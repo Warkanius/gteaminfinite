@@ -1,122 +1,92 @@
 
 
-# GTeam Infinite — Companion App
+# Phase 2: Admin Panel — Full Game Customization
 
 ## Overview
-A basketball card-game companion app with two roles: **Admin** (game master who customizes everything) and **Player** (immersive gameplay tools). Dark, sporty 2K-style design with bold gem-tier accent colors. Backed by Supabase for multi-user sync.
+Build out all 7 admin pages replacing the current placeholder stubs. Each page provides full CRUD (create, read, update, delete) for its game data, accessible only to users with the admin role.
 
 ---
 
-## Phase 1: Foundation & Data Layer
+## 1. Admin Player Card Manager (`/admin/players`)
+**File:** `src/pages/admin/AdminPlayers.tsx`
 
-### Authentication & Roles
-- Login/signup via email (Supabase Auth)
-- Admin vs Player roles stored in a `user_roles` table
-- Admin dashboard and Player dashboard are separate views based on role
+- Data table listing all player cards with columns: Name, Rating, Gem Tier, Position, Team
+- Filter/search bar by name, gem tier, position
+- "Add Player" button opens a dialog/drawer form with:
+  - Name, Position 1, Position 2
+  - 9 stat sliders or number inputs (3PT, MID, FIN, DNK, AST, STL, REB, BLK, INT)
+  - Gem tier dropdown (fetched from `gem_tiers` table)
+  - Team dropdown (fetched from `teams` table)
+  - Collection reward toggle
+  - Auto-calculated overall rating displayed live
+- Edit button on each row opens the same form pre-filled
+- Delete with confirmation dialog
+- **Badges & Traits sub-section** on each player form:
+  - Multi-select badges from `badges` table, each with a tier dropdown (Base/Gold/Diamond/HOF/Actolytrene)
+  - Multi-select traits from `signature_traits` table, each with tier + optional target stat
+  - Saves to `player_card_badges` and `player_card_traits` join tables
 
-### Database & Pre-loaded Data
-- Design the full Supabase schema: Players (cards), Badges, Signature Traits, Gem Tiers, Star Conversion Key, Packs, Pack Odds, Teams, Runs/Rosters, Challenges, Currencies, and Rule Config
-- Pre-load all player cards from the PDF (~60+ players with full stats, badges, traits, gem tier)
-- Pre-load badges (16 badges × 5 tiers), signature traits (8 traits × 5 tiers), star conversion key, pack odds tables, teams, and domination road maps
+## 2. Admin Packs & Odds Manager (`/admin/packs`)
+**File:** `src/pages/admin/AdminPacks.tsx`
 
-### Dark & Sporty UI Shell
-- Dark background with gem-tier accent colors (Gold, Emerald, Amethyst, Diamond, Pink Diamond, Actolytrene)
-- Sidebar navigation with role-based menu items
-- Responsive layout for desktop and mobile
+- List of all packs with name, type, cost, 10-box cost
+- Add/Edit pack form: name, pack_type, cost, ten_box_cost
+- **Pack Players tab**: assign player cards to pack slots (slot_number) via `pack_players` table
+- **Odds Table tab**: manage `pack_odds` rows for this pack type — dice_roll range, result_slot, description
+- Delete pack with cascade warning
 
----
+## 3. Admin Teams & Runs (`/admin/teams`)
+**File:** `src/pages/admin/AdminTeams.tsx`
 
-## Phase 2: Admin Panel — Full Game Customization
+- **Teams tab**: list all teams, add/edit (name, category, unlock_cost), assign player cards to team via `player_cards.team_id`
+- **Domination tab**: list domination road games, add/edit (road_name, opponent_name, game_order, difficulty_stars, coin_reward, pack_reward)
+- **Runs tab**: list runs, add/edit run names
 
-### Player Card Manager
-- Create, edit, delete player cards with all 9 skill stats (3PT, MID, FIN, DNK, AST, STL, REB, BLK, INT)
-- Assign gem tier, badges (with tier level), signature traits (with tier level), positions
-- Auto-calculate overall rating from stats
+## 4. Admin Badges & Traits (`/admin/badges`)
+**File:** `src/pages/admin/AdminBadgesTraits.tsx`
 
-### Packs & Odds Manager
-- Create/edit packs: name, cost, available players
-- Configure odds tables (dice roll → which player slot wins)
-- Support multiple pack types (Dom Pack, RTTR Pack, Sensations, etc.)
+- **Badges tab**: table of all badges with name, abbreviation, effect_type, affected_stat
+  - Expand/edit to see all 5 tier descriptions (base, gold, diamond, hof, actolytrene)
+- **Signature Traits tab**: table of all traits with name, abbreviation, condition_type
+  - Expand/edit to see all 5 tier descriptions
 
-### Teams, Runs & Rosters Manager
-- Create teams with rosters of player cards
-- Configure Domination road maps (sequence of opponents, difficulty stars, rewards)
-- Set up Runs (3v3 locations with rosters)
+## 5. Admin Challenges (`/admin/challenges`)
+**File:** `src/pages/admin/AdminChallenges.tsx`
 
-### Badges, Traits & Rules Config
-- Edit badge definitions and effects at each tier
-- Edit signature trait definitions and effects at each tier
-- Configure star conversion key, game modes (5v5, 3v3), and gameplay rule parameters
+- List challenges with name, type, coin/gem rewards
+- Add/edit form: name, description, challenge_type, coin_reward, gem_reward, conditions (JSON editor or structured form)
 
-### Challenges & Currencies
-- Create spotlight challenges with custom conditions
-- Manage currency types (coins, gems) and reward amounts
+## 6. Admin Currencies (`/admin/currencies`)
+**File:** `src/pages/admin/AdminCurrencies.tsx`
 
----
+- View/edit player profiles' coin and gem balances (admin override)
+- Summary stats: total coins/gems in circulation
+- Manual award form: select user, add coins or gems
 
-## Phase 3: Player Experience — Collection & Card View
+## 7. Admin Rules Config (`/admin/rules`)
+**File:** `src/pages/admin/AdminRules.tsx`
 
-### My Collection
-- Grid/list view of all owned player cards with gem-tier color borders
-- Tap a card to see full detail: stats radar/bar chart, badges, signature traits, bio
-- Filter/sort by gem tier, position, rating, badge
-
-### Evolution Tracker
-- Each card shows evolution progress toward the next gem tier
-- Manual stat input or auto-tracked from game logs
-- Visual progress bar with milestones
-
-### Card Design
-- Styled card components with gem-tier color gradients
-- Star ratings displayed visually
-- Badge and trait icons/chips on card face
-
----
-
-## Phase 4: Gameplay — Dice Roll Simulator
-
-### User Game Simulator (5v5 & 3v3)
-- Select 5 (or 3) players from collection to form lineup
-- For each player + each skill: roll dice, apply star modifier from conversion key
-- Automatically apply badge effects (rerolls, bonus half-dice, stat cancellations)
-- Apply signature trait effects based on game context (home/away, key game, underdog)
-- Apply opponent badge effects (Lockdown reducing stars, Intimidator reducing stars)
-- Sum totals per player and team; show final score comparison
-
-### CPU Roller
-- Select opponent team → load their roster
-- Auto-determine CPU shooter and shot type based on their strongest stat and the dice-roll rules (3PT if 1-2-3 rolled and strongest in 3PT, etc.)
-- Roll for CPU skill check with all badge/trait modifiers applied
-- Compare against user's defensive stats to determine success/failure
-
-### Game Log
-- Record each game result (user score, CPU score, individual player stats)
-- Feed stats into evolution tracker automatically
-- Win/loss record per mode
+- List all `rule_config` entries (key, value, description)
+- Edit value (JSON editor) and description for each rule
+- Add new rule config entries
+- Covers: star conversion key, game mode settings, rating roll modifiers, doubles rules
 
 ---
 
-## Phase 5: Markets — Packs & Rings
+## Shared Components
 
-### Pack Market
-- Browse available packs with cost in coins
-- Purchase a pack → dice-roll animation to determine which player you pull (using the odds table)
-- "Feel-good" reveal: card flips over with gem-tier glow effect, better tiers get bigger visual feedback (screen flash, color burst)
-- 10-box option for bulk opening
+- **`src/components/admin/DataTable.tsx`** — Reusable sortable/filterable table component used across all admin pages
+- **`src/components/admin/FormDialog.tsx`** — Reusable dialog wrapper for add/edit forms with save/cancel actions
+- **`src/components/admin/StatInput.tsx`** — Number input with label, used for the 9 player stats
+- **`src/components/admin/JsonEditor.tsx`** — Simple JSON textarea editor for conditions and rule values
 
-### Ring Market
-- Browse and purchase rings/rewards with coins or gems
-- Currency balance displayed in header
+## Routing Update
+- Update `src/App.tsx` to import each admin page instead of `Placeholder` for admin routes
 
-### Collection Rewards
-- When all players from a pack set are collected, unlock the collection reward card automatically
-- Notification and special reveal for collection completion
-
----
-
-## Design & UX Notes
-- **Color palette**: Dark navy/charcoal background, with gem-tier accents — Gold (#FFD700), Emerald (#50C878), Amethyst (#9966CC), Diamond (#B9F2FF), Pink Diamond (#FF69B4), Actolytrene (iridescent gradient)
-- **Card feel**: Each card has a subtle border glow matching its gem tier
-- **Pack opening**: Simple flip reveal with color burst matching the pull's tier — no complex 3D animations, just satisfying visual feedback
-- **Typography**: Bold, athletic-feeling headings; clean body text
+## Technical Details
+- All data fetching via `@tanstack/react-query` with `supabase` client
+- Mutations use `useMutation` with `queryClient.invalidateQueries` for optimistic UI
+- No database schema changes needed — all tables and RLS policies already exist
+- Admin-only access enforced by existing RLS policies (`has_role(auth.uid(), 'admin')`)
+- Client-side role check in sidebar already hides admin nav for non-admins
 
