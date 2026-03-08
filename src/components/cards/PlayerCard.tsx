@@ -1,5 +1,6 @@
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { Badge } from "@/components/ui/badge";
+import { StarRating } from "@/components/cards/StarRating";
 import { cn } from "@/lib/utils";
 
 interface PlayerCardProps {
