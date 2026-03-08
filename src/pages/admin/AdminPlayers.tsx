@@ -5,13 +5,15 @@ import { DataTable, Column } from "@/components/admin/DataTable";
 import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { StatInput } from "@/components/admin/StatInput";
+import { HslColorPicker } from "@/components/admin/HslColorPicker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Pencil, Trash2, X, Copy, Zap, Import } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
@@ -30,10 +32,22 @@ const STAT_LABELS: Record<string, string> = {
 };
 const BADGE_TIERS = ["base", "gold", "diamond", "hof", "actolytrene"];
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
-
 const ANIMATIONS = ["shimmer", "pulse", "holographic"];
 
-const emptyForm = (): Partial<PlayerCard> & { badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[] } => ({
+/* ── Playstyle Templates ──────────────────────────────── */
+const PLAYSTYLE_TEMPLATES: Record<string, Record<string, number>> = {
+  "Sharpshooter":      { stat_3pt: 92, stat_mid: 85, stat_fin: 60, stat_dnk: 40, stat_ast: 65, stat_stl: 55, stat_reb: 35, stat_blk: 25, stat_int: 70 },
+  "Slasher":           { stat_3pt: 55, stat_mid: 70, stat_fin: 92, stat_dnk: 88, stat_ast: 60, stat_stl: 60, stat_reb: 45, stat_blk: 35, stat_int: 65 },
+  "Playmaker":         { stat_3pt: 75, stat_mid: 78, stat_fin: 70, stat_dnk: 50, stat_ast: 94, stat_stl: 65, stat_reb: 35, stat_blk: 25, stat_int: 88 },
+  "Lockdown Defender": { stat_3pt: 50, stat_mid: 55, stat_fin: 55, stat_dnk: 50, stat_ast: 45, stat_stl: 92, stat_reb: 70, stat_blk: 88, stat_int: 80 },
+  "Glass Cleaner":     { stat_3pt: 30, stat_mid: 45, stat_fin: 65, stat_dnk: 75, stat_ast: 35, stat_stl: 45, stat_reb: 95, stat_blk: 80, stat_int: 55 },
+  "Two-Way":           { stat_3pt: 75, stat_mid: 75, stat_fin: 75, stat_dnk: 70, stat_ast: 70, stat_stl: 78, stat_reb: 65, stat_blk: 65, stat_int: 75 },
+  "Stretch Big":       { stat_3pt: 82, stat_mid: 75, stat_fin: 60, stat_dnk: 70, stat_ast: 45, stat_stl: 40, stat_reb: 82, stat_blk: 75, stat_int: 55 },
+};
+
+type FormState = Partial<PlayerCard> & { badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[] };
+
+const emptyForm = (): FormState => ({
   name: "", position1: null, position2: null,
   stat_3pt: 0, stat_mid: 0, stat_fin: 0, stat_dnk: 0, stat_ast: 0, stat_stl: 0, stat_reb: 0, stat_blk: 0, stat_int: 0,
   gem_tier_id: null, team_id: null, is_collection_reward: false, gem_name: null,
@@ -47,6 +61,7 @@ export default function AdminPlayers() {
   const [editId, setEditId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [bulkBadgeText, setBulkBadgeText] = useState("");
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["admin-players"],
@@ -106,7 +121,6 @@ export default function AdminPlayers() {
         cardId = data.id;
       }
 
-      // Sync badges
       await supabase.from("player_card_badges").delete().eq("player_card_id", cardId!);
       if (badges.length > 0) {
         await supabase.from("player_card_badges").insert(
@@ -114,7 +128,6 @@ export default function AdminPlayers() {
         );
       }
 
-      // Sync traits
       await supabase.from("player_card_traits").delete().eq("player_card_id", cardId!);
       if (traits.length > 0) {
         await supabase.from("player_card_traits").insert(
@@ -143,18 +156,69 @@ export default function AdminPlayers() {
     onError: (e) => toast.error(e.message),
   });
 
-  async function openEdit(player: PlayerCard) {
+  async function loadPlayerData(player: PlayerCard): Promise<FormState> {
     const [{ data: pBadges }, { data: pTraits }] = await Promise.all([
       supabase.from("player_card_badges").select("badge_id, tier").eq("player_card_id", player.id),
       supabase.from("player_card_traits").select("trait_id, tier, target_stat").eq("player_card_id", player.id),
     ]);
-    setForm({
+    return {
       ...player,
       badges: pBadges ?? [],
       traits: (pTraits ?? []).map((t) => ({ trait_id: t.trait_id, tier: t.tier, target_stat: t.target_stat ?? null })),
-    });
+    };
+  }
+
+  async function openEdit(player: PlayerCard) {
+    const data = await loadPlayerData(player);
+    setForm(data);
     setEditId(player.id);
     setDialogOpen(true);
+  }
+
+  async function copyFromPlayer(playerId: string) {
+    const player = players.find((p) => p.id === playerId);
+    if (!player) return;
+    const data = await loadPlayerData(player as PlayerCard);
+    setForm({ ...data, name: "", id: undefined });
+    // keep editId null so it creates a new record
+  }
+
+  function applyPlaystyleTemplate(templateName: string) {
+    const stats = PLAYSTYLE_TEMPLATES[templateName];
+    if (!stats) return;
+    setForm((f) => ({ ...f, ...stats }));
+    toast.success(`Applied "${templateName}" template`);
+  }
+
+  function importBulkBadges() {
+    if (!bulkBadgeText.trim()) return;
+    const entries = bulkBadgeText.split(",").map((s) => s.trim()).filter(Boolean);
+    const added: { badge_id: string; tier: string }[] = [];
+    const notFound: string[] = [];
+
+    for (const entry of entries) {
+      const [abbr, tierRaw] = entry.split(":").map((s) => s.trim());
+      const tier = tierRaw && BADGE_TIERS.includes(tierRaw.toLowerCase()) ? tierRaw.toLowerCase() : "base";
+      const badge = allBadges.find((b) => b.abbreviation.toLowerCase() === abbr.toLowerCase());
+      if (badge) {
+        if (!form.badges.some((fb) => fb.badge_id === badge.id)) {
+          added.push({ badge_id: badge.id, tier });
+        }
+      } else {
+        notFound.push(abbr);
+      }
+    }
+
+    if (added.length > 0) {
+      setForm((f) => ({ ...f, badges: [...f.badges, ...added] }));
+    }
+    if (notFound.length > 0) {
+      toast.error(`Unknown abbreviations: ${notFound.join(", ")}`);
+    }
+    if (added.length > 0) {
+      toast.success(`Imported ${added.length} badge(s)`);
+    }
+    setBulkBadgeText("");
   }
 
   const overallRating = Math.round(STAT_KEYS.reduce((s, k) => s + (Number((form as any)[k]) || 0), 0) / STAT_KEYS.length);
@@ -178,7 +242,7 @@ export default function AdminPlayers() {
         isLoading={isLoading}
         searchKeys={["name"]}
         searchPlaceholder="Search players…"
-        onAdd={() => { setForm(emptyForm()); setEditId(null); setDialogOpen(true); }}
+        onAdd={() => { setForm(emptyForm()); setEditId(null); setBulkBadgeText(""); setDialogOpen(true); }}
         addLabel="Add Player"
         actions={(row) => (
           <div className="flex gap-1">
@@ -197,6 +261,34 @@ export default function AdminPlayers() {
         className="max-w-3xl max-h-[90vh] overflow-y-auto"
       >
         <div className="space-y-6">
+          {/* Quick Actions: Template & Copy */}
+          {!editId && (
+            <div className="flex flex-wrap gap-3 p-3 rounded-lg border border-border/50 bg-muted/30">
+              <div className="space-y-1 flex-1 min-w-[180px]">
+                <Label className="text-xs flex items-center gap-1"><Zap className="h-3 w-3" /> Playstyle Template</Label>
+                <Select onValueChange={applyPlaystyleTemplate}>
+                  <SelectTrigger><SelectValue placeholder="Choose archetype…" /></SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(PLAYSTYLE_TEMPLATES).map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 flex-1 min-w-[180px]">
+                <Label className="text-xs flex items-center gap-1"><Copy className="h-3 w-3" /> Copy from Player</Label>
+                <Select onValueChange={copyFromPlayer}>
+                  <SelectTrigger><SelectValue placeholder="Select player…" /></SelectTrigger>
+                  <SelectContent>
+                    {players.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name} ({p.rating})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
           {/* Basic info */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -273,18 +365,9 @@ export default function AdminPlayers() {
                     <div className="w-full h-full flex items-center justify-center text-[10px] text-foreground/60">Preview</div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 flex-1">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Primary (HSL)</Label>
-                      <Input placeholder="e.g. 220 75% 50%" value={form.card_color_primary ?? ""} onChange={(e) => setForm(f => ({ ...f, card_color_primary: e.target.value || null }))} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Secondary (HSL)</Label>
-                      <Input placeholder="e.g. 220 60% 35%" value={form.card_color_secondary ?? ""} onChange={(e) => setForm(f => ({ ...f, card_color_secondary: e.target.value || null }))} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Glow (HSL)</Label>
-                      <Input placeholder="e.g. 220 85% 60%" value={form.card_glow_color ?? ""} onChange={(e) => setForm(f => ({ ...f, card_glow_color: e.target.value || null }))} />
-                    </div>
+                    <HslColorPicker label="Primary" value={form.card_color_primary ?? null} onChange={(v) => setForm(f => ({ ...f, card_color_primary: v }))} />
+                    <HslColorPicker label="Secondary" value={form.card_color_secondary ?? null} onChange={(v) => setForm(f => ({ ...f, card_color_secondary: v }))} />
+                    <HslColorPicker label="Glow" value={form.card_glow_color ?? null} onChange={(v) => setForm(f => ({ ...f, card_glow_color: v }))} />
                     <div className="space-y-1">
                       <Label className="text-xs">Animation</Label>
                       <Select value={form.card_animation ?? "none"} onValueChange={(v) => setForm(f => ({ ...f, card_animation: v === "none" ? null : v }))}>
@@ -309,6 +392,18 @@ export default function AdminPlayers() {
                 <SelectTrigger className="w-48"><SelectValue placeholder="Add badge…" /></SelectTrigger>
                 <SelectContent>{allBadges.filter((b) => !form.badges.some((fb) => fb.badge_id === b.id)).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
               </Select>
+            </div>
+            {/* Bulk import */}
+            <div className="flex gap-2 mb-3">
+              <Textarea
+                placeholder="Bulk import: HG:gold, DS:hof, QFS:base"
+                value={bulkBadgeText}
+                onChange={(e) => setBulkBadgeText(e.target.value)}
+                className="min-h-[40px] h-10 text-xs resize-none"
+              />
+              <Button variant="outline" size="sm" onClick={importBulkBadges} className="shrink-0 gap-1">
+                <Import className="h-3 w-3" /> Import
+              </Button>
             </div>
             <div className="space-y-2">
               {form.badges.map((fb, i) => {
