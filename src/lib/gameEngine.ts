@@ -60,12 +60,23 @@ export interface StatRollResult {
   points: number;           // rollResult * pointMultiplier
 }
 
+/**
+ * Get difficulty modifier for a player based on their star rating vs game difficulty.
+ * Returns a multiplier (e.g. 1.2 = +20% boost, 0.8 = -20% penalty).
+ * ±10% per star of difference. Only applied to user cards in domination.
+ */
+export function getDifficultyModifier(playerStars: number, difficultyStars: number): number {
+  const diff = playerStars - difficultyStars;
+  return 1 + diff * 0.1;
+}
+
 /** Calculate a single stat roll result given dice values */
 export function resolveStatRoll(
   stat: StatKey,
   statValue: number,
   stars: number,
   dice: number[],
+  difficultyStars?: number,
 ): StatRollResult {
   const diceCount = dice.length as 1 | 2;
   const diceTotal = dice.reduce((a, b) => a + b, 0);
@@ -73,7 +84,14 @@ export function resolveStatRoll(
   const baseModifier = getStarModifier(stars);
   // 5-star doubles = 3x modifier instead of 2.5x
   const modifier = (stars === 5 && isDoubles) ? 3 : baseModifier;
-  const rollResult = Math.round(diceTotal * modifier);
+  let rollResult = Math.round(diceTotal * modifier);
+
+  // Apply difficulty scaling (user cards only — caller decides when to pass difficultyStars)
+  if (difficultyStars != null) {
+    const diffMod = getDifficultyModifier(stars, difficultyStars);
+    rollResult = Math.max(0, Math.round(rollResult * diffMod));
+  }
+
   const pointMultiplier = getPointMultiplier(stat);
   const points = rollResult * pointMultiplier;
 

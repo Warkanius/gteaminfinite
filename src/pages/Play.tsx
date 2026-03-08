@@ -90,6 +90,7 @@ export default function Play() {
           userLineup={userLineup}
           cpuLineup={cpuLineup}
           onComplete={handleGameComplete}
+          difficultyStars={domState.difficultyStars}
         />
       )}
       {phase === "results" && gameResult && (
