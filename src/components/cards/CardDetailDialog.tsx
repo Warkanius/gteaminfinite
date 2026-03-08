@@ -73,9 +73,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
             <DialogTitle className="text-2xl">{card.name}</DialogTitle>
           </DialogHeader>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <Badge className="text-lg font-mono" style={{ background: `${bg(visuals.glow)}40` }}>
-              OVR {card.rating}
-            </Badge>
+            <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="lg" />
             {positions && <Badge variant="secondary">{positions}</Badge>}
             {gemTier?.name && <Badge variant="outline" className="border-foreground/30">{gemTier.name}</Badge>}
             {card.gem_name && <Badge variant="outline" className="border-foreground/30">{card.gem_name}</Badge>}
