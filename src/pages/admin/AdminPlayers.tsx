@@ -13,10 +13,11 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Pencil, Trash2, X, Copy, Zap, Import } from "lucide-react";
+import { Pencil, Trash2, X, Copy, Zap, Import, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
+import { generatePlayer } from "@/lib/archetypeEngine";
 
 type PlayerCard = Tables<"player_cards"> & {
   card_color_primary?: string | null;
@@ -34,16 +35,7 @@ const BADGE_TIERS = ["base", "gold", "diamond", "hof", "actolytrene"];
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 const ANIMATIONS = ["shimmer", "pulse", "holographic"];
 
-/* ── Playstyle Templates ──────────────────────────────── */
-const PLAYSTYLE_TEMPLATES: Record<string, Record<string, number>> = {
-  "Sharpshooter":      { stat_3pt: 92, stat_mid: 85, stat_fin: 60, stat_dnk: 40, stat_ast: 65, stat_stl: 55, stat_reb: 35, stat_blk: 25, stat_int: 70 },
-  "Slasher":           { stat_3pt: 55, stat_mid: 70, stat_fin: 92, stat_dnk: 88, stat_ast: 60, stat_stl: 60, stat_reb: 45, stat_blk: 35, stat_int: 65 },
-  "Playmaker":         { stat_3pt: 75, stat_mid: 78, stat_fin: 70, stat_dnk: 50, stat_ast: 94, stat_stl: 65, stat_reb: 35, stat_blk: 25, stat_int: 88 },
-  "Lockdown Defender": { stat_3pt: 50, stat_mid: 55, stat_fin: 55, stat_dnk: 50, stat_ast: 45, stat_stl: 92, stat_reb: 70, stat_blk: 88, stat_int: 80 },
-  "Glass Cleaner":     { stat_3pt: 30, stat_mid: 45, stat_fin: 65, stat_dnk: 75, stat_ast: 35, stat_stl: 45, stat_reb: 95, stat_blk: 80, stat_int: 55 },
-  "Two-Way":           { stat_3pt: 75, stat_mid: 75, stat_fin: 75, stat_dnk: 70, stat_ast: 70, stat_stl: 78, stat_reb: 65, stat_blk: 65, stat_int: 75 },
-  "Stretch Big":       { stat_3pt: 82, stat_mid: 75, stat_fin: 60, stat_dnk: 70, stat_ast: 45, stat_stl: 40, stat_reb: 82, stat_blk: 75, stat_int: 55 },
-};
+/* ── (Playstyle templates removed — replaced by archetype generator) ── */
 
 type FormState = Partial<PlayerCard> & { badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[] };
 
@@ -62,6 +54,7 @@ export default function AdminPlayers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [bulkBadgeText, setBulkBadgeText] = useState("");
+  const [generatorText, setGeneratorText] = useState("");
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["admin-players"],
@@ -183,11 +176,34 @@ export default function AdminPlayers() {
     // keep editId null so it creates a new record
   }
 
-  function applyPlaystyleTemplate(templateName: string) {
-    const stats = PLAYSTYLE_TEMPLATES[templateName];
-    if (!stats) return;
-    setForm((f) => ({ ...f, ...stats }));
-    toast.success(`Applied "${templateName}" template`);
+  function runGenerator() {
+    const selectedTier = gemTiers.find((g) => g.id === form.gem_tier_id);
+    if (!selectedTier) {
+      toast.error("Select a gem tier first — the generator needs it for stat scaling");
+      return;
+    }
+    if (!generatorText.trim()) {
+      toast.error("Describe the player archetype (e.g. 'badge heavy two-way slasher')");
+      return;
+    }
+    const result = generatePlayer(
+      generatorText,
+      selectedTier.stars,
+      allBadges.map((b) => ({ id: b.id, abbreviation: b.abbreviation, affected_stat: b.affected_stat, effect_type: b.effect_type })),
+    );
+    setForm((f) => ({
+      ...f,
+      ...result.stats,
+      position1: result.positions[0],
+      position2: result.positions[1],
+      badges: result.badges
+        .map((rb) => {
+          const badge = allBadges.find((b) => b.abbreviation.toLowerCase() === rb.abbreviation.toLowerCase());
+          return badge ? { badge_id: badge.id, tier: rb.tier } : null;
+        })
+        .filter(Boolean) as { badge_id: string; tier: string }[],
+    }));
+    toast.success(result.summary);
   }
 
   function importBulkBadges() {
@@ -242,7 +258,7 @@ export default function AdminPlayers() {
         isLoading={isLoading}
         searchKeys={["name"]}
         searchPlaceholder="Search players…"
-        onAdd={() => { setForm(emptyForm()); setEditId(null); setBulkBadgeText(""); setDialogOpen(true); }}
+        onAdd={() => { setForm(emptyForm()); setEditId(null); setBulkBadgeText(""); setGeneratorText(""); setDialogOpen(true); }}
         addLabel="Add Player"
         actions={(row) => (
           <div className="flex gap-1">
@@ -261,21 +277,28 @@ export default function AdminPlayers() {
         className="max-w-3xl max-h-[90vh] overflow-y-auto"
       >
         <div className="space-y-6">
-          {/* Quick Actions: Template & Copy */}
+          {/* Quick Actions: Generator & Copy */}
           {!editId && (
-            <div className="flex flex-wrap gap-3 p-3 rounded-lg border border-border/50 bg-muted/30">
-              <div className="space-y-1 flex-1 min-w-[180px]">
-                <Label className="text-xs flex items-center gap-1"><Zap className="h-3 w-3" /> Playstyle Template</Label>
-                <Select onValueChange={applyPlaystyleTemplate}>
-                  <SelectTrigger><SelectValue placeholder="Choose archetype…" /></SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(PLAYSTYLE_TEMPLATES).map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-3 p-3 rounded-lg border border-border/50 bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1"><Zap className="h-3 w-3" /> Archetype Generator</Label>
+                <p className="text-xs text-muted-foreground">Describe the player (e.g. "badge heavy two-way slasher with elite finishing"). Select gem tier first.</p>
+                <div className="flex gap-2">
+                  <Textarea
+                    placeholder="e.g. athletic slasher, lights out, badge heavy"
+                    value={generatorText}
+                    onChange={(e) => setGeneratorText(e.target.value)}
+                    className="min-h-[40px] h-10 text-xs resize-none flex-1"
+                  />
+                  <Button variant="default" size="sm" onClick={runGenerator} className="shrink-0 gap-1">
+                    <Zap className="h-3 w-3" /> Generate
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={runGenerator} className="shrink-0 gap-1" title="Re-roll with same description">
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-1 flex-1 min-w-[180px]">
+              <div className="space-y-1">
                 <Label className="text-xs flex items-center gap-1"><Copy className="h-3 w-3" /> Copy from Player</Label>
                 <Select onValueChange={copyFromPlayer}>
                   <SelectTrigger><SelectValue placeholder="Select player…" /></SelectTrigger>
