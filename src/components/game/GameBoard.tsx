@@ -79,7 +79,7 @@ export function GameBoard({ userLineup, cpuLineup, onComplete, difficultyStars }
   const maxDiceCount = Math.max(userDiceCount, cpuDiceCount) as 1 | 2;
 
   const handleDiceSubmit = useCallback((userDice: number[], cpuDice: number[]) => {
-    const uResult = resolveStatRoll(currentStat, userCard[currentStat], userStars, userDice);
+    const uResult = resolveStatRoll(currentStat, userCard[currentStat], userStars, userDice, difficultyStars);
     const cResult = resolveStatRoll(currentStat, cpuCard[currentStat], cpuStars, cpuDice);
 
     setLastUserResult(uResult);
@@ -87,7 +87,7 @@ export function GameBoard({ userLineup, cpuLineup, onComplete, difficultyStars }
     setCurrentUserStats((prev) => [...prev, uResult]);
     setCurrentCpuStats((prev) => [...prev, cResult]);
     setPhase("result");
-  }, [currentStat, userCard, cpuCard, userStars, cpuStars]);
+  }, [currentStat, userCard, cpuCard, userStars, cpuStars, difficultyStars]);
 
   const handleAutoRoll = useCallback(() => {
     setRolling(true);
