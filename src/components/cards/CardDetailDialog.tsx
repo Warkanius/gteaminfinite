@@ -86,7 +86,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 10 }}>
-              <XAxis type="number" domain={[0, 99]} hide />
+              <XAxis type="number" domain={[0, 6]} hide />
               <YAxis type="category" dataKey="name" width={35} tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
               <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
                 {chartData.map((entry, i) => (
