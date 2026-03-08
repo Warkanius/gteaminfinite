@@ -56,6 +56,78 @@ export type Database = {
         }
         Relationships: []
       }
+      card_game_stats: {
+        Row: {
+          created_at: string
+          game_log_id: string
+          id: string
+          player_card_id: string
+          points_scored: number
+          side: string
+          stat_3pt: number
+          stat_ast: number
+          stat_blk: number
+          stat_dnk: number
+          stat_fin: number
+          stat_int: number
+          stat_mid: number
+          stat_reb: number
+          stat_stl: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          game_log_id: string
+          id?: string
+          player_card_id: string
+          points_scored?: number
+          side?: string
+          stat_3pt?: number
+          stat_ast?: number
+          stat_blk?: number
+          stat_dnk?: number
+          stat_fin?: number
+          stat_int?: number
+          stat_mid?: number
+          stat_reb?: number
+          stat_stl?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          game_log_id?: string
+          id?: string
+          player_card_id?: string
+          points_scored?: number
+          side?: string
+          stat_3pt?: number
+          stat_ast?: number
+          stat_blk?: number
+          stat_dnk?: number
+          stat_fin?: number
+          stat_int?: number
+          stat_mid?: number
+          stat_reb?: number
+          stat_stl?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_game_stats_game_log_id_fkey"
+            columns: ["game_log_id"]
+            isOneToOne: false
+            referencedRelation: "game_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_game_stats_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       challenges: {
         Row: {
           challenge_type: string
@@ -88,6 +160,42 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      domination_game_players: {
+        Row: {
+          domination_game_id: string
+          id: string
+          player_card_id: string
+          slot: number
+        }
+        Insert: {
+          domination_game_id: string
+          id?: string
+          player_card_id: string
+          slot?: number
+        }
+        Update: {
+          domination_game_id?: string
+          id?: string
+          player_card_id?: string
+          slot?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domination_game_players_domination_game_id_fkey"
+            columns: ["domination_game_id"]
+            isOneToOne: false
+            referencedRelation: "domination_games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domination_game_players_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       domination_games: {
         Row: {
