@@ -10,9 +10,10 @@ import type { GameCard } from "@/pages/Play";
 
 interface LineupSelectProps {
   onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[]) => void;
+  dominationGameId?: string;
 }
 
-export function LineupSelect({ onConfirm }: LineupSelectProps) {
+export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps) {
   const { user } = useAuth();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -29,11 +30,28 @@ export function LineupSelect({ onConfirm }: LineupSelectProps) {
     },
   });
 
+  // For non-domination: fetch all cards for random CPU
   const { data: allCards = [] } = useQuery({
     queryKey: ["all-player-cards"],
+    enabled: !dominationGameId,
     queryFn: async () => {
       const { data } = await supabase.from("player_cards").select("*");
       return (data ?? []) as GameCard[];
+    },
+  });
+
+  // For domination: fetch fixed CPU lineup
+  const { data: domCpuLineup } = useQuery({
+    queryKey: ["domination-cpu-lineup", dominationGameId],
+    enabled: !!dominationGameId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("domination_game_players")
+        .select("slot, player_cards(*)")
+        .eq("domination_game_id", dominationGameId!)
+        .order("slot");
+      if (error) throw error;
+      return (data ?? []).map((d: any) => d.player_cards).filter(Boolean) as GameCard[];
     },
   });
 
@@ -62,10 +80,15 @@ export function LineupSelect({ onConfirm }: LineupSelectProps) {
   const selectedCards = collection.filter((c) => selectedIds.has(c.id));
 
   const handleStart = () => {
-    // CPU picks 5 random cards not in user's selection
-    const pool = allCards.filter((c) => !selectedIds.has(c.id));
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const cpuLineup = shuffled.slice(0, 5);
+    let cpuLineup: GameCard[];
+    if (dominationGameId && domCpuLineup && domCpuLineup.length > 0) {
+      cpuLineup = domCpuLineup;
+    } else {
+      // Random CPU
+      const pool = allCards.filter((c) => !selectedIds.has(c.id));
+      const shuffled = [...pool].sort(() => Math.random() - 0.5);
+      cpuLineup = shuffled.slice(0, 5);
+    }
     onConfirm(selectedCards, cpuLineup);
   };
 
@@ -82,6 +105,16 @@ export function LineupSelect({ onConfirm }: LineupSelectProps) {
       <div className="text-center py-20 text-muted-foreground">
         <p className="text-lg">You need at least 5 cards to play</p>
         <p className="text-sm mt-1">Open packs to build your collection!</p>
+      </div>
+    );
+  }
+
+  // Domination game has no players assigned yet
+  if (dominationGameId && domCpuLineup && domCpuLineup.length === 0) {
+    return (
+      <div className="text-center py-20 text-muted-foreground">
+        <p className="text-lg">This opponent's roster hasn't been set up yet</p>
+        <p className="text-sm mt-1">Check back later!</p>
       </div>
     );
   }

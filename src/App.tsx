@@ -59,6 +59,7 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/collection" element={<ProtectedRoute><LazyLoad><Collection /></LazyLoad></ProtectedRoute>} />
             <Route path="/play" element={<ProtectedRoute><LazyLoad><Play /></LazyLoad></ProtectedRoute>} />
+            <Route path="/domination" element={<ProtectedRoute><LazyLoad><Domination /></LazyLoad></ProtectedRoute>} />
             <Route path="/packs" element={<ProtectedRoute><LazyLoad><PackMarket /></LazyLoad></ProtectedRoute>} />
             <Route path="/rings" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />
             <Route path="/admin/players" element={<ProtectedRoute><LazyLoad><AdminPlayers /></LazyLoad></ProtectedRoute>} />
