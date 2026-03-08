@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { LineupSelect } from "@/components/game/LineupSelect";
 import { GameBoard } from "@/components/game/GameBoard";
 import { GameResults } from "@/components/game/GameResults";
@@ -36,11 +37,22 @@ export interface FullGameResult {
 
 type Phase = "lineup" | "game" | "results";
 
+interface DominationState {
+  dominationGameId?: string;
+  opponentName?: string;
+  coinReward?: number;
+}
+
 export default function Play() {
+  const location = useLocation();
+  const domState = (location.state as DominationState) ?? {};
+
   const [phase, setPhase] = useState<Phase>("lineup");
   const [userLineup, setUserLineup] = useState<GameCard[]>([]);
   const [cpuLineup, setCpuLineup] = useState<GameCard[]>([]);
   const [gameResult, setGameResult] = useState<FullGameResult | null>(null);
+
+  const isDomination = !!domState.dominationGameId;
 
   const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[]) => {
     setUserLineup(user);
@@ -62,8 +74,15 @@ export default function Play() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">5v5 Dice Mode</h1>
-      {phase === "lineup" && <LineupSelect onConfirm={handleLineupConfirm} />}
+      <h1 className="text-2xl font-bold font-display">
+        {isDomination ? `vs ${domState.opponentName}` : "5v5 Dice Mode"}
+      </h1>
+      {phase === "lineup" && (
+        <LineupSelect
+          onConfirm={handleLineupConfirm}
+          dominationGameId={domState.dominationGameId}
+        />
+      )}
       {phase === "game" && (
         <GameBoard
           userLineup={userLineup}
@@ -75,6 +94,9 @@ export default function Play() {
         <GameResults
           result={gameResult}
           onPlayAgain={handlePlayAgain}
+          coinReward={domState.coinReward}
+          opponentName={domState.opponentName}
+          mode={isDomination ? "domination" : "5v5"}
         />
       )}
     </div>

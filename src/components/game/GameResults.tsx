@@ -7,34 +7,37 @@ import { cn } from "@/lib/utils";
 import { STAT_LABELS, STATS, type CardGameResult, type StatKey } from "@/lib/gameEngine";
 import type { FullGameResult } from "@/pages/Play";
 
-const WIN_REWARD = 100;
+const DEFAULT_WIN_REWARD = 100;
 
 interface GameResultsProps {
   result: FullGameResult;
   onPlayAgain: () => void;
+  coinReward?: number;
+  opponentName?: string;
+  mode?: string;
 }
 
-export function GameResults({ result, onPlayAgain }: GameResultsProps) {
+export function GameResults({ result, onPlayAgain, coinReward, opponentName, mode = "5v5" }: GameResultsProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
   const won = result.userTotal > result.cpuTotal;
   const tied = result.userTotal === result.cpuTotal;
+  const reward = coinReward ?? DEFAULT_WIN_REWARD;
 
   useEffect(() => {
     if (!user || saved) return;
     const save = async () => {
-      // Log game
       const { data: gameLog } = await supabase.from("game_logs").insert({
         user_id: user.id,
-        mode: "5v5",
+        mode,
+        opponent_name: opponentName ?? null,
         user_score: result.userTotal,
         cpu_score: result.cpuTotal,
         won,
         player_stats: [...result.userCards, ...result.cpuCards] as any,
       }).select("id").single();
 
-      // Save card game stats
       if (gameLog) {
         const rows = [...result.userCards, ...result.cpuCards].map((c) => ({
           game_log_id: gameLog.id,
@@ -55,7 +58,6 @@ export function GameResults({ result, onPlayAgain }: GameResultsProps) {
         await supabase.from("card_game_stats").insert(rows);
       }
 
-      // Award coins on win
       if (won) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -65,14 +67,16 @@ export function GameResults({ result, onPlayAgain }: GameResultsProps) {
         if (profile) {
           await supabase
             .from("profiles")
-            .update({ coins: profile.coins + WIN_REWARD })
+            .update({ coins: profile.coins + reward })
             .eq("user_id", user.id);
         }
       }
       setSaved(true);
     };
     save();
-  }, [user, saved, result, won]);
+  }, [user, saved, result, won, reward, mode, opponentName]);
+
+  const isDomination = mode === "domination";
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -88,7 +92,7 @@ export function GameResults({ result, onPlayAgain }: GameResultsProps) {
         </h2>
         <p className="text-4xl font-display">{result.userTotal} — {result.cpuTotal}</p>
         {won && (
-          <p className="text-sm text-gem-emerald mt-2">+{WIN_REWARD} coins earned!</p>
+          <p className="text-sm text-gem-emerald mt-2">+{reward} coins earned!</p>
         )}
       </div>
 
@@ -96,13 +100,21 @@ export function GameResults({ result, onPlayAgain }: GameResultsProps) {
       <div className="space-y-4">
         <h3 className="font-display text-sm text-muted-foreground uppercase">Your Box Score</h3>
         <BoxScore cards={result.userCards} />
-        <h3 className="font-display text-sm text-muted-foreground uppercase">CPU Box Score</h3>
+        <h3 className="font-display text-sm text-muted-foreground uppercase">
+          {opponentName ? `${opponentName} Box Score` : "CPU Box Score"}
+        </h3>
         <BoxScore cards={result.cpuCards} />
       </div>
 
       {/* Actions */}
       <div className="flex gap-3">
-        <Button onClick={onPlayAgain} className="flex-1">Play Again</Button>
+        {isDomination ? (
+          <Button onClick={() => navigate("/domination")} className="flex-1">
+            Back to Domination
+          </Button>
+        ) : (
+          <Button onClick={onPlayAgain} className="flex-1">Play Again</Button>
+        )}
         <Button variant="outline" onClick={() => navigate("/")} className="flex-1">Dashboard</Button>
       </div>
     </div>
