@@ -10,8 +10,8 @@ import Dashboard from "@/pages/Dashboard";
 import Placeholder from "@/pages/Placeholder";
 const Collection = lazy(() => import("@/pages/Collection"));
 const PackMarket = lazy(() => import("@/pages/PackMarket"));
-import NotFound from "./pages/NotFound";
 import { lazy, Suspense } from "react";
+import NotFound from "./pages/NotFound";
 
 const AdminPlayers = lazy(() => import("@/pages/admin/AdminPlayers"));
 const AdminPacks = lazy(() => import("@/pages/admin/AdminPacks"));
