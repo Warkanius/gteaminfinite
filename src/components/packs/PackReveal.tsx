@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { RevealCard } from "./RevealCard";
+import { useState, useRef, useCallback } from "react";
+import { RevealCard, type RevealCardHandle } from "./RevealCard";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
@@ -27,23 +27,38 @@ export function PackReveal({ cards, onOpenAnother, onClose }: PackRevealProps) {
   const navigate = useNavigate();
   const [revealedCount, setRevealedCount] = useState(0);
   const allRevealed = revealedCount >= cards.length;
+  const cardRefs = useRef<(RevealCardHandle | null)[]>([]);
+
+  const handleRevealAll = useCallback(() => {
+    cardRefs.current.forEach((ref, i) => {
+      if (ref && !ref.isRevealed()) {
+        setTimeout(() => ref.reveal(), i * 200);
+      }
+    });
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6 p-4">
       <h2 className="font-display text-2xl font-bold text-foreground uppercase tracking-wider">
-        {allRevealed ? "Pack Opened!" : "Revealing..."}
+        {allRevealed ? "Pack Opened!" : "Tap cards to reveal!"}
       </h2>
 
       <div className="flex flex-wrap justify-center gap-4 max-w-3xl">
         {cards.map((card, i) => (
           <RevealCard
             key={`${card.id}-${i}`}
+            ref={(el) => { cardRefs.current[i] = el; }}
             card={card}
-            delay={i * 600}
             onRevealed={() => setRevealedCount((c) => c + 1)}
           />
         ))}
       </div>
+
+      {!allRevealed && (
+        <Button variant="ghost" size="sm" onClick={handleRevealAll} className="text-muted-foreground">
+          Reveal All
+        </Button>
+      )}
 
       {allRevealed && (
         <div className="flex gap-3 mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">

@@ -85,6 +85,22 @@
 .glow-actolytrene { box-shadow: 0 0 20px 3px hsl(var(--gem-actolytrene) / 0.5); }
 
 /* Card animations */
+/* 3D card flip */
+.card-flip-inner {
+  transform: rotateY(0deg);
+}
+.card-flipped {
+  transform: rotateY(180deg);
+}
+
+@keyframes reveal-burst {
+  0% { opacity: 0.7; transform: scale(1); filter: blur(8px); }
+  100% { opacity: 0; transform: scale(1.6); filter: blur(20px); }
+}
+.animate-reveal-burst {
+  animation: reveal-burst 0.6s ease-out forwards;
+}
+
 @keyframes shimmer {
   0% { background-position: -200% center; }
   100% { background-position: 200% center; }

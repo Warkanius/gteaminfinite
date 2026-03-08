@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -13,75 +13,128 @@ interface RevealCardProps {
     gem_name?: string | null;
     gem_tiers?: GemTierData | null;
   };
-  delay: number; // ms before reveal
+  delay?: number;
   onRevealed?: () => void;
 }
 
-export function RevealCard({ card, delay, onRevealed }: RevealCardProps) {
-  const [revealed, setRevealed] = useState(false);
-  const visuals = resolveCardVisuals(card, card.gem_tiers);
-  const isHsl = (c: string) => /^\d+\s/.test(c);
-  const bg = (c: string) => (isHsl(c) ? `hsl(${c})` : c);
-  const positions = [card.position1, card.position2].filter(Boolean).join("/");
+export interface RevealCardHandle {
+  reveal: () => void;
+  isRevealed: () => boolean;
+}
 
-  useEffect(() => {
-    const t = setTimeout(() => {
+export const RevealCard = forwardRef<RevealCardHandle, RevealCardProps>(
+  ({ card, onRevealed }, ref) => {
+    const [revealed, setRevealed] = useState(false);
+    const visuals = resolveCardVisuals(card, card.gem_tiers);
+    const isHsl = (c: string) => /^\d+\s/.test(c);
+    const bg = (c: string) => (isHsl(c) ? `hsl(${c})` : c);
+    const positions = [card.position1, card.position2].filter(Boolean).join("/");
+
+    useImperativeHandle(ref, () => ({
+      reveal: () => {
+        if (!revealed) {
+          setRevealed(true);
+          onRevealed?.();
+        }
+      },
+      isRevealed: () => revealed,
+    }));
+
+    function handleClick() {
+      if (revealed) return;
       setRevealed(true);
       onRevealed?.();
-    }, delay);
-    return () => clearTimeout(t);
-  }, [delay]);
+    }
 
-  return (
-    <div
-      className={cn(
-        "relative w-32 h-44 sm:w-36 sm:h-48 rounded-lg transition-all duration-700 ease-out",
-        revealed ? "scale-100 opacity-100" : "scale-75 opacity-0"
-      )}
-    >
-      {/* Glow burst */}
-      {revealed && (
-        <div
-          className="absolute -inset-3 rounded-xl animate-card-pulse opacity-60 blur-md pointer-events-none"
-          style={{ background: bg(visuals.glow) }}
-        />
-      )}
-
+    return (
       <div
-        className={cn(
-          "relative w-full h-full rounded-lg border border-border/50 flex flex-col items-center justify-end p-3 pt-6 overflow-hidden",
-          visuals.animation === "shimmer" && "animate-shimmer",
-          visuals.animation === "holographic" && "animate-holographic"
-        )}
-        style={{
-          background: `linear-gradient(135deg, ${bg(visuals.primary)}, ${bg(visuals.secondary)})`,
-          boxShadow: `0 0 24px 4px ${bg(visuals.glow)}50`,
-        }}
+        className="card-flip-container w-32 h-44 sm:w-36 sm:h-48 cursor-pointer select-none"
+        onClick={handleClick}
+        style={{ perspective: "800px" }}
       >
-        {/* OVR */}
         <div
-          className="absolute top-2 right-2 rounded-full w-8 h-8 flex items-center justify-center text-xs font-bold border border-border/30"
-          style={{ background: `${bg(visuals.glow)}30`, color: bg(visuals.glow) }}
-        >
-          {card.rating}
-        </div>
-
-        <h3 className="text-xs font-semibold text-foreground truncate w-full text-center drop-shadow-md">
-          {card.name}
-        </h3>
-        {card.gem_name && (
-          <p className="text-[9px] text-foreground/70 truncate w-full text-center mt-0.5">
-            {card.gem_name}
-          </p>
-        )}
-        <div className="flex gap-1 mt-1">
-          {positions && (
-            <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
-              {positions}
-            </Badge>
+          className={cn(
+            "card-flip-inner relative w-full h-full transition-transform duration-700 ease-out",
+            revealed && "card-flipped"
           )}
+          style={{ transformStyle: "preserve-3d" }}
+        >
+          {/* BACK FACE */}
+          <div
+            className="absolute inset-0 rounded-lg flex flex-col items-center justify-center backface-hidden"
+            style={{
+              backfaceVisibility: "hidden",
+              background: `linear-gradient(135deg, hsl(var(--card)), hsl(var(--muted)))`,
+              boxShadow: `0 0 20px 3px ${bg(visuals.glow)}40`,
+            }}
+          >
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold opacity-60 animate-card-pulse"
+              style={{ color: bg(visuals.glow), textShadow: `0 0 12px ${bg(visuals.glow)}` }}
+            >
+              ?
+            </div>
+            <span className="text-[10px] text-muted-foreground mt-2 uppercase tracking-wider">
+              Tap to reveal
+            </span>
+          </div>
+
+          {/* FRONT FACE */}
+          <div
+            className="absolute inset-0 rounded-lg backface-hidden"
+            style={{
+              backfaceVisibility: "hidden",
+              transform: "rotateY(180deg)",
+            }}
+          >
+            {/* Glow burst on reveal */}
+            {revealed && (
+              <div
+                className="absolute -inset-3 rounded-xl animate-reveal-burst pointer-events-none"
+                style={{ background: bg(visuals.glow), opacity: 0 }}
+              />
+            )}
+
+            <div
+              className={cn(
+                "relative w-full h-full rounded-lg border border-border/50 flex flex-col items-center justify-end p-3 pt-6 overflow-hidden",
+                visuals.animation === "shimmer" && "animate-shimmer",
+                visuals.animation === "holographic" && "animate-holographic"
+              )}
+              style={{
+                background: `linear-gradient(135deg, ${bg(visuals.primary)}, ${bg(visuals.secondary)})`,
+                boxShadow: `0 0 24px 4px ${bg(visuals.glow)}50`,
+              }}
+            >
+              {/* OVR */}
+              <div
+                className="absolute top-2 right-2 rounded-full w-8 h-8 flex items-center justify-center text-xs font-bold border border-border/30"
+                style={{ background: `${bg(visuals.glow)}30`, color: bg(visuals.glow) }}
+              >
+                {card.rating}
+              </div>
+
+              <h3 className="text-xs font-semibold text-foreground truncate w-full text-center drop-shadow-md">
+                {card.name}
+              </h3>
+              {card.gem_name && (
+                <p className="text-[9px] text-foreground/70 truncate w-full text-center mt-0.5">
+                  {card.gem_name}
+                </p>
+              )}
+              <div className="flex gap-1 mt-1">
+                {positions && (
+                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
+                    {positions}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
+);
+
+RevealCard.displayName = "RevealCard";
