@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { StarRating } from "@/components/cards/StarRating";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from "recharts";
 
