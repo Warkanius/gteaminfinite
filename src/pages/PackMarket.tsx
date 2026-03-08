@@ -33,7 +33,7 @@ export default function PackMarket() {
     if (!user) return;
     setLoading(true);
     const [packsRes, profileRes] = await Promise.all([
-      supabase.from("packs").select("*").order("name"),
+      supabase.from("packs").select("*").gt("cost", 0).order("name"),
       supabase.from("profiles").select("coins").eq("user_id", user.id).single(),
     ]);
     setPacks(packsRes.data || []);
