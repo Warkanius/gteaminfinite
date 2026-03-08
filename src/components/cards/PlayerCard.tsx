@@ -39,12 +39,9 @@ export function PlayerCard({ card, gemTier, onClick, className }: PlayerCardProp
         boxShadow: `0 0 18px 3px ${bg(visuals.glow)}40, inset 0 1px 0 ${bg(visuals.glow)}20`,
       }}
     >
-      {/* OVR badge */}
-      <div
-        className="absolute top-2 right-2 rounded-full w-9 h-9 flex items-center justify-center text-xs font-bold font-sans border border-border/30"
-        style={{ background: `${bg(visuals.glow)}30`, color: bg(visuals.glow) }}
-      >
-        {card.rating}
+      {/* Star rating */}
+      <div className="absolute top-2 right-2">
+        <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="sm" />
       </div>
 
       {/* Card name */}

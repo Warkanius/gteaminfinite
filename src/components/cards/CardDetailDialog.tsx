@@ -90,7 +90,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
               <YAxis type="category" dataKey="name" width={35} tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
               <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
                 {chartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.value >= 85 ? bg(visuals.glow) : entry.value >= 70 ? `${bg(visuals.primary)}` : "hsl(var(--muted-foreground) / 0.5)"} />
+                  <Cell key={i} fill={entry.value >= 5 ? bg(visuals.glow) : entry.value >= 4 ? `${bg(visuals.primary)}` : "hsl(var(--muted-foreground) / 0.5)"} />
                 ))}
               </Bar>
             </BarChart>

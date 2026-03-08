@@ -107,12 +107,9 @@ export const RevealCard = forwardRef<RevealCardHandle, RevealCardProps>(
                 boxShadow: `0 0 24px 4px ${bg(visuals.glow)}50`,
               }}
             >
-              {/* OVR */}
-              <div
-                className="absolute top-2 right-2 rounded-full w-8 h-8 flex items-center justify-center text-xs font-bold border border-border/30"
-                style={{ background: `${bg(visuals.glow)}30`, color: bg(visuals.glow) }}
-              >
-                {card.rating}
+              {/* Star rating */}
+              <div className="absolute top-2 right-2">
+                <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="sm" />
               </div>
 
               <h3 className="text-xs font-semibold text-foreground truncate w-full text-center drop-shadow-md">
