@@ -41,6 +41,7 @@ interface DominationState {
   dominationGameId?: string;
   opponentName?: string;
   coinReward?: number;
+  packReward?: string;
 }
 
 export default function Play() {
