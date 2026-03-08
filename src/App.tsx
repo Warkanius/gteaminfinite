@@ -10,6 +10,7 @@ import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Placeholder from "@/pages/Placeholder";
 const Play = lazy(() => import("@/pages/Play"));
+const Domination = lazy(() => import("@/pages/Domination"));
 import NotFound from "./pages/NotFound";
 const Collection = lazy(() => import("@/pages/Collection"));
 const PackMarket = lazy(() => import("@/pages/PackMarket"));
