@@ -46,6 +46,14 @@ export function PlayerCard({ card, gemTier, badgeCount, onClick, className }: Pl
         <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="sm" />
       </div>
 
+      {/* Badge count */}
+      {!!badgeCount && badgeCount > 0 && (
+        <div className="absolute top-2 left-2 flex items-center gap-0.5 rounded-full bg-background/60 backdrop-blur-sm px-1.5 py-0.5">
+          <Shield className="w-3 h-3 text-foreground/80" />
+          <span className="text-[10px] font-bold text-foreground/80">{badgeCount}</span>
+        </div>
+      )}
+
       {/* Card name */}
       <h3 className="text-sm font-semibold text-foreground truncate w-full text-center drop-shadow-md">
         {card.name}

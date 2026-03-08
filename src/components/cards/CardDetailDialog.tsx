@@ -88,6 +88,18 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
             <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 10 }}>
               <XAxis type="number" domain={[0, 6]} hide />
               <YAxis type="category" dataKey="name" width={35} tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip
+                cursor={{ fill: "hsl(var(--muted) / 0.3)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload;
+                  return (
+                    <div className="rounded-md border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-md">
+                      <span className="font-semibold">{d.name}</span>: {d.value}
+                    </div>
+                  );
+                }}
+              />
               <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
                 {chartData.map((entry, i) => (
                   <Cell key={i} fill={entry.value >= 5 ? bg(visuals.glow) : entry.value >= 4 ? `${bg(visuals.primary)}` : "hsl(var(--muted-foreground) / 0.5)"} />
