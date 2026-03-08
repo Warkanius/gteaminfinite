@@ -95,7 +95,8 @@ Deno.serve(async (req) => {
       return { ...o, min: parts[0], max: parts.length > 1 ? parts[1] : parts[0] };
     });
 
-    // Determine max dice value from odds
+    // Determine dice range from odds
+    const minDice = Math.min(...parsedOdds.map((o: any) => o.min));
     const maxDice = Math.max(...parsedOdds.map((o: any) => o.max));
 
     // Check if we have pack_players for numeric slot resolution
