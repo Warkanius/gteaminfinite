@@ -35,12 +35,18 @@ function pickStat(card: GameCard): typeof STATS[number] {
 }
 
 export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps) {
-  const [round, setRound] = useState(0); // 0-4
+  const [round, setRound] = useState(0);
   const [logs, setLogs] = useState<RoundLog[]>([]);
   const [userScore, setUserScore] = useState(0);
   const [cpuScore, setCpuScore] = useState(0);
   const [phase, setPhase] = useState<"dice" | "result">("dice");
   const [currentResult, setCurrentResult] = useState<RoundLog | null>(null);
+  const [useOwnDice, setUseOwnDice] = useState(false);
+
+  // Auto-roll state
+  const [rolling, setRolling] = useState(false);
+  const [autoUserDice, setAutoUserDice] = useState<number | null>(null);
+  const [autoCpuDice, setAutoCpuDice] = useState<number | null>(null);
 
   // Pick stat for this round
   const currentStat = useMemo(() => pickStat(userLineup[round] ?? userLineup[0]), [round, userLineup]);
@@ -57,7 +63,7 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
   const userCard = userLineup[round];
   const cpuCard = cpuLineup[round];
 
-  const handleDiceSubmit = (userDice: number, cpuDice: number) => {
+  const handleDiceSubmit = useCallback((userDice: number, cpuDice: number) => {
     const userGem = gemTierMap[userCard.gem_tier_id ?? ""];
     const cpuGem = gemTierMap[cpuCard.gem_tier_id ?? ""];
 
@@ -92,7 +98,26 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
     setCpuScore(newCpuScore);
     setCurrentResult(log);
     setPhase("result");
-  };
+  }, [gemTierMap, userCard, cpuCard, currentStat, round, logs, userScore, cpuScore]);
+
+  const handleAutoRoll = useCallback(() => {
+    setRolling(true);
+    setAutoUserDice(null);
+    setAutoCpuDice(null);
+
+    setTimeout(() => {
+      const uDice = Math.floor(Math.random() * 6) + 1;
+      const cDice = Math.floor(Math.random() * 6) + 1;
+      setAutoUserDice(uDice);
+      setAutoCpuDice(cDice);
+      setRolling(false);
+
+      // Small delay so user sees the result before resolving
+      setTimeout(() => {
+        handleDiceSubmit(uDice, cDice);
+      }, 600);
+    }, 1000);
+  }, [handleDiceSubmit]);
 
   const handleNextRound = () => {
     if (round >= 4) {
@@ -101,6 +126,8 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
       setRound((r) => r + 1);
       setPhase("dice");
       setCurrentResult(null);
+      setAutoUserDice(null);
+      setAutoCpuDice(null);
     }
   };
 
