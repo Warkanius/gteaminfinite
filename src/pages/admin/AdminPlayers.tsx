@@ -14,8 +14,14 @@ import { Badge } from "@/components/ui/badge";
 import { Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
+import { resolveCardVisuals } from "@/lib/cardVisuals";
 
-type PlayerCard = Tables<"player_cards">;
+type PlayerCard = Tables<"player_cards"> & {
+  card_color_primary?: string | null;
+  card_color_secondary?: string | null;
+  card_glow_color?: string | null;
+  card_animation?: string | null;
+};
 
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"] as const;
 const STAT_LABELS: Record<string, string> = {
