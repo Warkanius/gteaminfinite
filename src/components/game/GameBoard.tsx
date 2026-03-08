@@ -21,7 +21,7 @@ interface GameBoardProps {
   difficultyStars?: number;
 }
 
-export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps) {
+export function GameBoard({ userLineup, cpuLineup, onComplete, difficultyStars }: GameBoardProps) {
   const [playerIdx, setPlayerIdx] = useState(0);
   const [statIdx, setStatIdx] = useState(0);
   const [useOwnDice, setUseOwnDice] = useState(false);
