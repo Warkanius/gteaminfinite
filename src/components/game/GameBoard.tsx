@@ -18,6 +18,7 @@ interface GameBoardProps {
   userLineup: GameCard[];
   cpuLineup: GameCard[];
   onComplete: (result: FullGameResult) => void;
+  difficultyStars?: number;
 }
 
 export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps) {
