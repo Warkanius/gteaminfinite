@@ -1,1 +1,4 @@
 project_id = "tgcmhmcgxzabimgnzsiu"
+
+[functions.open-pack]
+verify_jwt = false
