@@ -2,7 +2,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/cards/StarRating";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from "recharts";
 
 interface CardDetailProps {
   open: boolean;
@@ -53,10 +52,6 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
   const positions = [card.position1, card.position2].filter(Boolean).join(" / ");
 
   const statKeys = Object.keys(STAT_LABELS) as (keyof typeof STAT_LABELS)[];
-  const chartData = statKeys.map((k) => ({
-    name: STAT_LABELS[k],
-    value: (card as any)[k] ?? 0,
-  }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,31 +77,16 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
           </div>
         </div>
 
-        {/* Stats chart */}
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 10 }}>
-              <XAxis type="number" domain={[0, 6]} hide />
-              <YAxis type="category" dataKey="name" width={35} tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                cursor={{ fill: "hsl(var(--muted) / 0.3)" }}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0].payload;
-                  return (
-                    <div className="rounded-md border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-md">
-                      <span className="font-semibold">{d.name}</span>: {d.value}
-                    </div>
-                  );
-                }}
-              />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
-                {chartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.value >= 5 ? bg(visuals.glow) : entry.value >= 4 ? `${bg(visuals.primary)}` : "hsl(var(--muted-foreground) / 0.5)"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+          {statKeys.map((k) => (
+            <div key={k} className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-8 shrink-0">
+                {STAT_LABELS[k]}
+              </span>
+              <StarRating rating={(card as any)[k] ?? 0} glowColor={bg(visuals.glow)} size="sm" />
+            </div>
+          ))}
         </div>
 
         {/* Badges */}
