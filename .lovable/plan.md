@@ -1,54 +1,92 @@
 
 
-# Expand Domination Roads + Add RTTR Pack Rewards
+# Phase 2: Admin Panel — Full Game Customization
 
-## Current State
-- 6 games per road (12 total), only final games have Team Dom Pack reward
-- RTTR Pack (`7feeb04c...`) exists but is unassigned
+## Overview
+Build out all 7 admin pages replacing the current placeholder stubs. Each page provides full CRUD (create, read, update, delete) for its game data, accessible only to users with the admin role.
 
-## What the Document Shows
-Each road should have **11 games**, with **every game** awarding a pack. Games 1-7 award **Team Dom Pack**, games 8-11 award **RTTR Pack**.
+---
 
-### LFO High School
-| # | Opponent | Coins | Pack |
-|---|----------|-------|------|
-| 1 | Ringgold I | 750 | Team Dom Pack |
-| 2 | Heritage I | 750 | Team Dom Pack |
-| 3 | McCallie I | 1000 | Team Dom Pack |
-| 4 | Hamilton Heights I | 1000 | Team Dom Pack |
-| 5 | Ringgold II | 1000 | Team Dom Pack |
-| 6 | Heritage II | 1000 | Team Dom Pack |
-| 7 | Brainerd '84 | 1000 | Team Dom Pack |
-| 8 | McCallie II | 2000 | RTTR Pack |
-| 9 | Hamilton Heights II | 2000 | RTTR Pack |
-| 10 | Brainerd '84 II | 2000 | RTTR Pack |
-| 11 | Georgia Stars | 4000 | RTTR Pack |
+## 1. Admin Player Card Manager (`/admin/players`)
+**File:** `src/pages/admin/AdminPlayers.tsx`
 
-### Seirin High
-| # | Opponent | Coins | Pack |
-|---|----------|-------|------|
-| 1 | Kaijo I | 750 | Team Dom Pack |
-| 2 | Shutoku I | 750 | Team Dom Pack |
-| 3 | Toō I | 1000 | Team Dom Pack |
-| 4 | Yosen I | 1000 | Team Dom Pack |
-| 5 | Shutoku II | 1000 | Team Dom Pack |
-| 6 | Kaijo II | 1000 | Team Dom Pack |
-| 7 | Rakuzan | 1000 | Team Dom Pack |
-| 8 | Toō II | 2000 | RTTR Pack |
-| 9 | Yosen II | 2000 | RTTR Pack |
-| 10 | Rakuzan II | 2000 | RTTR Pack |
-| 11 | Generation of Miracles | 4000 | RTTR Pack |
+- Data table listing all player cards with columns: Name, Rating, Gem Tier, Position, Team
+- Filter/search bar by name, gem tier, position
+- "Add Player" button opens a dialog/drawer form with:
+  - Name, Position 1, Position 2
+  - 9 stat sliders or number inputs (3PT, MID, FIN, DNK, AST, STL, REB, BLK, INT)
+  - Gem tier dropdown (fetched from `gem_tiers` table)
+  - Team dropdown (fetched from `teams` table)
+  - Collection reward toggle
+  - Auto-calculated overall rating displayed live
+- Edit button on each row opens the same form pre-filled
+- Delete with confirmation dialog
+- **Badges & Traits sub-section** on each player form:
+  - Multi-select badges from `badges` table, each with a tier dropdown (Base/Gold/Diamond/HOF/Actolytrene)
+  - Multi-select traits from `signature_traits` table, each with tier + optional target stat
+  - Saves to `player_card_badges` and `player_card_traits` join tables
 
-Difficulty stars: roughly 1★ for game 1, scaling up to 5★ for game 11 (matching the `*`/`**`/`***` markers).
+## 2. Admin Packs & Odds Manager (`/admin/packs`)
+**File:** `src/pages/admin/AdminPacks.tsx`
 
-## Changes
+- List of all packs with name, type, cost, 10-box cost
+- Add/Edit pack form: name, pack_type, cost, ten_box_cost
+- **Pack Players tab**: assign player cards to pack slots (slot_number) via `pack_players` table
+- **Odds Table tab**: manage `pack_odds` rows for this pack type — dice_roll range, result_slot, description
+- Delete pack with cascade warning
 
-### 1. Update existing 12 domination games
-Use data update tool to rename opponents, adjust coin rewards, and assign pack rewards to match the document for games 1-6 of each road.
+## 3. Admin Teams & Runs (`/admin/teams`)
+**File:** `src/pages/admin/AdminTeams.tsx`
 
-### 2. Insert 10 new games
-Add games 7-11 for each road (5 new games per road) with correct opponents, coin rewards, difficulty stars, and pack rewards (Team Dom Pack for game 7, RTTR Pack for games 8-11).
+- **Teams tab**: list all teams, add/edit (name, category, unlock_cost), assign player cards to team via `player_cards.team_id`
+- **Domination tab**: list domination road games, add/edit (road_name, opponent_name, game_order, difficulty_stars, coin_reward, pack_reward)
+- **Runs tab**: list runs, add/edit run names
 
-### 3. No code changes needed
-`Domination.tsx`, `Play.tsx`, and `GameResults.tsx` already handle `pack_reward` correctly — the reward flow triggers for any game with a non-null `pack_reward`.
+## 4. Admin Badges & Traits (`/admin/badges`)
+**File:** `src/pages/admin/AdminBadgesTraits.tsx`
+
+- **Badges tab**: table of all badges with name, abbreviation, effect_type, affected_stat
+  - Expand/edit to see all 5 tier descriptions (base, gold, diamond, hof, actolytrene)
+- **Signature Traits tab**: table of all traits with name, abbreviation, condition_type
+  - Expand/edit to see all 5 tier descriptions
+
+## 5. Admin Challenges (`/admin/challenges`)
+**File:** `src/pages/admin/AdminChallenges.tsx`
+
+- List challenges with name, type, coin/gem rewards
+- Add/edit form: name, description, challenge_type, coin_reward, gem_reward, conditions (JSON editor or structured form)
+
+## 6. Admin Currencies (`/admin/currencies`)
+**File:** `src/pages/admin/AdminCurrencies.tsx`
+
+- View/edit player profiles' coin and gem balances (admin override)
+- Summary stats: total coins/gems in circulation
+- Manual award form: select user, add coins or gems
+
+## 7. Admin Rules Config (`/admin/rules`)
+**File:** `src/pages/admin/AdminRules.tsx`
+
+- List all `rule_config` entries (key, value, description)
+- Edit value (JSON editor) and description for each rule
+- Add new rule config entries
+- Covers: star conversion key, game mode settings, rating roll modifiers, doubles rules
+
+---
+
+## Shared Components
+
+- **`src/components/admin/DataTable.tsx`** — Reusable sortable/filterable table component used across all admin pages
+- **`src/components/admin/FormDialog.tsx`** — Reusable dialog wrapper for add/edit forms with save/cancel actions
+- **`src/components/admin/StatInput.tsx`** — Number input with label, used for the 9 player stats
+- **`src/components/admin/JsonEditor.tsx`** — Simple JSON textarea editor for conditions and rule values
+
+## Routing Update
+- Update `src/App.tsx` to import each admin page instead of `Placeholder` for admin routes
+
+## Technical Details
+- All data fetching via `@tanstack/react-query` with `supabase` client
+- Mutations use `useMutation` with `queryClient.invalidateQueries` for optimistic UI
+- No database schema changes needed — all tables and RLS policies already exist
+- Admin-only access enforced by existing RLS policies (`has_role(auth.uid(), 'admin')`)
+- Client-side role check in sidebar already hides admin nav for non-admins
 
