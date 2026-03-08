@@ -1,6 +1,7 @@
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/cards/StarRating";
+import { Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PlayerCardProps {
@@ -13,6 +14,7 @@ interface PlayerCardProps {
     gem_name?: string | null;
   };
   gemTier?: GemTierData | null;
+  badgeCount?: number;
   onClick?: () => void;
   className?: string;
 }
