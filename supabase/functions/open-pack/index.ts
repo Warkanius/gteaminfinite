@@ -13,13 +13,22 @@ function jsonResp(body: unknown, status = 200) {
   });
 }
 
+// Maps text result_slot to a rank index (0-based)
+const SLOT_RANK_MAP: Record<string, number> = {
+  "Top Rated Player": 0,
+  "2nd Rated Player": 1,
+  "3rd Rated Player": 2,
+  "4th Rated Player": 3,
+  "5th Rated Player": 4,
+  "Player of Choice": -1, // special: random from top 10
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return jsonResp({ error: "Unauthorized" }, 401);
@@ -38,7 +47,6 @@ Deno.serve(async (req) => {
     }
     const userId = claimsData.claims.sub as string;
 
-    // Service client for writes
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -61,7 +69,7 @@ Deno.serve(async (req) => {
       ? pack.ten_box_cost
       : pack.cost * quantity;
 
-    // Fetch user profile + check coins
+    // Fetch user profile
     const { data: profile, error: profErr } = await admin
       .from("profiles")
       .select("id, coins")
@@ -81,51 +89,82 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "No odds configured for this pack type" }, 500);
     }
 
-    // Parse dice ranges: "1-3" → {min:1, max:3}
+    // Parse dice values — supports single "5" or range "1-3"
     const parsedOdds = odds.map((o: any) => {
-      const [min, max] = o.dice_roll.split("-").map(Number);
-      return { ...o, min, max: max ?? min };
+      const parts = o.dice_roll.split("-").map(Number);
+      return { ...o, min: parts[0], max: parts.length > 1 ? parts[1] : parts[0] };
     });
 
-    // Fetch all pack_players grouped by slot
+    // Determine max dice value from odds
+    const maxDice = Math.max(...parsedOdds.map((o: any) => o.max));
+
+    // Check if we have pack_players for numeric slot resolution
     const { data: allPackPlayers } = await admin
       .from("pack_players")
       .select("slot_number, player_card_id")
       .eq("pack_id", pack_id);
 
+    const hasPackPlayers = allPackPlayers && allPackPlayers.length > 0;
+
+    // Build numeric slot map if applicable
     const slotMap: Record<string, string[]> = {};
-    for (const pp of allPackPlayers || []) {
-      const key = String(pp.slot_number);
-      if (!slotMap[key]) slotMap[key] = [];
-      slotMap[key].push(pp.player_card_id);
+    if (hasPackPlayers) {
+      for (const pp of allPackPlayers!) {
+        const key = String(pp.slot_number);
+        if (!slotMap[key]) slotMap[key] = [];
+        slotMap[key].push(pp.player_card_id);
+      }
+    }
+
+    // For text-based slots, fetch player cards sorted by rating desc
+    let rankedCards: any[] = [];
+    if (!hasPackPlayers) {
+      const { data: cards } = await admin
+        .from("player_cards")
+        .select("id, name, rating")
+        .order("rating", { ascending: false })
+        .limit(100);
+      rankedCards = cards || [];
     }
 
     // Roll for each pack in quantity
     const pulledCardIds: string[] = [];
 
     for (let i = 0; i < quantity; i++) {
-      // Roll a d20 (1-20)
-      const roll = Math.floor(Math.random() * 20) + 1;
-      // Find matching odds row
+      const roll = Math.floor(Math.random() * maxDice) + 1;
       const matched = parsedOdds.find((o: any) => roll >= o.min && roll <= o.max);
       if (!matched) continue;
 
       const slot = matched.result_slot;
-      // Get cards in that slot
-      const candidates = slotMap[slot];
-      if (!candidates || candidates.length === 0) {
-        // Fallback: pick from slot 1
-        const fallback = slotMap["1"];
-        if (fallback && fallback.length > 0) {
-          pulledCardIds.push(fallback[Math.floor(Math.random() * fallback.length)]);
+
+      if (hasPackPlayers) {
+        // Numeric slot resolution
+        const candidates = slotMap[slot] || slotMap["1"] || [];
+        if (candidates.length > 0) {
+          pulledCardIds.push(candidates[Math.floor(Math.random() * candidates.length)]);
         }
-        continue;
+      } else {
+        // Text-based slot resolution using rating rank
+        const rankIndex = SLOT_RANK_MAP[slot];
+        if (rankIndex === undefined) continue;
+
+        if (rankIndex === -1) {
+          // "Player of Choice" — random from top 10
+          const top = rankedCards.slice(0, Math.min(10, rankedCards.length));
+          if (top.length > 0) {
+            pulledCardIds.push(top[Math.floor(Math.random() * top.length)].id);
+          }
+        } else if (rankIndex < rankedCards.length) {
+          pulledCardIds.push(rankedCards[rankIndex].id);
+        } else if (rankedCards.length > 0) {
+          // Fallback to random card
+          pulledCardIds.push(rankedCards[Math.floor(Math.random() * rankedCards.length)].id);
+        }
       }
-      pulledCardIds.push(candidates[Math.floor(Math.random() * candidates.length)]);
     }
 
     if (pulledCardIds.length === 0) {
-      return jsonResp({ error: "Failed to pull any cards" }, 500);
+      return jsonResp({ error: "Failed to pull any cards. Check pack_players or player_cards data." }, 500);
     }
 
     // Deduct coins
