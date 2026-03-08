@@ -146,6 +146,7 @@ export default function Collection() {
               key={card.id}
               card={card}
               gemTier={gemTierMap[card.gem_tier_id]}
+              badgeCount={card.player_card_badges?.length ?? 0}
               onClick={() => setSelectedId(card.id)}
             />
           ))}
