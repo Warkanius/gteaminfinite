@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,10 +9,9 @@ import { AppLayout } from "@/components/AppLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Placeholder from "@/pages/Placeholder";
+import NotFound from "./pages/NotFound";
 const Collection = lazy(() => import("@/pages/Collection"));
 const PackMarket = lazy(() => import("@/pages/PackMarket"));
-import { lazy, Suspense } from "react";
-import NotFound from "./pages/NotFound";
 
 const AdminPlayers = lazy(() => import("@/pages/admin/AdminPlayers"));
 const AdminPacks = lazy(() => import("@/pages/admin/AdminPacks"));
