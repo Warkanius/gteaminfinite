@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     const pulledCardIds: string[] = [];
 
     for (let i = 0; i < quantity; i++) {
-      const roll = Math.floor(Math.random() * maxDice) + 1;
+      const roll = Math.floor(Math.random() * (maxDice - minDice + 1)) + minDice;
       const matched = parsedOdds.find((o: any) => roll >= o.min && roll <= o.max);
       if (!matched) continue;
 
