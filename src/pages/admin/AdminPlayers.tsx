@@ -277,21 +277,28 @@ export default function AdminPlayers() {
         className="max-w-3xl max-h-[90vh] overflow-y-auto"
       >
         <div className="space-y-6">
-          {/* Quick Actions: Template & Copy */}
+          {/* Quick Actions: Generator & Copy */}
           {!editId && (
-            <div className="flex flex-wrap gap-3 p-3 rounded-lg border border-border/50 bg-muted/30">
-              <div className="space-y-1 flex-1 min-w-[180px]">
-                <Label className="text-xs flex items-center gap-1"><Zap className="h-3 w-3" /> Playstyle Template</Label>
-                <Select onValueChange={applyPlaystyleTemplate}>
-                  <SelectTrigger><SelectValue placeholder="Choose archetype…" /></SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(PLAYSTYLE_TEMPLATES).map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-3 p-3 rounded-lg border border-border/50 bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1"><Zap className="h-3 w-3" /> Archetype Generator</Label>
+                <p className="text-xs text-muted-foreground">Describe the player (e.g. "badge heavy two-way slasher with elite finishing"). Select gem tier first.</p>
+                <div className="flex gap-2">
+                  <Textarea
+                    placeholder="e.g. athletic slasher, lights out, badge heavy"
+                    value={generatorText}
+                    onChange={(e) => setGeneratorText(e.target.value)}
+                    className="min-h-[40px] h-10 text-xs resize-none flex-1"
+                  />
+                  <Button variant="default" size="sm" onClick={runGenerator} className="shrink-0 gap-1">
+                    <Zap className="h-3 w-3" /> Generate
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={runGenerator} className="shrink-0 gap-1" title="Re-roll with same description">
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-1 flex-1 min-w-[180px]">
+              <div className="space-y-1">
                 <Label className="text-xs flex items-center gap-1"><Copy className="h-3 w-3" /> Copy from Player</Label>
                 <Select onValueChange={copyFromPlayer}>
                   <SelectTrigger><SelectValue placeholder="Select player…" /></SelectTrigger>
