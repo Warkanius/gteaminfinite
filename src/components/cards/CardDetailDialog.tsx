@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { StarRating } from "@/components/cards/StarRating";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from "recharts";
 
@@ -72,9 +73,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
             <DialogTitle className="text-2xl">{card.name}</DialogTitle>
           </DialogHeader>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <Badge className="text-lg font-mono" style={{ background: `${bg(visuals.glow)}40` }}>
-              OVR {card.rating}
-            </Badge>
+            <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="lg" />
             {positions && <Badge variant="secondary">{positions}</Badge>}
             {gemTier?.name && <Badge variant="outline" className="border-foreground/30">{gemTier.name}</Badge>}
             {card.gem_name && <Badge variant="outline" className="border-foreground/30">{card.gem_name}</Badge>}
@@ -87,11 +86,11 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 10 }}>
-              <XAxis type="number" domain={[0, 99]} hide />
+              <XAxis type="number" domain={[0, 6]} hide />
               <YAxis type="category" dataKey="name" width={35} tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
               <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
                 {chartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.value >= 85 ? bg(visuals.glow) : entry.value >= 70 ? `${bg(visuals.primary)}` : "hsl(var(--muted-foreground) / 0.5)"} />
+                  <Cell key={i} fill={entry.value >= 5 ? bg(visuals.glow) : entry.value >= 4 ? `${bg(visuals.primary)}` : "hsl(var(--muted-foreground) / 0.5)"} />
                 ))}
               </Bar>
             </BarChart>
