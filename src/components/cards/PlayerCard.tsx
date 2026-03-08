@@ -19,7 +19,7 @@ interface PlayerCardProps {
   className?: string;
 }
 
-export function PlayerCard({ card, gemTier, onClick, className }: PlayerCardProps) {
+export function PlayerCard({ card, gemTier, badgeCount, onClick, className }: PlayerCardProps) {
   const visuals = resolveCardVisuals(card, gemTier);
   const positions = [card.position1, card.position2].filter(Boolean).join("/");
 
