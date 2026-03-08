@@ -278,26 +278,28 @@ export default function AdminPlayers() {
       >
         <div className="space-y-6">
           {/* Quick Actions: Generator & Copy */}
-          {!editId && (
-            <div className="space-y-3 p-3 rounded-lg border border-border/50 bg-muted/30">
-              <div className="space-y-1">
-                <Label className="text-xs flex items-center gap-1"><Zap className="h-3 w-3" /> Archetype Generator</Label>
-                <p className="text-xs text-muted-foreground">Describe the player (e.g. "badge heavy two-way slasher with elite finishing"). Select gem tier first.</p>
-                <div className="flex gap-2">
-                  <Textarea
-                    placeholder="e.g. athletic slasher, lights out, badge heavy"
-                    value={generatorText}
-                    onChange={(e) => setGeneratorText(e.target.value)}
-                    className="min-h-[40px] h-10 text-xs resize-none flex-1"
-                  />
-                  <Button variant="default" size="sm" onClick={runGenerator} className="shrink-0 gap-1">
-                    <Zap className="h-3 w-3" /> Generate
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={runGenerator} className="shrink-0 gap-1" title="Re-roll with same description">
-                    <RefreshCw className="h-3 w-3" />
-                  </Button>
-                </div>
+          <div className="space-y-3 p-3 rounded-lg border border-border/50 bg-muted/30">
+            <div className="space-y-1">
+              <Label className="text-xs flex items-center gap-1"><Zap className="h-3 w-3" /> Archetype Generator</Label>
+              <p className="text-xs text-muted-foreground">
+                {editId ? "Regenerate stats/badges based on a new archetype description." : "Describe the player (e.g. \"badge heavy two-way slasher with elite finishing\"). Select gem tier first."}
+              </p>
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder="e.g. athletic slasher, lights out, badge heavy"
+                  value={generatorText}
+                  onChange={(e) => setGeneratorText(e.target.value)}
+                  className="min-h-[40px] h-10 text-xs resize-none flex-1"
+                />
+                <Button variant="default" size="sm" onClick={runGenerator} className="shrink-0 gap-1">
+                  <Zap className="h-3 w-3" /> Generate
+                </Button>
+                <Button variant="outline" size="sm" onClick={runGenerator} className="shrink-0 gap-1" title="Re-roll with same description">
+                  <RefreshCw className="h-3 w-3" />
+                </Button>
               </div>
+            </div>
+            {!editId && (
               <div className="space-y-1">
                 <Label className="text-xs flex items-center gap-1"><Copy className="h-3 w-3" /> Copy from Player</Label>
                 <Select onValueChange={copyFromPlayer}>
@@ -309,8 +311,8 @@ export default function AdminPlayers() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Basic info */}
           <div className="grid grid-cols-2 gap-4">
