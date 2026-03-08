@@ -251,6 +251,44 @@ export type Database = {
           },
         ]
       }
+      pack_purchases: {
+        Row: {
+          cards_pulled: Json
+          coins_spent: number
+          id: string
+          pack_id: string
+          purchased_at: string
+          quantity: number
+          user_id: string
+        }
+        Insert: {
+          cards_pulled?: Json
+          coins_spent?: number
+          id?: string
+          pack_id: string
+          purchased_at?: string
+          quantity?: number
+          user_id: string
+        }
+        Update: {
+          cards_pulled?: Json
+          coins_spent?: number
+          id?: string
+          pack_id?: string
+          purchased_at?: string
+          quantity?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pack_purchases_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "packs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       packs: {
         Row: {
           cost: number
