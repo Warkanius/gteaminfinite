@@ -256,6 +256,51 @@ export default function AdminPlayers() {
             <Label>Collection Reward</Label>
           </div>
 
+          {/* Card Appearance */}
+          <div>
+            <Label className="text-base mb-2 block">Card Appearance</Label>
+            <p className="text-xs text-muted-foreground mb-3">Leave blank to auto-infer from gem name / tier.</p>
+            {(() => {
+              const preview = resolveCardVisuals(form as any, gemTiers.find(g => g.id === form.gem_tier_id));
+              const isHsl = (c: string) => /^\d+\s/.test(c);
+              const bg = (c: string) => isHsl(c) ? `hsl(${c})` : c;
+              return (
+                <div className="flex items-start gap-4 mb-3">
+                  <div className="w-20 h-28 rounded-lg border border-border/50 flex-shrink-0" style={{
+                    background: `linear-gradient(135deg, ${bg(preview.primary)}, ${bg(preview.secondary)})`,
+                    boxShadow: `0 0 14px 2px ${bg(preview.glow)}40`,
+                  }}>
+                    <div className="w-full h-full flex items-center justify-center text-[10px] text-foreground/60">Preview</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 flex-1">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Primary (HSL)</Label>
+                      <Input placeholder="e.g. 220 75% 50%" value={form.card_color_primary ?? ""} onChange={(e) => setForm(f => ({ ...f, card_color_primary: e.target.value || null }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Secondary (HSL)</Label>
+                      <Input placeholder="e.g. 220 60% 35%" value={form.card_color_secondary ?? ""} onChange={(e) => setForm(f => ({ ...f, card_color_secondary: e.target.value || null }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Glow (HSL)</Label>
+                      <Input placeholder="e.g. 220 85% 60%" value={form.card_glow_color ?? ""} onChange={(e) => setForm(f => ({ ...f, card_glow_color: e.target.value || null }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Animation</Label>
+                      <Select value={form.card_animation ?? "none"} onValueChange={(v) => setForm(f => ({ ...f, card_animation: v === "none" ? null : v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {ANIMATIONS.map(a => <SelectItem key={a} value={a} className="capitalize">{a}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Badges */}
           <div>
             <div className="flex items-center justify-between mb-2">
