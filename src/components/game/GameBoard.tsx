@@ -1,10 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PlayerCard } from "@/components/cards/PlayerCard";
 import { DiceInput } from "@/components/game/DiceInput";
+import { DiceRoll } from "@/components/game/DiceRoll";
 import { RoundResult } from "@/components/game/RoundResult";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Dice5 } from "lucide-react";
 import type { GameCard, RoundLog } from "@/pages/Play";
 
 const STATS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"] as const;
