@@ -8,6 +8,7 @@ import { AppLayout } from "@/components/AppLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Placeholder from "@/pages/Placeholder";
+const Collection = lazy(() => import("@/pages/Collection"));
 import NotFound from "./pages/NotFound";
 import { lazy, Suspense } from "react";
 
