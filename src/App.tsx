@@ -9,6 +9,7 @@ import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Placeholder from "@/pages/Placeholder";
 const Collection = lazy(() => import("@/pages/Collection"));
+const PackMarket = lazy(() => import("@/pages/PackMarket"));
 import NotFound from "./pages/NotFound";
 import { lazy, Suspense } from "react";
 
@@ -56,7 +57,7 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/collection" element={<ProtectedRoute><LazyLoad><Collection /></LazyLoad></ProtectedRoute>} />
             <Route path="/play" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />
-            <Route path="/packs" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />
+            <Route path="/packs" element={<ProtectedRoute><LazyLoad><PackMarket /></LazyLoad></ProtectedRoute>} />
             <Route path="/rings" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />
             <Route path="/admin/players" element={<ProtectedRoute><LazyLoad><AdminPlayers /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/packs" element={<ProtectedRoute><LazyLoad><AdminPacks /></LazyLoad></ProtectedRoute>} />
