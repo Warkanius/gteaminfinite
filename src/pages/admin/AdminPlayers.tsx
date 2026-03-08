@@ -31,10 +31,13 @@ const STAT_LABELS: Record<string, string> = {
 const BADGE_TIERS = ["base", "gold", "diamond", "hof", "actolytrene"];
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 
+const ANIMATIONS = ["shimmer", "pulse", "holographic"];
+
 const emptyForm = (): Partial<PlayerCard> & { badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[] } => ({
   name: "", position1: null, position2: null,
   stat_3pt: 0, stat_mid: 0, stat_fin: 0, stat_dnk: 0, stat_ast: 0, stat_stl: 0, stat_reb: 0, stat_blk: 0, stat_int: 0,
   gem_tier_id: null, team_id: null, is_collection_reward: false, gem_name: null,
+  card_color_primary: null, card_color_secondary: null, card_glow_color: null, card_animation: null,
   badges: [], traits: [],
 });
 
