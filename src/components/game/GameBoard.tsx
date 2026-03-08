@@ -18,9 +18,10 @@ interface GameBoardProps {
   userLineup: GameCard[];
   cpuLineup: GameCard[];
   onComplete: (result: FullGameResult) => void;
+  difficultyStars?: number;
 }
 
-export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps) {
+export function GameBoard({ userLineup, cpuLineup, onComplete, difficultyStars }: GameBoardProps) {
   const [playerIdx, setPlayerIdx] = useState(0);
   const [statIdx, setStatIdx] = useState(0);
   const [useOwnDice, setUseOwnDice] = useState(false);
@@ -78,7 +79,7 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
   const maxDiceCount = Math.max(userDiceCount, cpuDiceCount) as 1 | 2;
 
   const handleDiceSubmit = useCallback((userDice: number[], cpuDice: number[]) => {
-    const uResult = resolveStatRoll(currentStat, userCard[currentStat], userStars, userDice);
+    const uResult = resolveStatRoll(currentStat, userCard[currentStat], userStars, userDice, difficultyStars);
     const cResult = resolveStatRoll(currentStat, cpuCard[currentStat], cpuStars, cpuDice);
 
     setLastUserResult(uResult);
@@ -86,7 +87,7 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
     setCurrentUserStats((prev) => [...prev, uResult]);
     setCurrentCpuStats((prev) => [...prev, cResult]);
     setPhase("result");
-  }, [currentStat, userCard, cpuCard, userStars, cpuStars]);
+  }, [currentStat, userCard, cpuCard, userStars, cpuStars, difficultyStars]);
 
   const handleAutoRoll = useCallback(() => {
     setRolling(true);

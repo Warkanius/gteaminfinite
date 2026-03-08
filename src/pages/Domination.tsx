@@ -75,6 +75,7 @@ export default function Domination() {
         opponentName: game.opponent_name,
         coinReward: game.coin_reward,
         packReward: game.pack_reward,
+        difficultyStars: game.difficulty_stars,
       },
     });
   };

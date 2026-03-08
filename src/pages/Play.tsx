@@ -42,6 +42,7 @@ interface DominationState {
   opponentName?: string;
   coinReward?: number;
   packReward?: string;
+  difficultyStars?: number;
 }
 
 export default function Play() {
@@ -89,6 +90,7 @@ export default function Play() {
           userLineup={userLineup}
           cpuLineup={cpuLineup}
           onComplete={handleGameComplete}
+          difficultyStars={domState.difficultyStars}
         />
       )}
       {phase === "results" && gameResult && (
