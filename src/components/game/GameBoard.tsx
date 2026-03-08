@@ -176,8 +176,31 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
         </div>
       </div>
 
-      {/* Dice input or result */}
+      {/* Dice mode toggle */}
       {phase === "dice" && (
+        <div className="flex items-center justify-center gap-2">
+          <Dice5 className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Got your own dice?</span>
+          <Switch checked={useOwnDice} onCheckedChange={setUseOwnDice} />
+        </div>
+      )}
+
+      {/* Dice input or result */}
+      {phase === "dice" && !useOwnDice && (
+        <div className="space-y-4">
+          <div className="flex justify-center gap-8">
+            <DiceRoll rolling={rolling} value={autoUserDice} label="Your Roll" />
+            <DiceRoll rolling={rolling} value={autoCpuDice} label="CPU Roll" />
+          </div>
+          <div className="text-center">
+            <Button onClick={handleAutoRoll} disabled={rolling}>
+              {rolling ? "Rolling..." : "Roll Dice"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {phase === "dice" && useOwnDice && (
         <DiceInput onSubmit={handleDiceSubmit} />
       )}
 
