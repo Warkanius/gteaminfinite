@@ -22,7 +22,7 @@ export default function Collection() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_collections")
-        .select("*, player_cards(*)")
+        .select("*, player_cards(*, player_card_badges(id))")
         .eq("user_id", user!.id);
       if (error) throw error;
       return data;
