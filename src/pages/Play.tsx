@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { LineupSelect } from "@/components/game/LineupSelect";
 import { GameBoard } from "@/components/game/GameBoard";
 import { GameResults } from "@/components/game/GameResults";
+import type { CardGameResult } from "@/lib/gameEngine";
 
 export interface GameCard {
   id: string;
@@ -26,16 +27,11 @@ export interface GameCard {
   stat_int: number;
 }
 
-export interface RoundLog {
-  round: number;
-  stat: string;
-  userValue: number;
-  userDice: number;
+export interface FullGameResult {
+  userCards: CardGameResult[];
+  cpuCards: CardGameResult[];
   userTotal: number;
-  cpuValue: number;
-  cpuDice: number;
   cpuTotal: number;
-  winner: "user" | "cpu" | "tie";
 }
 
 type Phase = "lineup" | "game" | "results";
@@ -44,8 +40,7 @@ export default function Play() {
   const [phase, setPhase] = useState<Phase>("lineup");
   const [userLineup, setUserLineup] = useState<GameCard[]>([]);
   const [cpuLineup, setCpuLineup] = useState<GameCard[]>([]);
-  const [roundLogs, setRoundLogs] = useState<RoundLog[]>([]);
-  const [score, setScore] = useState({ user: 0, cpu: 0 });
+  const [gameResult, setGameResult] = useState<FullGameResult | null>(null);
 
   const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[]) => {
     setUserLineup(user);
@@ -53,9 +48,8 @@ export default function Play() {
     setPhase("game");
   }, []);
 
-  const handleGameComplete = useCallback((logs: RoundLog[], finalScore: { user: number; cpu: number }) => {
-    setRoundLogs(logs);
-    setScore(finalScore);
+  const handleGameComplete = useCallback((result: FullGameResult) => {
+    setGameResult(result);
     setPhase("results");
   }, []);
 
@@ -63,8 +57,7 @@ export default function Play() {
     setPhase("lineup");
     setUserLineup([]);
     setCpuLineup([]);
-    setRoundLogs([]);
-    setScore({ user: 0, cpu: 0 });
+    setGameResult(null);
   }, []);
 
   return (
@@ -78,10 +71,9 @@ export default function Play() {
           onComplete={handleGameComplete}
         />
       )}
-      {phase === "results" && (
+      {phase === "results" && gameResult && (
         <GameResults
-          score={score}
-          roundLogs={roundLogs}
+          result={gameResult}
           onPlayAgain={handlePlayAgain}
         />
       )}

@@ -1,0 +1,109 @@
+// Game Engine v2 — NBA-style scoring with star-based multipliers
+
+export const STATS = [
+  "stat_3pt", "stat_mid", "stat_fin", "stat_dnk",
+  "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int",
+] as const;
+
+export type StatKey = typeof STATS[number];
+
+export const STAT_LABELS: Record<StatKey, string> = {
+  stat_3pt: "3PT", stat_mid: "MID", stat_fin: "FIN", stat_dnk: "DNK",
+  stat_ast: "AST", stat_stl: "STL", stat_reb: "REB", stat_blk: "BLK", stat_int: "INT",
+};
+
+export const SCORING_STATS: StatKey[] = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_int"];
+
+/** Maps star rating to roll multiplier */
+export function getStarModifier(stars: number): number {
+  const map: Record<number, number> = { 0: 0, 1: 0.5, 2: 1, 3: 1.5, 4: 2, 5: 2.5 };
+  return map[stars] ?? 0;
+}
+
+/** 2 dice if stars >= 4, else 1 */
+export function getDiceCount(stars: number): 1 | 2 {
+  return stars >= 4 ? 2 : 1;
+}
+
+/** Point multiplier per stat type (like real basketball) */
+export function getPointMultiplier(stat: StatKey): number {
+  if (stat === "stat_3pt") return 3;
+  if (stat === "stat_mid" || stat === "stat_fin" || stat === "stat_dnk") return 2;
+  if (stat === "stat_int") return 1;
+  return 0; // AST, STL, REB, BLK — tracked, no points
+}
+
+export interface DiceResult {
+  dice: number[];
+  diceTotal: number;
+  isDoubles: boolean;
+}
+
+/** Roll dice (auto mode) */
+export function rollDice(count: 1 | 2): DiceResult {
+  const dice = Array.from({ length: count }, () => Math.floor(Math.random() * 6) + 1);
+  const isDoubles = count === 2 && dice[0] === dice[1];
+  return { dice, diceTotal: dice.reduce((a, b) => a + b, 0), isDoubles };
+}
+
+export interface StatRollResult {
+  stat: StatKey;
+  statValue: number;       // card's base stat value (for display)
+  stars: number;
+  diceCount: 1 | 2;
+  dice: number[];
+  diceTotal: number;
+  isDoubles: boolean;
+  modifier: number;         // star modifier used
+  rollResult: number;       // diceTotal * modifier (or 3x on doubles for 5-star)
+  pointMultiplier: number;  // 3, 2, 1, or 0
+  points: number;           // rollResult * pointMultiplier
+}
+
+/** Calculate a single stat roll result given dice values */
+export function resolveStatRoll(
+  stat: StatKey,
+  statValue: number,
+  stars: number,
+  dice: number[],
+): StatRollResult {
+  const diceCount = dice.length as 1 | 2;
+  const diceTotal = dice.reduce((a, b) => a + b, 0);
+  const isDoubles = diceCount === 2 && dice[0] === dice[1];
+  const baseModifier = getStarModifier(stars);
+  // 5-star doubles = 3x modifier instead of 2.5x
+  const modifier = (stars === 5 && isDoubles) ? 3 : baseModifier;
+  const rollResult = Math.round(diceTotal * modifier);
+  const pointMultiplier = getPointMultiplier(stat);
+  const points = rollResult * pointMultiplier;
+
+  return {
+    stat, statValue, stars, diceCount, dice, diceTotal,
+    isDoubles, modifier, rollResult, pointMultiplier, points,
+  };
+}
+
+export interface CardGameResult {
+  playerCardId: string;
+  cardName: string;
+  side: "user" | "cpu";
+  statResults: StatRollResult[];
+  totalPoints: number;
+  // Per-stat roll results for DB storage
+  statValues: Record<StatKey, number>;
+}
+
+/** Compute full card result from all 9 stat rolls */
+export function buildCardResult(
+  cardId: string,
+  cardName: string,
+  side: "user" | "cpu",
+  statResults: StatRollResult[],
+): CardGameResult {
+  const totalPoints = statResults.reduce((sum, r) => sum + r.points, 0);
+  const statValues = {} as Record<StatKey, number>;
+  for (const r of statResults) {
+    statValues[r.stat] = r.rollResult;
+  }
+  return { playerCardId: cardId, cardName, side, statResults, totalPoints, statValues };
+}
