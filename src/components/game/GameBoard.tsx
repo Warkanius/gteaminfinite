@@ -1,10 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PlayerCard } from "@/components/cards/PlayerCard";
 import { DiceInput } from "@/components/game/DiceInput";
+import { DiceRoll } from "@/components/game/DiceRoll";
 import { RoundResult } from "@/components/game/RoundResult";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Dice5 } from "lucide-react";
 import type { GameCard, RoundLog } from "@/pages/Play";
 
 const STATS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"] as const;
@@ -32,12 +35,18 @@ function pickStat(card: GameCard): typeof STATS[number] {
 }
 
 export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps) {
-  const [round, setRound] = useState(0); // 0-4
+  const [round, setRound] = useState(0);
   const [logs, setLogs] = useState<RoundLog[]>([]);
   const [userScore, setUserScore] = useState(0);
   const [cpuScore, setCpuScore] = useState(0);
   const [phase, setPhase] = useState<"dice" | "result">("dice");
   const [currentResult, setCurrentResult] = useState<RoundLog | null>(null);
+  const [useOwnDice, setUseOwnDice] = useState(false);
+
+  // Auto-roll state
+  const [rolling, setRolling] = useState(false);
+  const [autoUserDice, setAutoUserDice] = useState<number | null>(null);
+  const [autoCpuDice, setAutoCpuDice] = useState<number | null>(null);
 
   // Pick stat for this round
   const currentStat = useMemo(() => pickStat(userLineup[round] ?? userLineup[0]), [round, userLineup]);
@@ -54,7 +63,7 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
   const userCard = userLineup[round];
   const cpuCard = cpuLineup[round];
 
-  const handleDiceSubmit = (userDice: number, cpuDice: number) => {
+  const handleDiceSubmit = useCallback((userDice: number, cpuDice: number) => {
     const userGem = gemTierMap[userCard.gem_tier_id ?? ""];
     const cpuGem = gemTierMap[cpuCard.gem_tier_id ?? ""];
 
@@ -89,7 +98,26 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
     setCpuScore(newCpuScore);
     setCurrentResult(log);
     setPhase("result");
-  };
+  }, [gemTierMap, userCard, cpuCard, currentStat, round, logs, userScore, cpuScore]);
+
+  const handleAutoRoll = useCallback(() => {
+    setRolling(true);
+    setAutoUserDice(null);
+    setAutoCpuDice(null);
+
+    setTimeout(() => {
+      const uDice = Math.floor(Math.random() * 6) + 1;
+      const cDice = Math.floor(Math.random() * 6) + 1;
+      setAutoUserDice(uDice);
+      setAutoCpuDice(cDice);
+      setRolling(false);
+
+      // Small delay so user sees the result before resolving
+      setTimeout(() => {
+        handleDiceSubmit(uDice, cDice);
+      }, 600);
+    }, 1000);
+  }, [handleDiceSubmit]);
 
   const handleNextRound = () => {
     if (round >= 4) {
@@ -98,6 +126,8 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
       setRound((r) => r + 1);
       setPhase("dice");
       setCurrentResult(null);
+      setAutoUserDice(null);
+      setAutoCpuDice(null);
     }
   };
 
@@ -146,8 +176,31 @@ export function GameBoard({ userLineup, cpuLineup, onComplete }: GameBoardProps)
         </div>
       </div>
 
-      {/* Dice input or result */}
+      {/* Dice mode toggle */}
       {phase === "dice" && (
+        <div className="flex items-center justify-center gap-2">
+          <Dice5 className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Got your own dice?</span>
+          <Switch checked={useOwnDice} onCheckedChange={setUseOwnDice} />
+        </div>
+      )}
+
+      {/* Dice input or result */}
+      {phase === "dice" && !useOwnDice && (
+        <div className="space-y-4">
+          <div className="flex justify-center gap-8">
+            <DiceRoll rolling={rolling} value={autoUserDice} label="Your Roll" />
+            <DiceRoll rolling={rolling} value={autoCpuDice} label="CPU Roll" />
+          </div>
+          <div className="text-center">
+            <Button onClick={handleAutoRoll} disabled={rolling}>
+              {rolling ? "Rolling..." : "Roll Dice"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {phase === "dice" && useOwnDice && (
         <DiceInput onSubmit={handleDiceSubmit} />
       )}
 
