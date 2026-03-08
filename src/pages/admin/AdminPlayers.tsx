@@ -13,10 +13,11 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Pencil, Trash2, X, Copy, Zap, Import } from "lucide-react";
+import { Pencil, Trash2, X, Copy, Zap, Import, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
+import { generatePlayer } from "@/lib/archetypeEngine";
 
 type PlayerCard = Tables<"player_cards"> & {
   card_color_primary?: string | null;
