@@ -14,8 +14,14 @@ import { Badge } from "@/components/ui/badge";
 import { Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
+import { resolveCardVisuals } from "@/lib/cardVisuals";
 
-type PlayerCard = Tables<"player_cards">;
+type PlayerCard = Tables<"player_cards"> & {
+  card_color_primary?: string | null;
+  card_color_secondary?: string | null;
+  card_glow_color?: string | null;
+  card_animation?: string | null;
+};
 
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"] as const;
 const STAT_LABELS: Record<string, string> = {
@@ -25,10 +31,13 @@ const STAT_LABELS: Record<string, string> = {
 const BADGE_TIERS = ["base", "gold", "diamond", "hof", "actolytrene"];
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 
+const ANIMATIONS = ["shimmer", "pulse", "holographic"];
+
 const emptyForm = (): Partial<PlayerCard> & { badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[] } => ({
   name: "", position1: null, position2: null,
   stat_3pt: 0, stat_mid: 0, stat_fin: 0, stat_dnk: 0, stat_ast: 0, stat_stl: 0, stat_reb: 0, stat_blk: 0, stat_int: 0,
   gem_tier_id: null, team_id: null, is_collection_reward: false, gem_name: null,
+  card_color_primary: null, card_color_secondary: null, card_glow_color: null, card_animation: null,
   badges: [], traits: [],
 });
 
@@ -245,6 +254,51 @@ export default function AdminPlayers() {
           <div className="flex items-center gap-3">
             <Switch checked={form.is_collection_reward ?? false} onCheckedChange={(v) => setForm((f) => ({ ...f, is_collection_reward: v }))} />
             <Label>Collection Reward</Label>
+          </div>
+
+          {/* Card Appearance */}
+          <div>
+            <Label className="text-base mb-2 block">Card Appearance</Label>
+            <p className="text-xs text-muted-foreground mb-3">Leave blank to auto-infer from gem name / tier.</p>
+            {(() => {
+              const preview = resolveCardVisuals(form as any, gemTiers.find(g => g.id === form.gem_tier_id));
+              const isHsl = (c: string) => /^\d+\s/.test(c);
+              const bg = (c: string) => isHsl(c) ? `hsl(${c})` : c;
+              return (
+                <div className="flex items-start gap-4 mb-3">
+                  <div className="w-20 h-28 rounded-lg border border-border/50 flex-shrink-0" style={{
+                    background: `linear-gradient(135deg, ${bg(preview.primary)}, ${bg(preview.secondary)})`,
+                    boxShadow: `0 0 14px 2px ${bg(preview.glow)}40`,
+                  }}>
+                    <div className="w-full h-full flex items-center justify-center text-[10px] text-foreground/60">Preview</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 flex-1">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Primary (HSL)</Label>
+                      <Input placeholder="e.g. 220 75% 50%" value={form.card_color_primary ?? ""} onChange={(e) => setForm(f => ({ ...f, card_color_primary: e.target.value || null }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Secondary (HSL)</Label>
+                      <Input placeholder="e.g. 220 60% 35%" value={form.card_color_secondary ?? ""} onChange={(e) => setForm(f => ({ ...f, card_color_secondary: e.target.value || null }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Glow (HSL)</Label>
+                      <Input placeholder="e.g. 220 85% 60%" value={form.card_glow_color ?? ""} onChange={(e) => setForm(f => ({ ...f, card_glow_color: e.target.value || null }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Animation</Label>
+                      <Select value={form.card_animation ?? "none"} onValueChange={(v) => setForm(f => ({ ...f, card_animation: v === "none" ? null : v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {ANIMATIONS.map(a => <SelectItem key={a} value={a} className="capitalize">{a}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Badges */}

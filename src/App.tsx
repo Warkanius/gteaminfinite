@@ -8,6 +8,7 @@ import { AppLayout } from "@/components/AppLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Placeholder from "@/pages/Placeholder";
+const Collection = lazy(() => import("@/pages/Collection"));
 import NotFound from "./pages/NotFound";
 import { lazy, Suspense } from "react";
 
@@ -53,7 +54,7 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/collection" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />
+            <Route path="/collection" element={<ProtectedRoute><LazyLoad><Collection /></LazyLoad></ProtectedRoute>} />
             <Route path="/play" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />
             <Route path="/packs" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />
             <Route path="/rings" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />

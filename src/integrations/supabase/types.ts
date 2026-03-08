@@ -355,6 +355,10 @@ export type Database = {
       }
       player_cards: {
         Row: {
+          card_animation: string | null
+          card_color_primary: string | null
+          card_color_secondary: string | null
+          card_glow_color: string | null
           created_at: string
           gem_name: string | null
           gem_tier_id: string | null
@@ -377,6 +381,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          card_animation?: string | null
+          card_color_primary?: string | null
+          card_color_secondary?: string | null
+          card_glow_color?: string | null
           created_at?: string
           gem_name?: string | null
           gem_tier_id?: string | null
@@ -399,6 +407,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          card_animation?: string | null
+          card_color_primary?: string | null
+          card_color_secondary?: string | null
+          card_glow_color?: string | null
           created_at?: string
           gem_name?: string | null
           gem_tier_id?: string | null
