@@ -35,16 +35,7 @@ const BADGE_TIERS = ["base", "gold", "diamond", "hof", "actolytrene"];
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 const ANIMATIONS = ["shimmer", "pulse", "holographic"];
 
-/* ── Playstyle Templates ──────────────────────────────── */
-const PLAYSTYLE_TEMPLATES: Record<string, Record<string, number>> = {
-  "Sharpshooter":      { stat_3pt: 92, stat_mid: 85, stat_fin: 60, stat_dnk: 40, stat_ast: 65, stat_stl: 55, stat_reb: 35, stat_blk: 25, stat_int: 70 },
-  "Slasher":           { stat_3pt: 55, stat_mid: 70, stat_fin: 92, stat_dnk: 88, stat_ast: 60, stat_stl: 60, stat_reb: 45, stat_blk: 35, stat_int: 65 },
-  "Playmaker":         { stat_3pt: 75, stat_mid: 78, stat_fin: 70, stat_dnk: 50, stat_ast: 94, stat_stl: 65, stat_reb: 35, stat_blk: 25, stat_int: 88 },
-  "Lockdown Defender": { stat_3pt: 50, stat_mid: 55, stat_fin: 55, stat_dnk: 50, stat_ast: 45, stat_stl: 92, stat_reb: 70, stat_blk: 88, stat_int: 80 },
-  "Glass Cleaner":     { stat_3pt: 30, stat_mid: 45, stat_fin: 65, stat_dnk: 75, stat_ast: 35, stat_stl: 45, stat_reb: 95, stat_blk: 80, stat_int: 55 },
-  "Two-Way":           { stat_3pt: 75, stat_mid: 75, stat_fin: 75, stat_dnk: 70, stat_ast: 70, stat_stl: 78, stat_reb: 65, stat_blk: 65, stat_int: 75 },
-  "Stretch Big":       { stat_3pt: 82, stat_mid: 75, stat_fin: 60, stat_dnk: 70, stat_ast: 45, stat_stl: 40, stat_reb: 82, stat_blk: 75, stat_int: 55 },
-};
+/* ── (Playstyle templates removed — replaced by archetype generator) ── */
 
 type FormState = Partial<PlayerCard> & { badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[] };
 
