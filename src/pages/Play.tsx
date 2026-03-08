@@ -98,6 +98,7 @@ export default function Play() {
           coinReward={domState.coinReward}
           opponentName={domState.opponentName}
           mode={isDomination ? "domination" : "5v5"}
+          packReward={domState.packReward}
         />
       )}
     </div>
