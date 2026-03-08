@@ -1,6 +1,7 @@
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/cards/StarRating";
+import { Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PlayerCardProps {
@@ -13,11 +14,12 @@ interface PlayerCardProps {
     gem_name?: string | null;
   };
   gemTier?: GemTierData | null;
+  badgeCount?: number;
   onClick?: () => void;
   className?: string;
 }
 
-export function PlayerCard({ card, gemTier, onClick, className }: PlayerCardProps) {
+export function PlayerCard({ card, gemTier, badgeCount, onClick, className }: PlayerCardProps) {
   const visuals = resolveCardVisuals(card, gemTier);
   const positions = [card.position1, card.position2].filter(Boolean).join("/");
 
@@ -43,6 +45,14 @@ export function PlayerCard({ card, gemTier, onClick, className }: PlayerCardProp
       <div className="absolute top-2 right-2">
         <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="sm" />
       </div>
+
+      {/* Badge count */}
+      {!!badgeCount && badgeCount > 0 && (
+        <div className="absolute top-2 left-2 flex items-center gap-0.5 rounded-full bg-background/60 backdrop-blur-sm px-1.5 py-0.5">
+          <Shield className="w-3 h-3 text-foreground/80" />
+          <span className="text-[10px] font-bold text-foreground/80">{badgeCount}</span>
+        </div>
+      )}
 
       {/* Card name */}
       <h3 className="text-sm font-semibold text-foreground truncate w-full text-center drop-shadow-md">

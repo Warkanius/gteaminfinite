@@ -1,50 +1,92 @@
 
 
-# Plan: Sample 8-Star Card + Stat Tooltips + Badge Check
+# Phase 2: Admin Panel — Full Game Customization
 
-## 1. Create sample "DeWayne Watkins" 8-star card via DB migration
+## Overview
+Build out all 7 admin pages replacing the current placeholder stubs. Each page provides full CRUD (create, read, update, delete) for its game data, accessible only to users with the admin role.
 
-Insert a player card into `player_cards` with:
-- `name`: "DeWayne Watkins"
-- `rating`: 8 (breaks the 5-star scale — will show 8 stars)
-- `gem_tier_id`: Game Over tier (`b8288815-bded-4a9b-892f-2acf418a1e3a`)
-- `gem_name`: "Fire Onyx" (dramatic combo from the visual system)
-- Stats all cranked up (5-6 range)
-- `card_animation`: "holographic"
-- Position: SG/SF
+---
 
-Also insert it into `user_collections` for the current user so it appears in the collection. We'll need to insert for a specific user — I'll use a subquery to grab a user, or we can insert the card and you add it manually. Better approach: insert the card, then insert a `pack_players` entry or `user_collections` entry. Let me check the user_collections schema.
+## 1. Admin Player Card Manager (`/admin/players`)
+**File:** `src/pages/admin/AdminPlayers.tsx`
 
-Actually, we need to add it to the logged-in user's collection. I'll insert the card and add a `user_collections` row. Since we don't know the user ID at migration time, I'll insert the card and add it to ALL existing users' collections (there's likely just you).
+- Data table listing all player cards with columns: Name, Rating, Gem Tier, Position, Team
+- Filter/search bar by name, gem tier, position
+- "Add Player" button opens a dialog/drawer form with:
+  - Name, Position 1, Position 2
+  - 9 stat sliders or number inputs (3PT, MID, FIN, DNK, AST, STL, REB, BLK, INT)
+  - Gem tier dropdown (fetched from `gem_tiers` table)
+  - Team dropdown (fetched from `teams` table)
+  - Collection reward toggle
+  - Auto-calculated overall rating displayed live
+- Edit button on each row opens the same form pre-filled
+- Delete with confirmation dialog
+- **Badges & Traits sub-section** on each player form:
+  - Multi-select badges from `badges` table, each with a tier dropdown (Base/Gold/Diamond/HOF/Actolytrene)
+  - Multi-select traits from `signature_traits` table, each with tier + optional target stat
+  - Saves to `player_card_badges` and `player_card_traits` join tables
 
-## 2. Add Recharts Tooltip to stat bars in CardDetailDialog
+## 2. Admin Packs & Odds Manager (`/admin/packs`)
+**File:** `src/pages/admin/AdminPacks.tsx`
 
-Add a `<Tooltip>` component from Recharts to the `BarChart` so hovering a bar shows the numeric stat value. Simple addition — import `Tooltip` from recharts and add it inside the `BarChart`.
+- List of all packs with name, type, cost, 10-box cost
+- Add/Edit pack form: name, pack_type, cost, ten_box_cost
+- **Pack Players tab**: assign player cards to pack slots (slot_number) via `pack_players` table
+- **Odds Table tab**: manage `pack_odds` rows for this pack type — dice_roll range, result_slot, description
+- Delete pack with cascade warning
 
-## 3. Badges on PlayerCard thumbnails
+## 3. Admin Teams & Runs (`/admin/teams`)
+**File:** `src/pages/admin/AdminTeams.tsx`
 
-Currently badges only show in `CardDetailDialog`. The `PlayerCard` component does NOT display badges — it only shows name, stars, gem name, position, and tier. The card is already small, so showing full badges would clutter it. Options:
-- Show a small badge count indicator (e.g., a tiny shield icon with a number)
-- Show nothing on the thumbnail (current behavior — badges visible on click)
+- **Teams tab**: list all teams, add/edit (name, category, unlock_cost), assign player cards to team via `player_cards.team_id`
+- **Domination tab**: list domination road games, add/edit (road_name, opponent_name, game_order, difficulty_stars, coin_reward, pack_reward)
+- **Runs tab**: list runs, add/edit run names
 
-I'll add a small badge count indicator on the card if badges exist, which means the Collection page needs to fetch badge counts per card. This requires joining `player_card_badges` in the collection query or doing a separate count query.
+## 4. Admin Badges & Traits (`/admin/badges`)
+**File:** `src/pages/admin/AdminBadgesTraits.tsx`
 
-## Changes
+- **Badges tab**: table of all badges with name, abbreviation, effect_type, affected_stat
+  - Expand/edit to see all 5 tier descriptions (base, gold, diamond, hof, actolytrene)
+- **Signature Traits tab**: table of all traits with name, abbreviation, condition_type
+  - Expand/edit to see all 5 tier descriptions
 
-### DB Migration
-- Insert "DeWayne Watkins" into `player_cards` with rating 8, Game Over tier, Fire Onyx gem, high stats, holographic animation
-- Insert into `user_collections` for all existing users
-- Optionally add a couple badges to the card
+## 5. Admin Challenges (`/admin/challenges`)
+**File:** `src/pages/admin/AdminChallenges.tsx`
 
-### `CardDetailDialog.tsx`
-- Import `Tooltip` from recharts
-- Add `<Tooltip>` inside the `BarChart` with a custom formatter showing the stat value
+- List challenges with name, type, coin/gem rewards
+- Add/edit form: name, description, challenge_type, coin_reward, gem_reward, conditions (JSON editor or structured form)
 
-### `Collection.tsx`
-- Update the collection query to also fetch badge count (join `player_card_badges`)
-- Pass `badgeCount` to `PlayerCard`
+## 6. Admin Currencies (`/admin/currencies`)
+**File:** `src/pages/admin/AdminCurrencies.tsx`
 
-### `PlayerCard.tsx`
-- Accept optional `badgeCount` prop
-- If > 0, show a small shield icon with count in the bottom-left corner
+- View/edit player profiles' coin and gem balances (admin override)
+- Summary stats: total coins/gems in circulation
+- Manual award form: select user, add coins or gems
+
+## 7. Admin Rules Config (`/admin/rules`)
+**File:** `src/pages/admin/AdminRules.tsx`
+
+- List all `rule_config` entries (key, value, description)
+- Edit value (JSON editor) and description for each rule
+- Add new rule config entries
+- Covers: star conversion key, game mode settings, rating roll modifiers, doubles rules
+
+---
+
+## Shared Components
+
+- **`src/components/admin/DataTable.tsx`** — Reusable sortable/filterable table component used across all admin pages
+- **`src/components/admin/FormDialog.tsx`** — Reusable dialog wrapper for add/edit forms with save/cancel actions
+- **`src/components/admin/StatInput.tsx`** — Number input with label, used for the 9 player stats
+- **`src/components/admin/JsonEditor.tsx`** — Simple JSON textarea editor for conditions and rule values
+
+## Routing Update
+- Update `src/App.tsx` to import each admin page instead of `Placeholder` for admin routes
+
+## Technical Details
+- All data fetching via `@tanstack/react-query` with `supabase` client
+- Mutations use `useMutation` with `queryClient.invalidateQueries` for optimistic UI
+- No database schema changes needed — all tables and RLS policies already exist
+- Admin-only access enforced by existing RLS policies (`has_role(auth.uid(), 'admin')`)
+- Client-side role check in sidebar already hides admin nav for non-admins
 
