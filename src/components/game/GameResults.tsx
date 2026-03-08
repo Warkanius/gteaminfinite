@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { STAT_LABELS, STATS, type CardGameResult, type StatKey } from "@/lib/gameEngine";
+import { PackReveal } from "@/components/packs/PackReveal";
 import type { FullGameResult } from "@/pages/Play";
 
 const DEFAULT_WIN_REWARD = 100;
@@ -15,12 +16,29 @@ interface GameResultsProps {
   coinReward?: number;
   opponentName?: string;
   mode?: string;
+  packReward?: string;
 }
 
-export function GameResults({ result, onPlayAgain, coinReward, opponentName, mode = "5v5" }: GameResultsProps) {
+interface PulledCard {
+  id: string;
+  name: string;
+  rating: number;
+  position1?: string | null;
+  position2?: string | null;
+  gem_name?: string | null;
+  card_color_primary?: string | null;
+  card_color_secondary?: string | null;
+  card_glow_color?: string | null;
+  card_animation?: string | null;
+  gem_tiers?: { color?: string; name?: string } | null;
+}
+
+export function GameResults({ result, onPlayAgain, coinReward, opponentName, mode = "5v5", packReward }: GameResultsProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
+  const [rewardCards, setRewardCards] = useState<PulledCard[] | null>(null);
+  const [showReveal, setShowReveal] = useState(false);
   const won = result.userTotal > result.cpuTotal;
   const tied = result.userTotal === result.cpuTotal;
   const reward = coinReward ?? DEFAULT_WIN_REWARD;
@@ -70,13 +88,38 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
             .update({ coins: profile.coins + reward })
             .eq("user_id", user.id);
         }
+
+        // Open reward pack if present
+        if (packReward) {
+          try {
+            const { data } = await supabase.functions.invoke("open-pack", {
+              body: { pack_id: packReward, quantity: 1 },
+            });
+            if (data?.cards && data.cards.length > 0) {
+              setRewardCards(data.cards);
+              setShowReveal(true);
+            }
+          } catch (e) {
+            console.error("Failed to open reward pack:", e);
+          }
+        }
       }
       setSaved(true);
     };
     save();
-  }, [user, saved, result, won, reward, mode, opponentName]);
+  }, [user, saved, result, won, reward, mode, opponentName, packReward]);
 
   const isDomination = mode === "domination";
+
+  if (showReveal && rewardCards) {
+    return (
+      <PackReveal
+        cards={rewardCards}
+        onOpenAnother={() => setShowReveal(false)}
+        onClose={() => setShowReveal(false)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -93,6 +136,9 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
         <p className="text-4xl font-display">{result.userTotal} — {result.cpuTotal}</p>
         {won && (
           <p className="text-sm text-gem-emerald mt-2">+{reward} coins earned!</p>
+        )}
+        {won && packReward && !showReveal && rewardCards && (
+          <p className="text-sm text-primary mt-1">🎁 Reward pack opened!</p>
         )}
       </div>
 
