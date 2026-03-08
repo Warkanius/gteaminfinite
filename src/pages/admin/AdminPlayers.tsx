@@ -54,6 +54,7 @@ export default function AdminPlayers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [bulkBadgeText, setBulkBadgeText] = useState("");
+  const [generatorText, setGeneratorText] = useState("");
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["admin-players"],
