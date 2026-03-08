@@ -176,11 +176,34 @@ export default function AdminPlayers() {
     // keep editId null so it creates a new record
   }
 
-  function applyPlaystyleTemplate(templateName: string) {
-    const stats = PLAYSTYLE_TEMPLATES[templateName];
-    if (!stats) return;
-    setForm((f) => ({ ...f, ...stats }));
-    toast.success(`Applied "${templateName}" template`);
+  function runGenerator() {
+    const selectedTier = gemTiers.find((g) => g.id === form.gem_tier_id);
+    if (!selectedTier) {
+      toast.error("Select a gem tier first — the generator needs it for stat scaling");
+      return;
+    }
+    if (!generatorText.trim()) {
+      toast.error("Describe the player archetype (e.g. 'badge heavy two-way slasher')");
+      return;
+    }
+    const result = generatePlayer(
+      generatorText,
+      selectedTier.stars,
+      allBadges.map((b) => ({ id: b.id, abbreviation: b.abbreviation, affected_stat: b.affected_stat, effect_type: b.effect_type })),
+    );
+    setForm((f) => ({
+      ...f,
+      ...result.stats,
+      position1: result.positions[0],
+      position2: result.positions[1],
+      badges: result.badges
+        .map((rb) => {
+          const badge = allBadges.find((b) => b.abbreviation.toLowerCase() === rb.abbreviation.toLowerCase());
+          return badge ? { badge_id: badge.id, tier: rb.tier } : null;
+        })
+        .filter(Boolean) as { badge_id: string; tier: string }[],
+    }));
+    toast.success(result.summary);
   }
 
   function importBulkBadges() {
