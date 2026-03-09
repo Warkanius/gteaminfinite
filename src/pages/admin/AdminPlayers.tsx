@@ -460,9 +460,9 @@ export default function AdminPlayers() {
           </div>
 
           {/* Traits */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-base">Signature Traits</Label>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Signature Traits</h3>
               <Select onValueChange={(traitId) => setForm((f) => ({ ...f, traits: [...f.traits, { trait_id: traitId, tier: "base", target_stat: null }] }))}>
                 <SelectTrigger className="w-48"><SelectValue placeholder="Add trait…" /></SelectTrigger>
                 <SelectContent>{allTraits.filter((t) => !form.traits.some((ft) => ft.trait_id === t.id)).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
