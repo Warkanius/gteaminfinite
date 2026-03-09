@@ -328,7 +328,52 @@ export default function AdminTeams() {
 
       {/* Run dialog */}
       <FormDialog open={runDialog} onOpenChange={setRunDialog} title={runEditId ? "Edit Run" : "Add Run"} onSave={() => runSave.mutate()} saving={runSave.isPending}>
-        <div className="space-y-1"><Label>Name</Label><Input value={runForm.name} onChange={(e) => setRunForm((f) => ({ ...f, name: e.target.value }))} /></div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2"><Label>Name</Label><Input value={runForm.name} onChange={(e) => setRunForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. 3v3 Endless" /></div>
+            <div className="space-y-2"><Label>Target Score</Label><Input type="number" value={runForm.target_score} onChange={(e) => setRunForm((f) => ({ ...f, target_score: Number(e.target.value) }))} /></div>
+          </div>
+          <div className="space-y-2">
+            <Label>Opponent Roster (Team)</Label>
+            <Select value={runForm.team_id || "none"} onValueChange={(val) => setRunForm(f => ({ ...f, team_id: val === "none" ? null : val }))}>
+              <SelectTrigger><SelectValue placeholder="Select a team..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {teams.map(t => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Select a team to act as the pool of opponents for this run.</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Milestone Rewards (JSON)</Label>
+            <textarea 
+              className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+              value={typeof runForm.milestones === 'string' ? runForm.milestones : JSON.stringify(runForm.milestones, null, 2)}
+              onChange={(e) => {
+                setRunForm(f => ({...f, milestones: e.target.value}));
+              }}
+              onBlur={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value);
+                  setRunForm(f => ({...f, milestones: parsed}));
+                } catch {
+                  // Ignore on blur if it's invalid
+                }
+              }}
+              placeholder='[
+  {
+    "wins_required": 3,
+    "coin_reward": 500,
+    "gem_reward": 50,
+    "pack_reward": "basic"
+  }
+]'
+            />
+            <p className="text-xs text-muted-foreground">Define scaling rewards as an array of objects.</p>
+          </div>
+        </div>
       </FormDialog>
 
       <ConfirmDialog open={!!teamDeleteId} onOpenChange={(o) => !o && setTeamDeleteId(null)} title="Delete Team" description="This will permanently delete this team." onConfirm={() => teamDeleteId && teamDelete.mutate(teamDeleteId)} loading={teamDelete.isPending} />
