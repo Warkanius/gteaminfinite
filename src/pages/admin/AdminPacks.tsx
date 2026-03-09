@@ -111,31 +111,48 @@ export default function AdminPacks() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Packs & Odds Manager</h1>
-      <DataTable
-        data={packs}
-        columns={columns}
-        isLoading={isLoading}
-        searchKeys={["name", "pack_type"]}
-        searchPlaceholder="Search packs…"
-        onAdd={() => { setForm(emptyPack()); setEditId(null); setDialogOpen(true); }}
-        addLabel="Add Pack"
-        actions={(row) => (
-          <div className="flex gap-1">
-            <Button size="icon" variant="ghost" onClick={() => { setForm({ name: row.name, pack_type: row.pack_type, cost: row.cost, ten_box_cost: row.ten_box_cost }); setEditId(row.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-            <Button size="sm" variant="outline" onClick={() => setDetailPack(row)}>Manage</Button>
-            <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-          </div>
-        )}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Packs & Odds Manager</CardTitle>
+          <CardDescription>Manage pack pricing, odds, and player contents for the pack market.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            data={packs}
+            columns={columns}
+            isLoading={isLoading}
+            searchKeys={["name", "pack_type"]}
+            searchPlaceholder="Search packs…"
+            onAdd={() => { setForm(emptyPack()); setEditId(null); setDialogOpen(true); }}
+            addLabel="Add Pack"
+            actions={(row) => (
+              <div className="flex gap-1">
+                <Button size="icon" variant="ghost" onClick={() => { setForm({ name: row.name, pack_type: row.pack_type, cost: row.cost, ten_box_cost: row.ten_box_cost }); setEditId(row.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                <Button size="sm" variant="outline" onClick={() => setDetailPack(row)}>Manage</Button>
+                <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              </div>
+            )}
+          />
+        </CardContent>
+      </Card>
 
       {/* Add/Edit pack form */}
       <FormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editId ? "Edit Pack" : "Add Pack"} onSave={() => saveMut.mutate()} saving={saveMut.isPending}>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-          <div className="space-y-1"><Label>Pack Type</Label><Input value={form.pack_type} onChange={(e) => setForm((f) => ({ ...f, pack_type: e.target.value }))} /></div>
-          <div className="space-y-1"><Label>Cost</Label><Input type="number" value={form.cost} onChange={(e) => setForm((f) => ({ ...f, cost: Number(e.target.value) }))} /></div>
-          <div className="space-y-1"><Label>10-Box Cost</Label><Input type="number" value={form.ten_box_cost ?? ""} onChange={(e) => setForm((f) => ({ ...f, ten_box_cost: e.target.value ? Number(e.target.value) : null }))} placeholder="Optional" /></div>
+        <div className="space-y-4">
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <h3 className="font-semibold text-sm">Basic Details</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Pack Type</Label><Input value={form.pack_type} onChange={(e) => setForm((f) => ({ ...f, pack_type: e.target.value }))} /></div>
+            </div>
+          </div>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <h3 className="font-semibold text-sm">Store Pricing</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1"><Label>Cost (Coins/Gems)</Label><Input type="number" value={form.cost} onChange={(e) => setForm((f) => ({ ...f, cost: Number(e.target.value) }))} /></div>
+              <div className="space-y-1"><Label>10-Box Cost</Label><Input type="number" value={form.ten_box_cost ?? ""} onChange={(e) => setForm((f) => ({ ...f, ten_box_cost: e.target.value ? Number(e.target.value) : null }))} placeholder="Optional" /></div>
+            </div>
+          </div>
         </div>
       </FormDialog>
 
