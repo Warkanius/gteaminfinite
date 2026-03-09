@@ -184,21 +184,25 @@ export default function AdminPacks() {
               </div>
             </div>
           </TabsContent>
-          <TabsContent value="odds" className="space-y-3">
-            <div className="flex gap-2 items-end">
-              <div className="space-y-1 flex-1"><Label>Dice Roll</Label><Input value={oddsForm.dice_roll} onChange={(e) => setOddsForm((f) => ({ ...f, dice_roll: e.target.value }))} placeholder="e.g. 1-3" /></div>
-              <div className="space-y-1 flex-1"><Label>Result Slot</Label><Input value={oddsForm.result_slot} onChange={(e) => setOddsForm((f) => ({ ...f, result_slot: e.target.value }))} /></div>
-              <div className="space-y-1 flex-1"><Label>Description</Label><Input value={oddsForm.description} onChange={(e) => setOddsForm((f) => ({ ...f, description: e.target.value }))} /></div>
-              <Button size="sm" onClick={() => addOddsMut.mutate()} disabled={!oddsForm.dice_roll || !oddsForm.result_slot}><Plus className="h-4 w-4" /></Button>
-            </div>
-            {packOdds.map((o) => (
-              <div key={o.id} className="flex items-center gap-2 bg-muted/50 rounded p-2">
-                <span className="text-sm font-mono w-16">{o.dice_roll}</span>
-                <span className="text-sm flex-1">{o.result_slot}</span>
-                <span className="text-xs text-muted-foreground flex-1">{o.description ?? ""}</span>
-                <Button size="icon" variant="ghost" onClick={() => deleteOddsMut.mutate(o.id)}><X className="h-3 w-3" /></Button>
+          <TabsContent value="odds" className="space-y-4 pt-4">
+            <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+              <div className="flex gap-2 items-end">
+                <div className="space-y-1 flex-1"><Label>Dice Roll</Label><Input value={oddsForm.dice_roll} onChange={(e) => setOddsForm((f) => ({ ...f, dice_roll: e.target.value }))} placeholder="e.g. 1-3" /></div>
+                <div className="space-y-1 flex-1"><Label>Result Slot</Label><Input value={oddsForm.result_slot} onChange={(e) => setOddsForm((f) => ({ ...f, result_slot: e.target.value }))} /></div>
+                <div className="space-y-1 flex-[2]"><Label>Description</Label><Input value={oddsForm.description} onChange={(e) => setOddsForm((f) => ({ ...f, description: e.target.value }))} placeholder="Optional" /></div>
+                <Button onClick={() => addOddsMut.mutate()} disabled={!oddsForm.dice_roll || !oddsForm.result_slot}><Plus className="h-4 w-4 mr-1" /> Add Rule</Button>
               </div>
-            ))}
+              <div className="space-y-2">
+                {packOdds.map((o) => (
+                  <div key={o.id} className="flex items-center gap-3 bg-background border rounded-md p-2">
+                    <span className="text-sm font-mono bg-muted px-2 py-1 rounded w-16 text-center">{o.dice_roll}</span>
+                    <span className="text-sm font-medium w-24">Slot: {o.result_slot}</span>
+                    <span className="text-sm text-muted-foreground flex-1">{o.description ?? ""}</span>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteOddsMut.mutate(o.id)}><X className="h-4 w-4" /></Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </FormDialog>
