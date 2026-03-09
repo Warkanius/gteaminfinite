@@ -800,6 +800,44 @@ export type Database = {
         }
         Relationships: []
       }
+      user_runs: {
+        Row: {
+          created_at: string
+          current_wins: number
+          highest_wins: number
+          id: string
+          run_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_wins?: number
+          highest_wins?: number
+          id?: string
+          run_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_wins?: number
+          highest_wins?: number
+          id?: string
+          run_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_runs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
