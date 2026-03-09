@@ -159,7 +159,12 @@ export default function AdminPacks() {
       {/* Detail panel */}
       <FormDialog open={!!detailPack} onOpenChange={(o) => !o && setDetailPack(null)} title={`Manage: ${detailPack?.name ?? ""}`} onSave={() => setDetailPack(null)} className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <Tabs defaultValue="players">
-          <TabsList><TabsTrigger value="players">Pack Players</TabsTrigger><TabsTrigger value="odds">Odds Table</TabsTrigger></TabsList>
+          <TabsList>
+            <TabsTrigger value="players">Pack Players</TabsTrigger>
+            {detailPack?.pack_type !== "rttr" && detailPack?.pack_type !== "dom" && (
+              <TabsTrigger value="odds">Odds Table</TabsTrigger>
+            )}
+          </TabsList>
           <TabsContent value="players" className="space-y-4 pt-4">
             <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
               <div className="flex gap-2 items-end">
