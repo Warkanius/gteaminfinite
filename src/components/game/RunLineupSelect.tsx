@@ -139,7 +139,9 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
               <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold z-10 shadow-lg border-2 border-background">
                 {i + 1}
               </div>
-              <PlayerCard card={card} size="sm" onClick={() => handleCardClick(card.id)} />
+              <div onClick={() => handleCardClick(card.id)} className="cursor-pointer">
+                <PlayerCard card={card} />
+              </div>
             </div>
           ))}
           {Array.from({ length: 3 - playerLineup.length }).map((_, i) => (
