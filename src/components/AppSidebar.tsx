@@ -73,8 +73,8 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end={item.url === "/"}
-                      className="hover:bg-accent/50"
-                      activeClassName="bg-accent text-primary font-medium"
+                      className="hover:bg-sidebar-accent/60 text-sidebar-foreground"
+                      activeClassName="bg-primary text-primary-foreground font-medium"
                     >
                       <item.icon className="mr-2 h-4 w-4" />
                       <span>{item.title}</span>
@@ -98,8 +98,8 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild>
                       <NavLink
                         to={item.url}
-                        className="hover:bg-accent/50"
-                        activeClassName="bg-accent text-primary font-medium"
+                        className="hover:bg-sidebar-accent/60 text-sidebar-foreground"
+                        activeClassName="bg-primary text-primary-foreground font-medium"
                       >
                         <item.icon className="mr-2 h-4 w-4" />
                         <span>{item.title}</span>
