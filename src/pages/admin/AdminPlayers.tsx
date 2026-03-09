@@ -384,9 +384,11 @@ export default function AdminPlayers() {
           </div>
 
           {/* Card Appearance */}
-          <div>
-            <Label className="text-base mb-2 block">Card Appearance</Label>
-            <p className="text-xs text-muted-foreground mb-3">Leave blank to auto-infer from gem name / tier.</p>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div>
+              <h3 className="font-semibold text-sm block">Card Appearance</h3>
+              <p className="text-xs text-muted-foreground mt-1">Leave blank to auto-infer from gem name / tier.</p>
+            </div>
             {(() => {
               const preview = resolveCardVisuals(form as any, gemTiers.find(g => g.id === form.gem_tier_id));
               const isHsl = (c: string) => /^\d+\s/.test(c);
