@@ -422,9 +422,9 @@ export default function AdminPlayers() {
           </div>
 
           {/* Badges */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-base">Badges</Label>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Badges</h3>
               <Select onValueChange={(badgeId) => setForm((f) => ({ ...f, badges: [...f.badges, { badge_id: badgeId, tier: "base" }] }))}>
                 <SelectTrigger className="w-48"><SelectValue placeholder="Add badge…" /></SelectTrigger>
                 <SelectContent>{allBadges.filter((b) => !form.badges.some((fb) => fb.badge_id === b.id)).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
