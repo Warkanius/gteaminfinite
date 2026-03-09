@@ -129,7 +129,12 @@ export default function AdminTeams() {
     { key: "pack_reward", label: "Pack Reward", render: (r) => r.pack_reward ?? "—" },
   ];
 
-  const runCols: Column<Run>[] = [{ key: "name", label: "Name", sortable: true }];
+  const runCols: Column<Run>[] = [
+    { key: "name", label: "Name", sortable: true },
+    { key: "target_score" as any, label: "Score", render: (r: any) => r.target_score },
+    { key: "team_id" as any, label: "Roster (Team)", render: (r: any) => teams.find(t => t.id === r.team_id)?.name || "None" },
+    { key: "milestones" as any, label: "Milestones", render: (r: any) => `${Array.isArray(r.milestones) ? r.milestones.length : 0} Ranks` }
+  ];
 
   // Group Domination Games by Road
   const groupedDomGames = domGames.reduce((acc, game) => {
