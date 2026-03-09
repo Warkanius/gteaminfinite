@@ -108,7 +108,7 @@ export default function RunsHub() {
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Active Streak</p>
                     <div className="flex items-center gap-2">
-                      <Flame className={`h-5 w-5 ${currentWins > 0 ? "text-orange-500" : "text-muted-foreground"}`} />
+                      <Flame className={`h-5 w-5 ${currentWins > 0 ? "text-gem-ruby" : "text-muted-foreground"}`} />
                       <span className="text-2xl font-bold">{currentWins}</span>
                     </div>
                   </div>
