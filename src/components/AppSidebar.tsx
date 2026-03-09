@@ -4,7 +4,7 @@ import {
   Package,
   Trophy,
   Swords,
-  Dice5,
+  Sparkles,
   ShoppingBag,
   Settings,
   Shield,
