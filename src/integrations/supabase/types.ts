@@ -656,19 +656,36 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          milestones: Json
           name: string
+          target_score: number
+          team_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
+          milestones?: Json
           name: string
+          target_score?: number
+          team_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
+          milestones?: Json
           name?: string
+          target_score?: number
+          team_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "runs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       signature_traits: {
         Row: {
