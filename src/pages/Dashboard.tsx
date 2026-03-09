@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 const quickActions = [
   { title: "My Collection", desc: "View your player cards", icon: BookOpen, url: "/collection", color: "text-gem-emerald" },
-  { title: "Play Game", desc: "Start a dice roll match", icon: Dice5, url: "/play", color: "text-gem-diamond" },
+  { title: "Game Modes", desc: "Select match type", icon: Dice5, url: "/play", color: "text-gem-diamond" },
   { title: "The Runs", desc: "Race to 21 Gauntlet", icon: Trophy, url: "/runs", color: "text-gem-amethyst" },
   { title: "Pack Market", desc: "Open new packs", icon: ShoppingBag, url: "/packs", color: "text-gem-gold" },
 ];

@@ -72,6 +72,38 @@ export default function RunsHub() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Rank & Progression Bar */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-1">Lifetime Rank</p>
+                      <div className={`font-display text-2xl font-bold flex items-center gap-2 ${rankInfo.color}`}>
+                        <Star className="h-5 w-5 fill-current" />
+                        {rankInfo.rank}
+                      </div>
+                    </div>
+                    {rankInfo.winsNeeded > 0 && (
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Next Tier</p>
+                        <p className="text-sm font-bold flex items-center justify-end gap-1">
+                          {rankInfo.nextRank} <ChevronRight className="h-3 w-3" />
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <Progress value={rankInfo.progress} className="h-2.5 bg-muted" />
+                    {rankInfo.winsNeeded > 0 ? (
+                      <p className="text-xs text-right text-muted-foreground">
+                        <span className="font-bold text-foreground">{rankInfo.winsNeeded}</span> wins to rank up
+                      </p>
+                    ) : (
+                      <p className="text-xs text-right text-yellow-500 font-bold">Max Rank Reached!</p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="bg-muted/30 rounded-lg p-4 flex justify-between items-center border border-border/50">
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Active Streak</p>
