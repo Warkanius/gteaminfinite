@@ -202,11 +202,9 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
               const isSelected = selectedIds.has(card.id);
               return (
                 <div key={card.id} className="relative w-32 sm:w-36 shrink-0 transition-transform hover:-translate-y-1">
-                  <PlayerCard 
-                    card={card} 
-                    size="sm" 
-                    onClick={() => handleCardClick(card.id)}
-                  />
+                  <div onClick={() => handleCardClick(card.id)} className="cursor-pointer">
+                    <PlayerCard card={card} />
+                  </div>
                   {isSelected && (
                     <div className="absolute inset-0 bg-background/50 rounded-lg flex items-center justify-center border-4 border-primary">
                       <div className="bg-primary text-primary-foreground font-bold px-3 py-1 rounded-full text-sm">
