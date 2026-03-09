@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pencil, Trash2, X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
@@ -110,31 +111,48 @@ export default function AdminPacks() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Packs & Odds Manager</h1>
-      <DataTable
-        data={packs}
-        columns={columns}
-        isLoading={isLoading}
-        searchKeys={["name", "pack_type"]}
-        searchPlaceholder="Search packs…"
-        onAdd={() => { setForm(emptyPack()); setEditId(null); setDialogOpen(true); }}
-        addLabel="Add Pack"
-        actions={(row) => (
-          <div className="flex gap-1">
-            <Button size="icon" variant="ghost" onClick={() => { setForm({ name: row.name, pack_type: row.pack_type, cost: row.cost, ten_box_cost: row.ten_box_cost }); setEditId(row.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-            <Button size="sm" variant="outline" onClick={() => setDetailPack(row)}>Manage</Button>
-            <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-          </div>
-        )}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Packs & Odds Manager</CardTitle>
+          <CardDescription>Manage pack pricing, odds, and player contents for the pack market.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            data={packs}
+            columns={columns}
+            isLoading={isLoading}
+            searchKeys={["name", "pack_type"]}
+            searchPlaceholder="Search packs…"
+            onAdd={() => { setForm(emptyPack()); setEditId(null); setDialogOpen(true); }}
+            addLabel="Add Pack"
+            actions={(row) => (
+              <div className="flex gap-1">
+                <Button size="icon" variant="ghost" onClick={() => { setForm({ name: row.name, pack_type: row.pack_type, cost: row.cost, ten_box_cost: row.ten_box_cost }); setEditId(row.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                <Button size="sm" variant="outline" onClick={() => setDetailPack(row)}>Manage</Button>
+                <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              </div>
+            )}
+          />
+        </CardContent>
+      </Card>
 
       {/* Add/Edit pack form */}
       <FormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editId ? "Edit Pack" : "Add Pack"} onSave={() => saveMut.mutate()} saving={saveMut.isPending}>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-          <div className="space-y-1"><Label>Pack Type</Label><Input value={form.pack_type} onChange={(e) => setForm((f) => ({ ...f, pack_type: e.target.value }))} /></div>
-          <div className="space-y-1"><Label>Cost</Label><Input type="number" value={form.cost} onChange={(e) => setForm((f) => ({ ...f, cost: Number(e.target.value) }))} /></div>
-          <div className="space-y-1"><Label>10-Box Cost</Label><Input type="number" value={form.ten_box_cost ?? ""} onChange={(e) => setForm((f) => ({ ...f, ten_box_cost: e.target.value ? Number(e.target.value) : null }))} placeholder="Optional" /></div>
+        <div className="space-y-4">
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <h3 className="font-semibold text-sm">Basic Details</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Pack Type</Label><Input value={form.pack_type} onChange={(e) => setForm((f) => ({ ...f, pack_type: e.target.value }))} /></div>
+            </div>
+          </div>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <h3 className="font-semibold text-sm">Store Pricing</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1"><Label>Cost (Coins/Gems)</Label><Input type="number" value={form.cost} onChange={(e) => setForm((f) => ({ ...f, cost: Number(e.target.value) }))} /></div>
+              <div className="space-y-1"><Label>10-Box Cost</Label><Input type="number" value={form.ten_box_cost ?? ""} onChange={(e) => setForm((f) => ({ ...f, ten_box_cost: e.target.value ? Number(e.target.value) : null }))} placeholder="Optional" /></div>
+            </div>
+          </div>
         </div>
       </FormDialog>
 
@@ -142,41 +160,49 @@ export default function AdminPacks() {
       <FormDialog open={!!detailPack} onOpenChange={(o) => !o && setDetailPack(null)} title={`Manage: ${detailPack?.name ?? ""}`} onSave={() => setDetailPack(null)} className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <Tabs defaultValue="players">
           <TabsList><TabsTrigger value="players">Pack Players</TabsTrigger><TabsTrigger value="odds">Odds Table</TabsTrigger></TabsList>
-          <TabsContent value="players" className="space-y-3">
-            <div className="flex gap-2 items-end">
-              <div className="space-y-1 flex-1">
-                <Label>Player</Label>
-                <Select value={slotPlayer} onValueChange={setSlotPlayer}>
-                  <SelectTrigger><SelectValue placeholder="Select player" /></SelectTrigger>
-                  <SelectContent>{playerCards.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                </Select>
+          <TabsContent value="players" className="space-y-4 pt-4">
+            <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+              <div className="flex gap-2 items-end">
+                <div className="space-y-1 flex-1">
+                  <Label>Player</Label>
+                  <Select value={slotPlayer} onValueChange={setSlotPlayer}>
+                    <SelectTrigger><SelectValue placeholder="Select player" /></SelectTrigger>
+                    <SelectContent>{playerCards.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 w-24"><Label>Slot</Label><Input type="number" min={1} value={slotNum} onChange={(e) => setSlotNum(Number(e.target.value))} /></div>
+                <Button disabled={!slotPlayer} onClick={() => { addSlotMut.mutate({ packId: detailPack!.id, playerCardId: slotPlayer, slot: slotNum }); setSlotPlayer(""); }}><Plus className="h-4 w-4 mr-1" /> Add Player</Button>
               </div>
-              <div className="space-y-1 w-20"><Label>Slot</Label><Input type="number" min={1} value={slotNum} onChange={(e) => setSlotNum(Number(e.target.value))} /></div>
-              <Button size="sm" disabled={!slotPlayer} onClick={() => { addSlotMut.mutate({ packId: detailPack!.id, playerCardId: slotPlayer, slot: slotNum }); setSlotPlayer(""); }}><Plus className="h-4 w-4" /></Button>
+              <div className="space-y-2">
+                {packPlayers.map((pp) => (
+                  <div key={pp.id} className="flex items-center gap-3 bg-background border rounded-md p-2">
+                    <span className="text-sm font-mono bg-muted px-2 py-1 rounded w-10 text-center">#{pp.slot_number}</span>
+                    <span className="flex-1 font-medium">{playerCards.find((p) => p.id === pp.player_card_id)?.name ?? pp.player_card_id}</span>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeSlotMut.mutate(pp.id)}><X className="h-4 w-4" /></Button>
+                  </div>
+                ))}
+              </div>
             </div>
-            {packPlayers.map((pp) => (
-              <div key={pp.id} className="flex items-center gap-2 bg-muted/50 rounded p-2">
-                <span className="text-sm font-mono w-8">#{pp.slot_number}</span>
-                <span className="flex-1 text-sm">{playerCards.find((p) => p.id === pp.player_card_id)?.name ?? pp.player_card_id}</span>
-                <Button size="icon" variant="ghost" onClick={() => removeSlotMut.mutate(pp.id)}><X className="h-3 w-3" /></Button>
-              </div>
-            ))}
           </TabsContent>
-          <TabsContent value="odds" className="space-y-3">
-            <div className="flex gap-2 items-end">
-              <div className="space-y-1 flex-1"><Label>Dice Roll</Label><Input value={oddsForm.dice_roll} onChange={(e) => setOddsForm((f) => ({ ...f, dice_roll: e.target.value }))} placeholder="e.g. 1-3" /></div>
-              <div className="space-y-1 flex-1"><Label>Result Slot</Label><Input value={oddsForm.result_slot} onChange={(e) => setOddsForm((f) => ({ ...f, result_slot: e.target.value }))} /></div>
-              <div className="space-y-1 flex-1"><Label>Description</Label><Input value={oddsForm.description} onChange={(e) => setOddsForm((f) => ({ ...f, description: e.target.value }))} /></div>
-              <Button size="sm" onClick={() => addOddsMut.mutate()} disabled={!oddsForm.dice_roll || !oddsForm.result_slot}><Plus className="h-4 w-4" /></Button>
-            </div>
-            {packOdds.map((o) => (
-              <div key={o.id} className="flex items-center gap-2 bg-muted/50 rounded p-2">
-                <span className="text-sm font-mono w-16">{o.dice_roll}</span>
-                <span className="text-sm flex-1">{o.result_slot}</span>
-                <span className="text-xs text-muted-foreground flex-1">{o.description ?? ""}</span>
-                <Button size="icon" variant="ghost" onClick={() => deleteOddsMut.mutate(o.id)}><X className="h-3 w-3" /></Button>
+          <TabsContent value="odds" className="space-y-4 pt-4">
+            <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+              <div className="flex gap-2 items-end">
+                <div className="space-y-1 flex-1"><Label>Dice Roll</Label><Input value={oddsForm.dice_roll} onChange={(e) => setOddsForm((f) => ({ ...f, dice_roll: e.target.value }))} placeholder="e.g. 1-3" /></div>
+                <div className="space-y-1 flex-1"><Label>Result Slot</Label><Input value={oddsForm.result_slot} onChange={(e) => setOddsForm((f) => ({ ...f, result_slot: e.target.value }))} /></div>
+                <div className="space-y-1 flex-[2]"><Label>Description</Label><Input value={oddsForm.description} onChange={(e) => setOddsForm((f) => ({ ...f, description: e.target.value }))} placeholder="Optional" /></div>
+                <Button onClick={() => addOddsMut.mutate()} disabled={!oddsForm.dice_roll || !oddsForm.result_slot}><Plus className="h-4 w-4 mr-1" /> Add Rule</Button>
               </div>
-            ))}
+              <div className="space-y-2">
+                {packOdds.map((o) => (
+                  <div key={o.id} className="flex items-center gap-3 bg-background border rounded-md p-2">
+                    <span className="text-sm font-mono bg-muted px-2 py-1 rounded w-16 text-center">{o.dice_roll}</span>
+                    <span className="text-sm font-medium w-24">Slot: {o.result_slot}</span>
+                    <span className="text-sm text-muted-foreground flex-1">{o.description ?? ""}</span>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteOddsMut.mutate(o.id)}><X className="h-4 w-4" /></Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </FormDialog>

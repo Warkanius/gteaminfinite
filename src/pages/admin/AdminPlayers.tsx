@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pencil, Trash2, X, Copy, Zap, Import, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
@@ -251,22 +252,29 @@ export default function AdminPlayers() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Player Card Manager</h1>
-      <DataTable
-        data={players}
-        columns={columns}
-        isLoading={isLoading}
-        searchKeys={["name"]}
-        searchPlaceholder="Search players…"
-        onAdd={() => { setForm(emptyForm()); setEditId(null); setBulkBadgeText(""); setGeneratorText(""); setDialogOpen(true); }}
-        addLabel="Add Player"
-        actions={(row) => (
-          <div className="flex gap-1">
-            <Button size="icon" variant="ghost" onClick={() => openEdit(row)}><Pencil className="h-4 w-4" /></Button>
-            <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-          </div>
-        )}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Player Card Manager</CardTitle>
+          <CardDescription>Manage the roster of players, their attributes, badges, and card visuals.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            data={players}
+            columns={columns}
+            isLoading={isLoading}
+            searchKeys={["name"]}
+            searchPlaceholder="Search players…"
+            onAdd={() => { setForm(emptyForm()); setEditId(null); setBulkBadgeText(""); setGeneratorText(""); setDialogOpen(true); }}
+            addLabel="Add Player"
+            actions={(row) => (
+              <div className="flex gap-1">
+                <Button size="icon" variant="ghost" onClick={() => openEdit(row)}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              </div>
+            )}
+          />
+        </CardContent>
+      </Card>
 
       <FormDialog
         open={dialogOpen}
@@ -315,49 +323,57 @@ export default function AdminPlayers() {
           </div>
 
           {/* Basic info */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label>Name</Label>
-              <Input value={form.name ?? ""} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <h3 className="font-semibold text-sm">General Info</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>Name</Label>
+                <Input value={form.name ?? ""} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Gem Name</Label>
+                <Input value={form.gem_name ?? ""} onChange={(e) => setForm((f) => ({ ...f, gem_name: e.target.value || null }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Position 1</Label>
+                <Select value={form.position1 ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, position1: v || null }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>{POSITIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Position 2</Label>
+                <Select value={form.position2 ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, position2: v || null }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>{POSITIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Gem Tier</Label>
+                <Select value={form.gem_tier_id ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, gem_tier_id: v || null }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>{gemTiers.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Team</Label>
+                <Select value={form.team_id ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, team_id: v || null }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>{teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label>Gem Name</Label>
-              <Input value={form.gem_name ?? ""} onChange={(e) => setForm((f) => ({ ...f, gem_name: e.target.value || null }))} />
-            </div>
-            <div className="space-y-1">
-              <Label>Position 1</Label>
-              <Select value={form.position1 ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, position1: v || null }))}>
-                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent>{POSITIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Position 2</Label>
-              <Select value={form.position2 ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, position2: v || null }))}>
-                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent>{POSITIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Gem Tier</Label>
-              <Select value={form.gem_tier_id ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, gem_tier_id: v || null }))}>
-                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent>{gemTiers.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Team</Label>
-              <Select value={form.team_id ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, team_id: v || null }))}>
-                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent>{teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-              </Select>
+            {/* Collection reward */}
+            <div className="flex items-center gap-3 pt-2">
+              <Switch checked={form.is_collection_reward ?? false} onCheckedChange={(v) => setForm((f) => ({ ...f, is_collection_reward: v }))} />
+              <Label>Collection Reward</Label>
             </div>
           </div>
 
           {/* Stats */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-base">Stats</Label>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Attributes</h3>
               <Badge variant="secondary" className="text-lg font-mono">OVR {overallRating}</Badge>
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
@@ -367,16 +383,12 @@ export default function AdminPlayers() {
             </div>
           </div>
 
-          {/* Collection reward */}
-          <div className="flex items-center gap-3">
-            <Switch checked={form.is_collection_reward ?? false} onCheckedChange={(v) => setForm((f) => ({ ...f, is_collection_reward: v }))} />
-            <Label>Collection Reward</Label>
-          </div>
-
           {/* Card Appearance */}
-          <div>
-            <Label className="text-base mb-2 block">Card Appearance</Label>
-            <p className="text-xs text-muted-foreground mb-3">Leave blank to auto-infer from gem name / tier.</p>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div>
+              <h3 className="font-semibold text-sm block">Card Appearance</h3>
+              <p className="text-xs text-muted-foreground mt-1">Leave blank to auto-infer from gem name / tier.</p>
+            </div>
             {(() => {
               const preview = resolveCardVisuals(form as any, gemTiers.find(g => g.id === form.gem_tier_id));
               const isHsl = (c: string) => /^\d+\s/.test(c);
@@ -410,9 +422,9 @@ export default function AdminPlayers() {
           </div>
 
           {/* Badges */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-base">Badges</Label>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Badges</h3>
               <Select onValueChange={(badgeId) => setForm((f) => ({ ...f, badges: [...f.badges, { badge_id: badgeId, tier: "base" }] }))}>
                 <SelectTrigger className="w-48"><SelectValue placeholder="Add badge…" /></SelectTrigger>
                 <SelectContent>{allBadges.filter((b) => !form.badges.some((fb) => fb.badge_id === b.id)).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
@@ -448,9 +460,9 @@ export default function AdminPlayers() {
           </div>
 
           {/* Traits */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-base">Signature Traits</Label>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Signature Traits</h3>
               <Select onValueChange={(traitId) => setForm((f) => ({ ...f, traits: [...f.traits, { trait_id: traitId, tier: "base", target_stat: null }] }))}>
                 <SelectTrigger className="w-48"><SelectValue placeholder="Add trait…" /></SelectTrigger>
                 <SelectContent>{allTraits.filter((t) => !form.traits.some((ft) => ft.trait_id === t.id)).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
