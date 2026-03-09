@@ -59,6 +59,7 @@ export default function RunsHub() {
           const currentWins = userRun?.current_wins || 0;
           const highestWins = userRun?.highest_wins || 0;
           const opponentName = run.teams?.name || "Unknown Team";
+          const rankInfo = getRankData(highestWins);
           
           return (
             <Card key={run.id} className="border-border/50 bg-card overflow-hidden">
