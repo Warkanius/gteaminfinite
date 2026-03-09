@@ -85,7 +85,7 @@ export default function AdminTeams() {
   });
 
   // Runs
-  const [runForm, setRunForm] = useState({ name: "" });
+  const [runForm, setRunForm] = useState<{name: string; target_score: number; team_id: string | null; milestones: any[] | string}>({ name: "", target_score: 21, team_id: null, milestones: [] });
   const [runEditId, setRunEditId] = useState<string | null>(null);
   const [runDialog, setRunDialog] = useState(false);
   const [runDeleteId, setRunDeleteId] = useState<string | null>(null);
@@ -96,8 +96,14 @@ export default function AdminTeams() {
 
   const runSave = useMutation({
     mutationFn: async () => {
-      if (runEditId) { const { error } = await supabase.from("runs").update(runForm).eq("id", runEditId); if (error) throw error; }
-      else { const { error } = await supabase.from("runs").insert(runForm); if (error) throw error; }
+      const payload = {
+        name: runForm.name,
+        target_score: runForm.target_score,
+        team_id: runForm.team_id,
+        milestones: typeof runForm.milestones === 'string' ? JSON.parse(runForm.milestones) : runForm.milestones
+      };
+      if (runEditId) { const { error } = await supabase.from("runs").update(payload).eq("id", runEditId); if (error) throw error; }
+      else { const { error } = await supabase.from("runs").insert(payload); if (error) throw error; }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-runs"] }); setRunDialog(false); toast.success("Saved"); },
     onError: (e) => toast.error(e.message),
