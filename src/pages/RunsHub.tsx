@@ -28,13 +28,78 @@ export default function RunsHub() {
     enabled: !!user,
   });
 
+  const RANKS = [
+    { name: "Nobody I", wins: 1, color: "text-muted-foreground" },
+    { name: "Nobody II", wins: 5, color: "text-muted-foreground" },
+    { name: "Nobody III", wins: 10, color: "text-muted-foreground" },
+    { name: "Nobody IV", wins: 15, color: "text-muted-foreground" },
+    { name: "Nobody V", wins: 20, color: "text-muted-foreground" },
+    { name: "Regular I", wins: 25, color: "text-gem-emerald" },
+    { name: "Regular II", wins: 35, color: "text-gem-emerald" },
+    { name: "Regular III", wins: 45, color: "text-gem-emerald" },
+    { name: "Regular IV", wins: 55, color: "text-gem-emerald" },
+    { name: "Regular V", wins: 65, color: "text-gem-emerald" },
+    { name: "Hooper I", wins: 75, color: "text-gem-amethyst" },
+    { name: "Hooper II", wins: 90, color: "text-gem-amethyst" },
+    { name: "Hooper III", wins: 105, color: "text-gem-amethyst" },
+    { name: "Hooper IV", wins: 120, color: "text-gem-amethyst" },
+    { name: "Hooper V", wins: 135, color: "text-gem-amethyst" },
+    { name: "Top Pick I", wins: 150, color: "text-gem-diamond" },
+    { name: "Top Pick II", wins: 170, color: "text-gem-diamond" },
+    { name: "Top Pick III", wins: 190, color: "text-gem-diamond" },
+    { name: "Top Pick IV", wins: 210, color: "text-gem-diamond" },
+    { name: "Top Pick V", wins: 230, color: "text-gem-diamond" },
+    { name: "Legend I", wins: 250, color: "text-gem-gold" },
+    { name: "Legend II", wins: 350, color: "text-gem-gold" },
+    { name: "Legend III", wins: 500, color: "text-gem-gold" },
+    { name: "Legend IV", wins: 725, color: "text-gem-gold" },
+    { name: "Legend V", wins: 1000, color: "text-gem-gold" },
+  ];
+
   const getRankData = (wins: number) => {
-    if (wins < 3) return { rank: "Prospect", nextRank: "Hooper", winsNeeded: 3 - wins, progress: (wins / 3) * 100, color: "text-muted-foreground" };
-    if (wins < 7) return { rank: "Hooper", nextRank: "Baller", winsNeeded: 7 - wins, progress: ((wins - 3) / 4) * 100, color: "text-gem-emerald" };
-    if (wins < 12) return { rank: "Baller", nextRank: "Star", winsNeeded: 12 - wins, progress: ((wins - 7) / 5) * 100, color: "text-gem-amethyst" };
-    if (wins < 18) return { rank: "Star", nextRank: "Superstar", winsNeeded: 18 - wins, progress: ((wins - 12) / 6) * 100, color: "text-gem-diamond" };
-    if (wins < 25) return { rank: "Superstar", nextRank: "Legend", winsNeeded: 25 - wins, progress: ((wins - 18) / 7) * 100, color: "text-gem-pink" };
-    return { rank: "Legend", nextRank: "Max", winsNeeded: 0, progress: 100, color: "text-gem-gold" };
+    let currentRankIndex = -1;
+    for (let i = RANKS.length - 1; i >= 0; i--) {
+      if (wins >= RANKS[i].wins) {
+        currentRankIndex = i;
+        break;
+      }
+    }
+
+    if (currentRankIndex === -1) {
+      const nextRank = RANKS[0];
+      return {
+        rank: "Unranked",
+        nextRank: nextRank.name,
+        winsNeeded: nextRank.wins - wins,
+        progress: (wins / nextRank.wins) * 100,
+        color: "text-muted-foreground"
+      };
+    }
+
+    const currentRank = RANKS[currentRankIndex];
+    
+    if (currentRankIndex === RANKS.length - 1) {
+      return {
+        rank: currentRank.name,
+        nextRank: "Max",
+        winsNeeded: 0,
+        progress: 100,
+        color: currentRank.color
+      };
+    }
+
+    const nextRank = RANKS[currentRankIndex + 1];
+    const prevWins = currentRank.wins;
+    const nextWins = nextRank.wins;
+    const progress = ((wins - prevWins) / (nextWins - prevWins)) * 100;
+
+    return {
+      rank: currentRank.name,
+      nextRank: nextRank.name,
+      winsNeeded: nextWins - wins,
+      progress,
+      color: currentRank.color
+    };
   };
 
   if (isLoading) {
