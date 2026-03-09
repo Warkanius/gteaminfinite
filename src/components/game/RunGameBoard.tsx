@@ -105,7 +105,24 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
           });
         }
         
-        // TODO: Milestone reward checks would happen here based on currentWins
+        // Milestone reward checks
+        if (winner === "player" && run.milestones && Array.isArray(run.milestones)) {
+          const reachedMilestone = run.milestones.find((m: any) => m.wins_required === currentWins);
+          if (reachedMilestone) {
+            const { data: profile } = await supabase.from("profiles").select("coins, gems").eq("user_id", user.id).single();
+            if (profile) {
+              const newCoins = profile.coins + (reachedMilestone.coin_reward || 0);
+              const newGems = profile.gems + (reachedMilestone.gem_reward || 0);
+              await supabase.from("profiles").update({ coins: newCoins, gems: newGems }).eq("user_id", user.id);
+              
+              toast({
+                title: "Milestone Reached!",
+                description: `You earned ${reachedMilestone.coin_reward || 0} Coins and ${reachedMilestone.gem_reward || 0} Gems!`,
+                variant: "default"
+              });
+            }
+          }
+        }
       }
 
       setTimeout(() => onGameComplete(), 2000);
