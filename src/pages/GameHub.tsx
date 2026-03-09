@@ -1,13 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dice5, Trophy, Target } from "lucide-react";
+import { Trophy, Target, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const gameModes = [
   {
-    title: "Casual 5v5",
-    desc: "A quick, classic 5-on-5 dice match against the CPU.",
-    icon: Dice5,
-    url: "/play/match",
+    title: "Play With Friends",
+    desc: "Challenge your friends to a match. (Coming Soon)",
+    icon: Users,
+    url: "#",
     color: "text-gem-diamond",
   },
   {

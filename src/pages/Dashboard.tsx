@@ -1,11 +1,11 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Dice5, ShoppingBag, Trophy } from "lucide-react";
+import { BookOpen, Users, ShoppingBag, Trophy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const quickActions = [
   { title: "My Collection", desc: "View your player cards", icon: BookOpen, url: "/collection", color: "text-gem-emerald" },
-  { title: "Game Modes", desc: "Select match type", icon: Dice5, url: "/play", color: "text-gem-diamond" },
+  { title: "Play With Friends", desc: "Challenge a friend", icon: Users, url: "#", color: "text-gem-diamond" },
   { title: "The Runs", desc: "Race to 21 Gauntlet", icon: Trophy, url: "/runs", color: "text-gem-amethyst" },
   { title: "Pack Market", desc: "Open new packs", icon: ShoppingBag, url: "/packs", color: "text-gem-gold" },
 ];
