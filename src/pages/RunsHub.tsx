@@ -29,12 +29,12 @@ export default function RunsHub() {
   });
 
   const getRankData = (wins: number) => {
-    if (wins < 3) return { rank: "Prospect", nextRank: "Hooper", winsNeeded: 3 - wins, progress: (wins / 3) * 100, color: "text-slate-400" };
-    if (wins < 7) return { rank: "Hooper", nextRank: "Baller", winsNeeded: 7 - wins, progress: ((wins - 3) / 4) * 100, color: "text-green-500" };
-    if (wins < 12) return { rank: "Baller", nextRank: "Star", winsNeeded: 12 - wins, progress: ((wins - 7) / 5) * 100, color: "text-blue-400" };
-    if (wins < 18) return { rank: "Star", nextRank: "Superstar", winsNeeded: 18 - wins, progress: ((wins - 12) / 6) * 100, color: "text-purple-500" };
-    if (wins < 25) return { rank: "Superstar", nextRank: "Legend", winsNeeded: 25 - wins, progress: ((wins - 18) / 7) * 100, color: "text-pink-500" };
-    return { rank: "Legend", nextRank: "Max", winsNeeded: 0, progress: 100, color: "text-yellow-500" };
+    if (wins < 3) return { rank: "Prospect", nextRank: "Hooper", winsNeeded: 3 - wins, progress: (wins / 3) * 100, color: "text-muted-foreground" };
+    if (wins < 7) return { rank: "Hooper", nextRank: "Baller", winsNeeded: 7 - wins, progress: ((wins - 3) / 4) * 100, color: "text-gem-emerald" };
+    if (wins < 12) return { rank: "Baller", nextRank: "Star", winsNeeded: 12 - wins, progress: ((wins - 7) / 5) * 100, color: "text-gem-amethyst" };
+    if (wins < 18) return { rank: "Star", nextRank: "Superstar", winsNeeded: 18 - wins, progress: ((wins - 12) / 6) * 100, color: "text-gem-diamond" };
+    if (wins < 25) return { rank: "Superstar", nextRank: "Legend", winsNeeded: 25 - wins, progress: ((wins - 18) / 7) * 100, color: "text-gem-pink" };
+    return { rank: "Legend", nextRank: "Max", winsNeeded: 0, progress: 100, color: "text-gem-gold" };
   };
 
   if (isLoading) {
