@@ -10,6 +10,7 @@ import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Placeholder from "@/pages/Placeholder";
 const Play = lazy(() => import("@/pages/Play"));
+const GameHub = lazy(() => import("@/pages/GameHub"));
 const Domination = lazy(() => import("@/pages/Domination"));
 const RunsHub = lazy(() => import("@/pages/RunsHub"));
 const RunPlay = lazy(() => import("@/pages/RunPlay"));
