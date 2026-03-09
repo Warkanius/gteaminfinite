@@ -160,25 +160,29 @@ export default function AdminPacks() {
       <FormDialog open={!!detailPack} onOpenChange={(o) => !o && setDetailPack(null)} title={`Manage: ${detailPack?.name ?? ""}`} onSave={() => setDetailPack(null)} className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <Tabs defaultValue="players">
           <TabsList><TabsTrigger value="players">Pack Players</TabsTrigger><TabsTrigger value="odds">Odds Table</TabsTrigger></TabsList>
-          <TabsContent value="players" className="space-y-3">
-            <div className="flex gap-2 items-end">
-              <div className="space-y-1 flex-1">
-                <Label>Player</Label>
-                <Select value={slotPlayer} onValueChange={setSlotPlayer}>
-                  <SelectTrigger><SelectValue placeholder="Select player" /></SelectTrigger>
-                  <SelectContent>{playerCards.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                </Select>
+          <TabsContent value="players" className="space-y-4 pt-4">
+            <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+              <div className="flex gap-2 items-end">
+                <div className="space-y-1 flex-1">
+                  <Label>Player</Label>
+                  <Select value={slotPlayer} onValueChange={setSlotPlayer}>
+                    <SelectTrigger><SelectValue placeholder="Select player" /></SelectTrigger>
+                    <SelectContent>{playerCards.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 w-24"><Label>Slot</Label><Input type="number" min={1} value={slotNum} onChange={(e) => setSlotNum(Number(e.target.value))} /></div>
+                <Button disabled={!slotPlayer} onClick={() => { addSlotMut.mutate({ packId: detailPack!.id, playerCardId: slotPlayer, slot: slotNum }); setSlotPlayer(""); }}><Plus className="h-4 w-4 mr-1" /> Add Player</Button>
               </div>
-              <div className="space-y-1 w-20"><Label>Slot</Label><Input type="number" min={1} value={slotNum} onChange={(e) => setSlotNum(Number(e.target.value))} /></div>
-              <Button size="sm" disabled={!slotPlayer} onClick={() => { addSlotMut.mutate({ packId: detailPack!.id, playerCardId: slotPlayer, slot: slotNum }); setSlotPlayer(""); }}><Plus className="h-4 w-4" /></Button>
+              <div className="space-y-2">
+                {packPlayers.map((pp) => (
+                  <div key={pp.id} className="flex items-center gap-3 bg-background border rounded-md p-2">
+                    <span className="text-sm font-mono bg-muted px-2 py-1 rounded w-10 text-center">#{pp.slot_number}</span>
+                    <span className="flex-1 font-medium">{playerCards.find((p) => p.id === pp.player_card_id)?.name ?? pp.player_card_id}</span>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeSlotMut.mutate(pp.id)}><X className="h-4 w-4" /></Button>
+                  </div>
+                ))}
+              </div>
             </div>
-            {packPlayers.map((pp) => (
-              <div key={pp.id} className="flex items-center gap-2 bg-muted/50 rounded p-2">
-                <span className="text-sm font-mono w-8">#{pp.slot_number}</span>
-                <span className="flex-1 text-sm">{playerCards.find((p) => p.id === pp.player_card_id)?.name ?? pp.player_card_id}</span>
-                <Button size="icon" variant="ghost" onClick={() => removeSlotMut.mutate(pp.id)}><X className="h-3 w-3" /></Button>
-              </div>
-            ))}
           </TabsContent>
           <TabsContent value="odds" className="space-y-3">
             <div className="flex gap-2 items-end">
