@@ -4,7 +4,7 @@ import {
   Package,
   Trophy,
   Swords,
-  Dice5,
+  Sparkles,
   ShoppingBag,
   Settings,
   Shield,
@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 const playerItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Collection", url: "/collection", icon: BookOpen },
-  { title: "Game Modes", url: "/play", icon: Dice5 },
+  { title: "Game Modes", url: "/play", icon: Sparkles },
   { title: "Domination", url: "/domination", icon: Swords },
   { title: "Pack Market", url: "/packs", icon: ShoppingBag },
   { title: "Gem Market", url: "/gems", icon: Award },
@@ -53,8 +53,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border p-4">
-        <h2 className="font-display text-xl font-bold tracking-wider text-primary">
+      <SidebarHeader className="border-b border-sidebar-border p-4 bg-sidebar/50 backdrop-blur-sm">
+        <h2 className="font-display text-xl font-bold tracking-wider text-primary drop-shadow-[0_0_8px_rgba(150,80,255,0.8)]">
           GTeam Infinite
         </h2>
         <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
