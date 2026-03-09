@@ -10,6 +10,7 @@ import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Placeholder from "@/pages/Placeholder";
 const Play = lazy(() => import("@/pages/Play"));
+const GameHub = lazy(() => import("@/pages/GameHub"));
 const Domination = lazy(() => import("@/pages/Domination"));
 const RunsHub = lazy(() => import("@/pages/RunsHub"));
 const RunPlay = lazy(() => import("@/pages/RunPlay"));
@@ -60,11 +61,13 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/collection" element={<ProtectedRoute><LazyLoad><Collection /></LazyLoad></ProtectedRoute>} />
-            <Route path="/play" element={<ProtectedRoute><LazyLoad><Play /></LazyLoad></ProtectedRoute>} />
+            <Route path="/play" element={<ProtectedRoute><LazyLoad><GameHub /></LazyLoad></ProtectedRoute>} />
+            <Route path="/play/match" element={<ProtectedRoute><LazyLoad><Play /></LazyLoad></ProtectedRoute>} />
             <Route path="/domination" element={<ProtectedRoute><LazyLoad><Domination /></LazyLoad></ProtectedRoute>} />
             <Route path="/runs" element={<ProtectedRoute><LazyLoad><RunsHub /></LazyLoad></ProtectedRoute>} />
             <Route path="/runs/:runId" element={<ProtectedRoute><LazyLoad><RunPlay /></LazyLoad></ProtectedRoute>} />
             <Route path="/packs" element={<ProtectedRoute><LazyLoad><PackMarket /></LazyLoad></ProtectedRoute>} />
+            <Route path="/gems" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />
             <Route path="/admin/players" element={<ProtectedRoute><LazyLoad><AdminPlayers /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/packs" element={<ProtectedRoute><LazyLoad><AdminPacks /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/teams" element={<ProtectedRoute><LazyLoad><AdminTeams /></LazyLoad></ProtectedRoute>} />

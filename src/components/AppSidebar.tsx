@@ -32,10 +32,10 @@ import { Button } from "@/components/ui/button";
 const playerItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Collection", url: "/collection", icon: BookOpen },
-  { title: "Play Game", url: "/play", icon: Dice5 },
+  { title: "Game Modes", url: "/play", icon: Dice5 },
   { title: "Domination", url: "/domination", icon: Swords },
   { title: "Pack Market", url: "/packs", icon: ShoppingBag },
-  { title: "Ring Market", url: "/rings", icon: Award },
+  { title: "Gem Market", url: "/gems", icon: Award },
 ];
 
 const adminItems = [

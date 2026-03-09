@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { useNavigate } from "react-router-dom";
-import { Trophy, Flame, Target } from "lucide-react";
+import { Trophy, Flame, Target, Star, ChevronRight } from "lucide-react";
 
 export default function RunsHub() {
   const { user } = useAuth();
@@ -26,6 +27,15 @@ export default function RunsHub() {
     },
     enabled: !!user,
   });
+
+  const getRankData = (wins: number) => {
+    if (wins < 3) return { rank: "Prospect", nextRank: "Hooper", winsNeeded: 3 - wins, progress: (wins / 3) * 100, color: "text-muted-foreground" };
+    if (wins < 7) return { rank: "Hooper", nextRank: "Baller", winsNeeded: 7 - wins, progress: ((wins - 3) / 4) * 100, color: "text-gem-emerald" };
+    if (wins < 12) return { rank: "Baller", nextRank: "Star", winsNeeded: 12 - wins, progress: ((wins - 7) / 5) * 100, color: "text-gem-amethyst" };
+    if (wins < 18) return { rank: "Star", nextRank: "Superstar", winsNeeded: 18 - wins, progress: ((wins - 12) / 6) * 100, color: "text-gem-diamond" };
+    if (wins < 25) return { rank: "Superstar", nextRank: "Legend", winsNeeded: 25 - wins, progress: ((wins - 18) / 7) * 100, color: "text-gem-pink" };
+    return { rank: "Legend", nextRank: "Max", winsNeeded: 0, progress: 100, color: "text-gem-gold" };
+  };
 
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>;
@@ -49,6 +59,7 @@ export default function RunsHub() {
           const currentWins = userRun?.current_wins || 0;
           const highestWins = userRun?.highest_wins || 0;
           const opponentName = run.teams?.name || "Unknown Team";
+          const rankInfo = getRankData(highestWins);
           
           return (
             <Card key={run.id} className="border-border/50 bg-card overflow-hidden">
@@ -61,11 +72,43 @@ export default function RunsHub() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Rank & Progression Bar */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-1">Lifetime Rank</p>
+                      <div className={`font-display text-2xl font-bold flex items-center gap-2 ${rankInfo.color}`}>
+                        <Star className="h-5 w-5 fill-current" />
+                        {rankInfo.rank}
+                      </div>
+                    </div>
+                    {rankInfo.winsNeeded > 0 && (
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Next Tier</p>
+                        <p className="text-sm font-bold flex items-center justify-end gap-1">
+                          {rankInfo.nextRank} <ChevronRight className="h-3 w-3" />
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <Progress value={rankInfo.progress} className="h-2.5 bg-muted" />
+                    {rankInfo.winsNeeded > 0 ? (
+                      <p className="text-xs text-right text-muted-foreground">
+                        <span className="font-bold text-foreground">{rankInfo.winsNeeded}</span> wins to rank up
+                      </p>
+                    ) : (
+                      <p className="text-xs text-right text-gem-gold font-bold">Max Rank Reached!</p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="bg-muted/30 rounded-lg p-4 flex justify-between items-center border border-border/50">
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Active Streak</p>
                     <div className="flex items-center gap-2">
-                      <Flame className={`h-5 w-5 ${currentWins > 0 ? "text-orange-500" : "text-muted-foreground"}`} />
+                      <Flame className={`h-5 w-5 ${currentWins > 0 ? "text-gem-ruby" : "text-muted-foreground"}`} />
                       <span className="text-2xl font-bold">{currentWins}</span>
                     </div>
                   </div>
