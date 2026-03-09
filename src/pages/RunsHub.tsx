@@ -99,7 +99,7 @@ export default function RunsHub() {
                         <span className="font-bold text-foreground">{rankInfo.winsNeeded}</span> wins to rank up
                       </p>
                     ) : (
-                      <p className="text-xs text-right text-yellow-500 font-bold">Max Rank Reached!</p>
+                      <p className="text-xs text-right text-gem-gold font-bold">Max Rank Reached!</p>
                     )}
                   </div>
                 </div>
