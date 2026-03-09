@@ -11,6 +11,8 @@ import Dashboard from "@/pages/Dashboard";
 import Placeholder from "@/pages/Placeholder";
 const Play = lazy(() => import("@/pages/Play"));
 const Domination = lazy(() => import("@/pages/Domination"));
+const RunsHub = lazy(() => import("@/pages/RunsHub"));
+const RunPlay = lazy(() => import("@/pages/RunPlay"));
 import NotFound from "./pages/NotFound";
 const Collection = lazy(() => import("@/pages/Collection"));
 const PackMarket = lazy(() => import("@/pages/PackMarket"));
