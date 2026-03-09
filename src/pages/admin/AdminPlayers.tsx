@@ -252,22 +252,29 @@ export default function AdminPlayers() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Player Card Manager</h1>
-      <DataTable
-        data={players}
-        columns={columns}
-        isLoading={isLoading}
-        searchKeys={["name"]}
-        searchPlaceholder="Search players…"
-        onAdd={() => { setForm(emptyForm()); setEditId(null); setBulkBadgeText(""); setGeneratorText(""); setDialogOpen(true); }}
-        addLabel="Add Player"
-        actions={(row) => (
-          <div className="flex gap-1">
-            <Button size="icon" variant="ghost" onClick={() => openEdit(row)}><Pencil className="h-4 w-4" /></Button>
-            <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-          </div>
-        )}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Player Card Manager</CardTitle>
+          <CardDescription>Manage the roster of players, their attributes, badges, and card visuals.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            data={players}
+            columns={columns}
+            isLoading={isLoading}
+            searchKeys={["name"]}
+            searchPlaceholder="Search players…"
+            onAdd={() => { setForm(emptyForm()); setEditId(null); setBulkBadgeText(""); setGeneratorText(""); setDialogOpen(true); }}
+            addLabel="Add Player"
+            actions={(row) => (
+              <div className="flex gap-1">
+                <Button size="icon" variant="ghost" onClick={() => openEdit(row)}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              </div>
+            )}
+          />
+        </CardContent>
+      </Card>
 
       <FormDialog
         open={dialogOpen}
