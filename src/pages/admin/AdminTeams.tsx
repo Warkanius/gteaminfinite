@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2 } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Pencil, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -18,6 +22,16 @@ type Run = Tables<"runs">;
 
 export default function AdminTeams() {
   const qc = useQueryClient();
+
+  // Fetch Packs for Rewards
+  const { data: packs = [] } = useQuery({
+    queryKey: ["admin-packs-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("packs").select("id, name, pack_type").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
 
   // Teams
   const [teamForm, setTeamForm] = useState({ name: "", category: "domination", unlock_cost: 0 });
@@ -51,7 +65,7 @@ export default function AdminTeams() {
   const [domDeleteId, setDomDeleteId] = useState<string | null>(null);
 
   const { data: domGames = [], isLoading: domLoading } = useQuery({
-    queryKey: ["admin-dom"], queryFn: async () => { const { data, error } = await supabase.from("domination_games").select("*").order("road_name").order("game_order"); if (error) throw error; return data; },
+    queryKey: ["admin-dom"], queryFn: async () => { const { data, error } = await supabase.from("domination_games").select("*").order("game_order"); if (error) throw error; return data; },
   });
 
   const domSave = useMutation({
@@ -102,9 +116,8 @@ export default function AdminTeams() {
   ];
 
   const domCols: Column<DomGame>[] = [
-    { key: "road_name", label: "Road", sortable: true },
-    { key: "opponent_name", label: "Opponent", sortable: true },
     { key: "game_order", label: "Order", sortable: true },
+    { key: "opponent_name", label: "Opponent" },
     { key: "difficulty_stars", label: "Stars" },
     { key: "coin_reward", label: "Coins" },
     { key: "pack_reward", label: "Pack Reward", render: (r) => r.pack_reward ?? "—" },
@@ -112,25 +125,117 @@ export default function AdminTeams() {
 
   const runCols: Column<Run>[] = [{ key: "name", label: "Name", sortable: true }];
 
+  // Group Domination Games by Road
+  const groupedDomGames = domGames.reduce((acc, game) => {
+    if (!acc[game.road_name]) acc[game.road_name] = [];
+    acc[game.road_name].push(game);
+    return acc;
+  }, {} as Record<string, DomGame[]>);
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Teams, Domination & Runs</h1>
-      <Tabs defaultValue="teams">
-        <TabsList><TabsTrigger value="teams">Teams</TabsTrigger><TabsTrigger value="domination">Domination</TabsTrigger><TabsTrigger value="runs">Runs</TabsTrigger></TabsList>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Match Configurations</h1>
+        <p className="text-muted-foreground mt-2">Manage teams, domination roads, and endless run settings.</p>
+      </div>
 
-        <TabsContent value="teams">
-          <DataTable data={teams} columns={teamCols} isLoading={teamsLoading} searchKeys={["name"]} onAdd={() => { setTeamForm({ name: "", category: "domination", unlock_cost: 0 }); setTeamEditId(null); setTeamDialog(true); }} addLabel="Add Team"
-            actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTeamForm({ name: r.name, category: r.category, unlock_cost: r.unlock_cost }); setTeamEditId(r.id); setTeamDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTeamDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+      <Tabs defaultValue="domination" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="domination">Domination</TabsTrigger>
+          <TabsTrigger value="teams">Teams</TabsTrigger>
+          <TabsTrigger value="runs">Runs</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="domination" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle>Domination Roads</CardTitle>
+                <CardDescription>Grouped sequences of challenges and rewards</CardDescription>
+              </div>
+              <Button onClick={() => { 
+                setDomForm({ road_name: "", opponent_name: "", game_order: 1, difficulty_stars: 1, coin_reward: 0, pack_reward: "" }); 
+                setDomEditId(null); 
+                setDomDialog(true); 
+              }}>
+                <Plus className="h-4 w-4 mr-2" /> Add Game
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {domLoading ? (
+                <div className="py-8 text-center text-muted-foreground">Loading games...</div>
+              ) : Object.keys(groupedDomGames).length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">No domination games found.</div>
+              ) : (
+                <Accordion type="multiple" defaultValue={Object.keys(groupedDomGames)} className="w-full">
+                  {Object.entries(groupedDomGames).map(([road, games]) => (
+                    <AccordionItem key={road} value={road} className="border bg-card mb-4 rounded-lg overflow-hidden">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 data-[state=open]:border-b">
+                        <div className="flex items-center justify-between w-full pr-4">
+                          <span className="font-semibold text-lg">{road}</span>
+                          <span className="text-sm text-muted-foreground font-normal">{games.length} Games</span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="p-0">
+                        <DataTable 
+                          data={games} 
+                          columns={domCols} 
+                          searchKeys={["opponent_name"]} 
+                          actions={(r) => (
+                            <div className="flex gap-1 justify-end">
+                              <Button size="icon" variant="ghost" onClick={() => { 
+                                setDomForm({ 
+                                  road_name: r.road_name, 
+                                  opponent_name: r.opponent_name, 
+                                  game_order: r.game_order, 
+                                  difficulty_stars: r.difficulty_stars, 
+                                  coin_reward: r.coin_reward, 
+                                  pack_reward: r.pack_reward ?? "" 
+                                }); 
+                                setDomEditId(r.id); 
+                                setDomDialog(true); 
+                              }}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button size="icon" variant="ghost" onClick={() => setDomDeleteId(r.id)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          )} 
+                        />
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="domination">
-          <DataTable data={domGames} columns={domCols} isLoading={domLoading} searchKeys={["road_name", "opponent_name"]} onAdd={() => { setDomForm({ road_name: "", opponent_name: "", game_order: 1, difficulty_stars: 1, coin_reward: 0, pack_reward: "" }); setDomEditId(null); setDomDialog(true); }} addLabel="Add Game"
-            actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setDomForm({ road_name: r.road_name, opponent_name: r.opponent_name, game_order: r.game_order, difficulty_stars: r.difficulty_stars, coin_reward: r.coin_reward, pack_reward: r.pack_reward ?? "" }); setDomEditId(r.id); setDomDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setDomDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+        <TabsContent value="teams">
+          <Card>
+            <CardHeader>
+              <CardTitle>Opponent Teams</CardTitle>
+              <CardDescription>Manage CPU opponents and unlockable rosters.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable data={teams} columns={teamCols} isLoading={teamsLoading} searchKeys={["name"]} onAdd={() => { setTeamForm({ name: "", category: "domination", unlock_cost: 0 }); setTeamEditId(null); setTeamDialog(true); }} addLabel="Add Team"
+                actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTeamForm({ name: r.name, category: r.category, unlock_cost: r.unlock_cost }); setTeamEditId(r.id); setTeamDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTeamDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="runs">
-          <DataTable data={runs} columns={runCols} isLoading={runsLoading} searchKeys={["name"]} onAdd={() => { setRunForm({ name: "" }); setRunEditId(null); setRunDialog(true); }} addLabel="Add Run"
-            actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setRunForm({ name: r.name }); setRunEditId(r.id); setRunDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setRunDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+          <Card>
+            <CardHeader>
+              <CardTitle>Endless Runs</CardTitle>
+              <CardDescription>Configure distinct continuous gauntlets.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable data={runs} columns={runCols} isLoading={runsLoading} searchKeys={["name"]} onAdd={() => { setRunForm({ name: "" }); setRunEditId(null); setRunDialog(true); }} addLabel="Add Run"
+                actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setRunForm({ name: r.name }); setRunEditId(r.id); setRunDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setRunDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
@@ -144,14 +249,69 @@ export default function AdminTeams() {
       </FormDialog>
 
       {/* Dom dialog */}
-      <FormDialog open={domDialog} onOpenChange={setDomDialog} title={domEditId ? "Edit Game" : "Add Game"} onSave={() => domSave.mutate()} saving={domSave.isPending}>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1"><Label>Road Name</Label><Input value={domForm.road_name} onChange={(e) => setDomForm((f) => ({ ...f, road_name: e.target.value }))} /></div>
-          <div className="space-y-1"><Label>Opponent</Label><Input value={domForm.opponent_name} onChange={(e) => setDomForm((f) => ({ ...f, opponent_name: e.target.value }))} /></div>
-          <div className="space-y-1"><Label>Order</Label><Input type="number" value={domForm.game_order} onChange={(e) => setDomForm((f) => ({ ...f, game_order: Number(e.target.value) }))} /></div>
-          <div className="space-y-1"><Label>Stars</Label><Input type="number" min={1} max={5} value={domForm.difficulty_stars} onChange={(e) => setDomForm((f) => ({ ...f, difficulty_stars: Number(e.target.value) }))} /></div>
-          <div className="space-y-1"><Label>Coin Reward</Label><Input type="number" value={domForm.coin_reward} onChange={(e) => setDomForm((f) => ({ ...f, coin_reward: Number(e.target.value) }))} /></div>
-          <div className="space-y-1"><Label>Pack Reward</Label><Input value={domForm.pack_reward} onChange={(e) => setDomForm((f) => ({ ...f, pack_reward: e.target.value }))} placeholder="Optional" /></div>
+      <FormDialog open={domDialog} onOpenChange={setDomDialog} title={domEditId ? "Edit Domination Game" : "Add Domination Game"} onSave={() => domSave.mutate()} saving={domSave.isPending}>
+        <div className="space-y-6">
+          <div className="space-y-4 p-4 border rounded-lg bg-card">
+            <h3 className="font-semibold flex items-center text-sm uppercase tracking-wider text-muted-foreground">Match Setup</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Road Name</Label>
+                <Input value={domForm.road_name} onChange={(e) => setDomForm((f) => ({ ...f, road_name: e.target.value }))} placeholder="e.g. Seirin High" />
+              </div>
+              <div className="space-y-2">
+                <Label>Opponent Team</Label>
+                <Input 
+                  list="team-names" 
+                  value={domForm.opponent_name} 
+                  onChange={(e) => setDomForm((f) => ({ ...f, opponent_name: e.target.value }))} 
+                  placeholder="Type or select team..."
+                />
+                <datalist id="team-names">
+                  {teams.map(t => <option key={t.id} value={t.name} />)}
+                </datalist>
+              </div>
+              <div className="space-y-2">
+                <Label>Game Order</Label>
+                <Input type="number" min={1} value={domForm.game_order} onChange={(e) => setDomForm((f) => ({ ...f, game_order: Number(e.target.value) }))} />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4 p-4 border rounded-lg bg-card">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold flex items-center text-sm uppercase tracking-wider text-muted-foreground">Difficulty</h3>
+              <span className="font-bold text-lg">{domForm.difficulty_stars} {domForm.difficulty_stars === 1 ? 'Star' : 'Stars'}</span>
+            </div>
+            <div className="pt-2 pb-4 px-2">
+              <Slider 
+                min={1} max={5} step={1} 
+                value={[domForm.difficulty_stars]} 
+                onValueChange={([val]) => setDomForm((f) => ({ ...f, difficulty_stars: val }))} 
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4 p-4 border rounded-lg bg-card">
+            <h3 className="font-semibold flex items-center text-sm uppercase tracking-wider text-muted-foreground">Rewards</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Coin Reward</Label>
+                <Input type="number" min={0} value={domForm.coin_reward} onChange={(e) => setDomForm((f) => ({ ...f, coin_reward: Number(e.target.value) }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Pack Reward</Label>
+                <Select value={domForm.pack_reward || "none"} onValueChange={(val) => setDomForm(f => ({ ...f, pack_reward: val === "none" ? "" : val }))}>
+                  <SelectTrigger><SelectValue placeholder="No Pack Reward" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Pack</SelectItem>
+                    {packs.map(p => (
+                      <SelectItem key={p.id} value={p.pack_type || p.name}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
         </div>
       </FormDialog>
 
