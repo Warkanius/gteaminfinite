@@ -371,9 +371,9 @@ export default function AdminPlayers() {
           </div>
 
           {/* Stats */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-base">Stats</Label>
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Attributes</h3>
               <Badge variant="secondary" className="text-lg font-mono">OVR {overallRating}</Badge>
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
@@ -381,12 +381,6 @@ export default function AdminPlayers() {
                 <StatInput key={k} label={STAT_LABELS[k]} value={(form as any)[k] ?? 0} onChange={(v) => setForm((f) => ({ ...f, [k]: v }))} max={99} />
               ))}
             </div>
-          </div>
-
-          {/* Collection reward */}
-          <div className="flex items-center gap-3">
-            <Switch checked={form.is_collection_reward ?? false} onCheckedChange={(v) => setForm((f) => ({ ...f, is_collection_reward: v }))} />
-            <Label>Collection Reward</Label>
           </div>
 
           {/* Card Appearance */}
