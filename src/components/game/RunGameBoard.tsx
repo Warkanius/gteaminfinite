@@ -216,12 +216,31 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameCom
     const defender = playerLineup[defenderIdx];
     const defRating = defender._runRating ?? 60;
 
-    const offDice = rollDice(getRunDiceCount(offRating)).dice;
-    const defDice = rollDice(getRunDiceCount(defRating)).dice;
+    // Badge effects for CPU offense
+    const shooterBadges = badgeMap[shooter.id] ?? [];
+    const defenderBadges = badgeMap[defender.id] ?? [];
+    const shooterTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, shooter.id);
+
+    const offDiceRaw = rollDice(getRunDiceCount(offRating)).dice;
+    const offBadge = resolveBadgeEffects(
+      cpuStat, shooter[cpuStat], offDiceRaw,
+      shooterBadges, defenderBadges, shooterTeammateBadges, "runs",
+    );
+
+    // Badge effects for player defense
+    const defBadgesOwn = badgeMap[defender.id] ?? [];
+    const defTeammateBadges = getTeammateBadges(badgeMap, playerLineup, defender.id);
+    const defDiceRaw = rollDice(getRunDiceCount(defRating)).dice;
+    const defBadge = resolveBadgeEffects(
+      defStat, defender[defStat], defDiceRaw,
+      defBadgesOwn, shooterBadges, defTeammateBadges, "runs",
+    );
+
+    logBadgeActivations([...offBadge.activations, ...defBadge.activations]);
 
     const result = resolveRunShotContest(
-      cpuStat, shooter[cpuStat], offRating, offDice,
-      defStat, defender[defStat], defRating, defDice,
+      cpuStat, offBadge.adjustedStat, offRating, offBadge.finalDice,
+      defStat, defBadge.adjustedStat, defRating, defBadge.finalDice,
     );
     setLastContest(result);
 
@@ -229,11 +248,11 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameCom
     let newCScore = cpuScore;
 
     if (result.made) {
-      newCScore += result.points;
+      const pts = result.points + Math.round(offBadge.totalBonus);
+      newCScore += pts;
       setCpuScore(newCScore);
-      addLog({ msg: `🏀 CPU ${shooter.name} hits ${STAT_LABELS[cpuStat]}! +${result.points}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-cpu" });
+      addLog({ msg: `🏀 CPU ${shooter.name} hits ${STAT_LABELS[cpuStat]}! +${pts}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-cpu" });
       
-      // Possession goes to player
       setPossession("player");
       setPhase("choose");
 
