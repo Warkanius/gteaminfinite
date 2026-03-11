@@ -652,6 +652,42 @@ export type Database = {
         }
         Relationships: []
       }
+      run_players: {
+        Row: {
+          created_at: string
+          id: string
+          player_card_id: string
+          run_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          player_card_id: string
+          run_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          player_card_id?: string
+          run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "run_players_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_players_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       runs: {
         Row: {
           created_at: string
