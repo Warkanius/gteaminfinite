@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import type { GameCard } from "@/pages/Play";
+import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 
 interface LineupSelectProps {
-  onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[]) => void;
+  onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[], badgeMap: Record<string, CardBadge[]>) => void;
   dominationGameId?: string;
 }
 
@@ -79,17 +80,20 @@ export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps)
 
   const selectedCards = collection.filter((c) => selectedIds.has(c.id));
 
-  const handleStart = () => {
-    let cpuLineup: GameCard[];
+  const handleStart = async () => {
+    let cpuCards: GameCard[];
     if (dominationGameId && domCpuLineup && domCpuLineup.length > 0) {
-      cpuLineup = domCpuLineup;
+      cpuCards = domCpuLineup;
     } else {
       // Random CPU
       const pool = allCards.filter((c) => !selectedIds.has(c.id));
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
-      cpuLineup = shuffled.slice(0, 5);
+      cpuCards = shuffled.slice(0, 5);
     }
-    onConfirm(selectedCards, cpuLineup);
+    // Fetch badges for all 10 cards
+    const allCardIds = [...selectedCards.map(c => c.id), ...cpuCards.map(c => c.id)];
+    const badgeMap = await fetchBadgesForCards(supabase, allCardIds);
+    onConfirm(selectedCards, cpuCards, badgeMap);
   };
 
   if (isLoading) {

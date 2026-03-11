@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Dices } from "lucide-react";
 import { runRatingToStars, starStatToRunStat } from "@/lib/gameEngine";
+import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 
 interface Props {
   runId: string;
   teamId: string | null;
-  onLineupConfirmed: (playerLineup: any[], cpuLineup: any[]) => void;
+  onLineupConfirmed: (playerLineup: any[], cpuLineup: any[], badgeMap: Record<string, CardBadge[]>) => void;
 }
 
 export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
@@ -216,7 +217,11 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
               <Button 
                 className="w-full font-display text-lg tracking-wider bg-gem-diamond hover:bg-gem-diamond/90 text-black" 
                 size="lg"
-                onClick={() => onLineupConfirmed(playerLineup, cpuLineup)}
+                onClick={async () => {
+                  const allCardIds = [...playerLineup.map((c: any) => c.id), ...cpuLineup.map((c: any) => c.id)];
+                  const badgeMap = await fetchBadgesForCards(supabase, allCardIds);
+                  onLineupConfirmed(playerLineup, cpuLineup, badgeMap);
+                }}
               >
                 START GAUNTLET
               </Button>

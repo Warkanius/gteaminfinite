@@ -8,6 +8,10 @@ import {
   resolveRunShotContest, pickRebounderSlot, resolveRunReboundRoll,
   type ShotContestResult,
 } from "@/lib/gameEngine";
+import {
+  resolveBadgeEffects, getTeammateBadges,
+  type CardBadge, type BadgeActivation,
+} from "@/lib/badgeEngine";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +20,7 @@ interface Props {
   run: any;
   playerLineup: any[];
   cpuLineup: any[];
+  badgeMap: Record<string, CardBadge[]>;
   onGameComplete: () => void;
 }
 
@@ -24,10 +29,10 @@ type Possession = "player" | "cpu";
 
 interface LogEntry {
   msg: string;
-  type: "score-player" | "score-cpu" | "miss" | "rebound" | "info";
+  type: "score-player" | "score-cpu" | "miss" | "rebound" | "info" | "badge";
 }
 
-export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: Props) {
+export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameComplete }: Props) {
   const { user } = useAuth();
   const targetScore = run.target_score;
 
@@ -131,24 +136,48 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
     if (winner) handleGameEnd(winner, newPScore, newCScore);
   };
 
+  const logBadgeActivations = (activations: BadgeActivation[]) => {
+    for (const ba of activations) {
+      addLog({ msg: `🏅 ${ba.abbreviation} (${ba.tier}) — ${ba.effect}`, type: "badge" });
+    }
+  };
+
   /** Player shoots on their possession */
   const handlePlayerShoot = () => {
     setPhase("rolling");
     const shooter = playerLineup[selectedShooterIdx];
     const offRating = shooter._runRating ?? 60;
 
-    // Determine defender
     const defStat = getDefenseStat(selectedStat);
-    const defenderIdx = isInsideStat(selectedStat) ? 2 : selectedShooterIdx; // slot 3 for inside, direct matchup for perimeter
+    const defenderIdx = isInsideStat(selectedStat) ? 2 : selectedShooterIdx;
     const defender = cpuLineup[defenderIdx];
     const defRating = defender._runRating ?? 60;
 
-    const offDice = rollDice(getRunDiceCount(offRating)).dice;
-    const defDice = rollDice(getRunDiceCount(defRating)).dice;
+    // Apply badge effects to offense
+    const shooterBadges = badgeMap[shooter.id] ?? [];
+    const defenderBadges = badgeMap[defender.id] ?? [];
+    const shooterTeammateBadges = getTeammateBadges(badgeMap, playerLineup, shooter.id);
+
+    const offDiceRaw = rollDice(getRunDiceCount(offRating)).dice;
+    const offBadge = resolveBadgeEffects(
+      selectedStat, shooter[selectedStat], offDiceRaw,
+      shooterBadges, defenderBadges, shooterTeammateBadges, "runs",
+    );
+
+    // Apply badge effects to defense
+    const defBadgesOwn = badgeMap[defender.id] ?? [];
+    const defTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, defender.id);
+    const defDiceRaw = rollDice(getRunDiceCount(defRating)).dice;
+    const defBadge = resolveBadgeEffects(
+      defStat, defender[defStat], defDiceRaw,
+      defBadgesOwn, shooterBadges, defTeammateBadges, "runs",
+    );
+
+    logBadgeActivations([...offBadge.activations, ...defBadge.activations]);
 
     const result = resolveRunShotContest(
-      selectedStat, shooter[selectedStat], offRating, offDice,
-      defStat, defender[defStat], defRating, defDice,
+      selectedStat, offBadge.adjustedStat, offRating, offBadge.finalDice,
+      defStat, defBadge.adjustedStat, defRating, defBadge.finalDice,
     );
     setLastContest(result);
 
@@ -156,11 +185,11 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
     let newCScore = cpuScore;
 
     if (result.made) {
-      newPScore += result.points;
+      const pts = result.points + Math.round(offBadge.totalBonus);
+      newPScore += pts;
       setPlayerScore(newPScore);
-      addLog({ msg: `🏀 ${shooter.name} hits ${STAT_LABELS[selectedStat]}! +${result.points}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-player" });
+      addLog({ msg: `🏀 ${shooter.name} hits ${STAT_LABELS[selectedStat]}! +${pts}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-player" });
       
-      // Possession changes to CPU
       const idx = Math.floor(Math.random() * 3);
       const stat = SCORING_STATS[Math.floor(Math.random() * SCORING_STATS.length)];
       setCpuShooterIdx(idx);
@@ -172,7 +201,6 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
       if (winner) handleGameEnd(winner, newPScore, newCScore);
     } else {
       addLog({ msg: `❌ ${shooter.name} misses ${STAT_LABELS[selectedStat]}! (${result.offenseRoll} vs ${result.defenseRoll}) → Rebound...`, type: "miss" });
-      // Trigger rebound
       setTimeout(() => resolveRebound(newPScore, newCScore), 800);
     }
   };
@@ -188,12 +216,31 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
     const defender = playerLineup[defenderIdx];
     const defRating = defender._runRating ?? 60;
 
-    const offDice = rollDice(getRunDiceCount(offRating)).dice;
-    const defDice = rollDice(getRunDiceCount(defRating)).dice;
+    // Badge effects for CPU offense
+    const shooterBadges = badgeMap[shooter.id] ?? [];
+    const defenderBadges = badgeMap[defender.id] ?? [];
+    const shooterTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, shooter.id);
+
+    const offDiceRaw = rollDice(getRunDiceCount(offRating)).dice;
+    const offBadge = resolveBadgeEffects(
+      cpuStat, shooter[cpuStat], offDiceRaw,
+      shooterBadges, defenderBadges, shooterTeammateBadges, "runs",
+    );
+
+    // Badge effects for player defense
+    const defBadgesOwn = badgeMap[defender.id] ?? [];
+    const defTeammateBadges = getTeammateBadges(badgeMap, playerLineup, defender.id);
+    const defDiceRaw = rollDice(getRunDiceCount(defRating)).dice;
+    const defBadge = resolveBadgeEffects(
+      defStat, defender[defStat], defDiceRaw,
+      defBadgesOwn, shooterBadges, defTeammateBadges, "runs",
+    );
+
+    logBadgeActivations([...offBadge.activations, ...defBadge.activations]);
 
     const result = resolveRunShotContest(
-      cpuStat, shooter[cpuStat], offRating, offDice,
-      defStat, defender[defStat], defRating, defDice,
+      cpuStat, offBadge.adjustedStat, offRating, offBadge.finalDice,
+      defStat, defBadge.adjustedStat, defRating, defBadge.finalDice,
     );
     setLastContest(result);
 
@@ -201,11 +248,11 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
     let newCScore = cpuScore;
 
     if (result.made) {
-      newCScore += result.points;
+      const pts = result.points + Math.round(offBadge.totalBonus);
+      newCScore += pts;
       setCpuScore(newCScore);
-      addLog({ msg: `🏀 CPU ${shooter.name} hits ${STAT_LABELS[cpuStat]}! +${result.points}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-cpu" });
+      addLog({ msg: `🏀 CPU ${shooter.name} hits ${STAT_LABELS[cpuStat]}! +${pts}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-cpu" });
       
-      // Possession goes to player
       setPossession("player");
       setPhase("choose");
 
@@ -349,6 +396,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
                 log.type === "score-player" ? "bg-primary/10 border-primary" :
                 log.type === "score-cpu" ? "bg-destructive/10 border-destructive" :
                 log.type === "rebound" ? "bg-accent/20 border-accent" :
+                log.type === "badge" ? "bg-secondary/30 border-secondary" :
                 "bg-muted border-muted-foreground"
               }`}
             >

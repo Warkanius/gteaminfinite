@@ -7,21 +7,27 @@ import { DiceRoll } from "@/components/game/DiceRoll";
 import { StatResult } from "@/components/game/StatResult";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Dice5 } from "lucide-react";
 import {
   STATS, STAT_LABELS, getDiceCount, resolveStatRoll, buildCardResult,
   rollDice, type StatRollResult, type CardGameResult, type StatKey,
 } from "@/lib/gameEngine";
+import {
+  resolveBadgeEffects, getTeammateBadges,
+  type CardBadge, type BadgeActivation,
+} from "@/lib/badgeEngine";
 import type { GameCard, FullGameResult } from "@/pages/Play";
 
 interface GameBoardProps {
   userLineup: GameCard[];
   cpuLineup: GameCard[];
+  badgeMap: Record<string, CardBadge[]>;
   onComplete: (result: FullGameResult) => void;
   difficultyStars?: number;
 }
 
-export function GameBoard({ userLineup, cpuLineup, onComplete, difficultyStars }: GameBoardProps) {
+export function GameBoard({ userLineup, cpuLineup, badgeMap, onComplete, difficultyStars }: GameBoardProps) {
   const [playerIdx, setPlayerIdx] = useState(0);
   const [statIdx, setStatIdx] = useState(0);
   const [useOwnDice, setUseOwnDice] = useState(false);
@@ -43,6 +49,9 @@ export function GameBoard({ userLineup, cpuLineup, onComplete, difficultyStars }
   const [rolling, setRolling] = useState(false);
   const [autoUserDice, setAutoUserDice] = useState<(number | null)[]>([null]);
   const [autoCpuDice, setAutoCpuDice] = useState<(number | null)[]>([null]);
+
+  // Badge activations for display
+  const [lastBadgeActivations, setLastBadgeActivations] = useState<BadgeActivation[]>([]);
 
   // Running score
   const userRunningScore = useMemo(
@@ -79,15 +88,57 @@ export function GameBoard({ userLineup, cpuLineup, onComplete, difficultyStars }
   const maxDiceCount = Math.max(userDiceCount, cpuDiceCount) as 1 | 2;
 
   const handleDiceSubmit = useCallback((userDice: number[], cpuDice: number[]) => {
-    const uResult = resolveStatRoll(currentStat, userCard[currentStat], userStars, userDice, difficultyStars);
-    const cResult = resolveStatRoll(currentStat, cpuCard[currentStat], cpuStars, cpuDice);
+    const allActivations: BadgeActivation[] = [];
+
+    // Apply badges to user roll
+    const userBadges = badgeMap[userCard.id] ?? [];
+    const cpuDefenderBadges = badgeMap[cpuCard.id] ?? [];
+    const userTeammateBadges = getTeammateBadges(badgeMap, userLineup, userCard.id);
+
+    const userBadgeResult = resolveBadgeEffects(
+      currentStat, userCard[currentStat], userDice,
+      userBadges, cpuDefenderBadges, userTeammateBadges, "5v5",
+    );
+    allActivations.push(...userBadgeResult.activations);
+
+    // Apply badges to CPU roll
+    const cpuBadges = badgeMap[cpuCard.id] ?? [];
+    const userDefenderBadges = badgeMap[userCard.id] ?? [];
+    const cpuTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, cpuCard.id);
+
+    const cpuBadgeResult = resolveBadgeEffects(
+      currentStat, cpuCard[currentStat], cpuDice,
+      cpuBadges, userDefenderBadges, cpuTeammateBadges, "5v5",
+    );
+    allActivations.push(...cpuBadgeResult.activations);
+
+    // Resolve stat rolls with badge-adjusted values
+    const uResult = resolveStatRoll(
+      currentStat, userBadgeResult.adjustedStat, userStars,
+      userBadgeResult.finalDice, difficultyStars,
+    );
+    // Add badge bonus to points
+    if (userBadgeResult.totalBonus > 0) {
+      uResult.rollResult += Math.round(userBadgeResult.totalBonus);
+      uResult.points = uResult.rollResult * uResult.pointMultiplier;
+    }
+
+    const cResult = resolveStatRoll(
+      currentStat, cpuBadgeResult.adjustedStat, cpuStars,
+      cpuBadgeResult.finalDice,
+    );
+    if (cpuBadgeResult.totalBonus > 0) {
+      cResult.rollResult += Math.round(cpuBadgeResult.totalBonus);
+      cResult.points = cResult.rollResult * cResult.pointMultiplier;
+    }
 
     setLastUserResult(uResult);
     setLastCpuResult(cResult);
     setCurrentUserStats((prev) => [...prev, uResult]);
     setCurrentCpuStats((prev) => [...prev, cResult]);
+    setLastBadgeActivations(allActivations);
     setPhase("result");
-  }, [currentStat, userCard, cpuCard, userStars, cpuStars, difficultyStars]);
+  }, [currentStat, userCard, cpuCard, userStars, cpuStars, difficultyStars, badgeMap, userLineup, cpuLineup]);
 
   const handleAutoRoll = useCallback(() => {
     setRolling(true);
@@ -229,6 +280,16 @@ export function GameBoard({ userLineup, cpuLineup, onComplete, difficultyStars }
       {phase === "result" && lastUserResult && lastCpuResult && (
         <div className="space-y-4">
           <StatResult userResult={lastUserResult} cpuResult={lastCpuResult} />
+          {/* Badge activations */}
+          {lastBadgeActivations.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {lastBadgeActivations.map((ba, i) => (
+                <Badge key={i} variant="secondary" className="text-[10px] gap-1">
+                  🏅 {ba.abbreviation} ({ba.tier}) — {ba.effect}
+                </Badge>
+              ))}
+            </div>
+          )}
           <div className="text-center">
             <Button onClick={handleNext}>
               {isLastStat && isLastPlayer ? "See Final Results" :
