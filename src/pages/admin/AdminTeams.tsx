@@ -333,7 +333,7 @@ export default function AdminTeams() {
       </FormDialog>
 
       {/* Run dialog */}
-      <FormDialog open={runDialog} onOpenChange={setRunDialog} title={runEditId ? "Edit Run" : "Add Run"} onSave={() => { console.log("RUN SAVE CLICKED", { runForm, runEditId, isPending: runSave.isPending }); runSave.mutate(); }} saving={runSave.isPending}>
+      <FormDialog open={runDialog} onOpenChange={setRunDialog} title={runEditId ? "Edit Run" : "Add Run"} onSave={() => runSave.mutate()} saving={runSave.isPending}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2"><Label>Name</Label><Input value={runForm.name} onChange={(e) => setRunForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. 3v3 Endless" /></div>
