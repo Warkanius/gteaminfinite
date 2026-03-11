@@ -246,15 +246,15 @@ export function RunRosterManager({ runId }: Props) {
   const pendingIds = useMemo(() => new Set(pendingPlayers.map((p) => p.id)), [pendingPlayers]);
 
   const filtered = useMemo(() => {
-    if (!search) return allPlayers;
-    const q = search.toLowerCase();
+    if (!debouncedSearch) return allPlayers;
+    const q = debouncedSearch.toLowerCase();
     return allPlayers.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         (p.position1 ?? "").toLowerCase().includes(q) ||
         (p.gem_name ?? "").toLowerCase().includes(q)
     );
-  }, [search, allPlayers]);
+  }, [debouncedSearch, allPlayers]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
