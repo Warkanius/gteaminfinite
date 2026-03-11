@@ -45,31 +45,51 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
     const pRunRating = pCard._runRating ?? 60;
     const cRunRating = cCard._runRating ?? 60;
 
-    const pDice = rollDice(getRunDiceCount(pRunRating)).dice;
-    const cDice = rollDice(getRunDiceCount(cRunRating)).dice;
+    // Determine the stat for this possession
+    const activeStat: StatKey = isPlayerTurn
+      ? selectedStat
+      : SCORING_STATS[Math.floor(Math.random() * SCORING_STATS.length)];
 
-    const pResult = resolveRunStatRoll(selectedStat, pCard[selectedStat], pRunRating, pDice);
-    const cResult = resolveRunStatRoll(selectedStat, cCard[selectedStat], cRunRating, cDice);
+    const offenseCard = isPlayerTurn ? pCard : cCard;
+    const defenseCard = isPlayerTurn ? cCard : pCard;
+    const offRating = isPlayerTurn ? pRunRating : cRunRating;
+    const defRating = isPlayerTurn ? cRunRating : pRunRating;
+
+    const offDice = rollDice(getRunDiceCount(offRating)).dice;
+    const defDice = rollDice(getRunDiceCount(defRating)).dice;
+
+    const offResult = resolveRunStatRoll(activeStat, offenseCard[activeStat], offRating, offDice);
+    const defResult = resolveRunStatRoll(activeStat, defenseCard[activeStat], defRating, defDice);
 
     const newLogs = [...logs];
     let newPScore = playerScore;
     let newCScore = cpuScore;
 
-    if (pResult.rollResult > cResult.rollResult) {
-      newPScore += pResult.points;
-      newLogs.unshift({ msg: `Player ${pCard.name} won ${STAT_LABELS[selectedStat]} roll! (+${pResult.points} pts)`, pPts: pResult.points, cPts: 0 });
-    } else if (cResult.rollResult > pResult.rollResult) {
-      newCScore += cResult.points;
-      newLogs.unshift({ msg: `CPU ${cCard.name} won ${STAT_LABELS[selectedStat]} roll! (+${cResult.points} pts)`, pPts: 0, cPts: cResult.points });
+    const offLabel = isPlayerTurn ? `Your ${pCard.name}` : `CPU ${cCard.name}`;
+    const defLabel = isPlayerTurn ? `CPU ${cCard.name}` : `Your ${pCard.name}`;
+
+    if (offResult.rollResult > defResult.rollResult) {
+      // Offense wins — they score
+      if (isPlayerTurn) {
+        newPScore += offResult.points;
+        newLogs.unshift({ msg: `🏀 ${offLabel} scores on ${STAT_LABELS[activeStat]}! (+${offResult.points} pts)`, pPts: offResult.points, cPts: 0 });
+      } else {
+        newCScore += offResult.points;
+        newLogs.unshift({ msg: `🏀 ${offLabel} scores on ${STAT_LABELS[activeStat]}! (+${offResult.points} pts)`, pPts: 0, cPts: offResult.points });
+      }
+    } else if (defResult.rollResult > offResult.rollResult) {
+      // Defense wins — turnover, no points
+      newLogs.unshift({ msg: `🛡️ ${defLabel} stops ${offLabel} on ${STAT_LABELS[activeStat]}!`, pPts: 0, cPts: 0 });
     } else {
-      newLogs.unshift({ msg: `Tie on ${STAT_LABELS[selectedStat]}! No points.`, pPts: 0, cPts: 0 });
+      newLogs.unshift({ msg: `Tie on ${STAT_LABELS[activeStat]}! No points.`, pPts: 0, cPts: 0 });
     }
 
     setPlayerScore(newPScore);
     setCpuScore(newCScore);
     setLogs(newLogs.slice(0, 10));
 
-    // Next turn
+    // Alternate possession and rotate players
+    setIsPlayerTurn(!isPlayerTurn);
     setPlayerIndex((playerIndex + 1) % 3);
     setCpuIndex((cpuIndex + 1) % 3);
     
