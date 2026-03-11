@@ -280,6 +280,16 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, onComplete, difficu
       {phase === "result" && lastUserResult && lastCpuResult && (
         <div className="space-y-4">
           <StatResult userResult={lastUserResult} cpuResult={lastCpuResult} />
+          {/* Badge activations */}
+          {lastBadgeActivations.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {lastBadgeActivations.map((ba, i) => (
+                <Badge key={i} variant="secondary" className="text-[10px] gap-1">
+                  🏅 {ba.abbreviation} ({ba.tier}) — {ba.effect}
+                </Badge>
+              ))}
+            </div>
+          )}
           <div className="text-center">
             <Button onClick={handleNext}>
               {isLastStat && isLastPlayer ? "See Final Results" :

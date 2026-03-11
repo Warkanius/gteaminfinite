@@ -8,6 +8,10 @@ import {
   resolveRunShotContest, pickRebounderSlot, resolveRunReboundRoll,
   type ShotContestResult,
 } from "@/lib/gameEngine";
+import {
+  resolveBadgeEffects, getTeammateBadges,
+  type CardBadge, type BadgeActivation,
+} from "@/lib/badgeEngine";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +20,7 @@ interface Props {
   run: any;
   playerLineup: any[];
   cpuLineup: any[];
+  badgeMap: Record<string, CardBadge[]>;
   onGameComplete: () => void;
 }
 
@@ -24,10 +29,10 @@ type Possession = "player" | "cpu";
 
 interface LogEntry {
   msg: string;
-  type: "score-player" | "score-cpu" | "miss" | "rebound" | "info";
+  type: "score-player" | "score-cpu" | "miss" | "rebound" | "info" | "badge";
 }
 
-export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: Props) {
+export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameComplete }: Props) {
   const { user } = useAuth();
   const targetScore = run.target_score;
 
