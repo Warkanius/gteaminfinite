@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Dices } from "lucide-react";
 import { runRatingToStars, starStatToRunStat } from "@/lib/gameEngine";
+import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 
 interface Props {
   runId: string;
