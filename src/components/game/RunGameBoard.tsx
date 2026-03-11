@@ -396,6 +396,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameCom
                 log.type === "score-player" ? "bg-primary/10 border-primary" :
                 log.type === "score-cpu" ? "bg-destructive/10 border-destructive" :
                 log.type === "rebound" ? "bg-accent/20 border-accent" :
+                log.type === "badge" ? "bg-secondary/30 border-secondary" :
                 "bg-muted border-muted-foreground"
               }`}
             >
