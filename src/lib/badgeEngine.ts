@@ -7,7 +7,9 @@
  *   debuff  — reduce opponent's stat before rolling (Lockdown, Intimidator…)
  *   cancel  — nullify an opponent's debuff badge if tier ≥ theirs (Art of F You)
  *   boost   — increase a teammate's stat (Floor General)
- *   passive — special per-badge logic (Hidden Gem, Mr. Versatile — future)
+ *   passive — special per-badge logic:
+ *     Hidden Gem   — protects from difficulty penalties (does NOT upgrade roll)
+ *     Mr. Versatile — adds extra Signature Trait slots per tier level
  */
 
 import { rollDice, type StatKey } from "@/lib/gameEngine";
