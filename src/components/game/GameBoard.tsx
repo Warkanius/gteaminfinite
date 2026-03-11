@@ -50,6 +50,9 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, onComplete, difficu
   const [autoUserDice, setAutoUserDice] = useState<(number | null)[]>([null]);
   const [autoCpuDice, setAutoCpuDice] = useState<(number | null)[]>([null]);
 
+  // Badge activations for display
+  const [lastBadgeActivations, setLastBadgeActivations] = useState<BadgeActivation[]>([]);
+
   // Running score
   const userRunningScore = useMemo(
     () => userCardResults.reduce((s, c) => s + c.totalPoints, 0) +
