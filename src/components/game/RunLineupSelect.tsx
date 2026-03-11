@@ -7,6 +7,7 @@ import { RevealCard, RevealCardHandle } from "@/components/packs/RevealCard";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Dices } from "lucide-react";
+import { runRatingToStars, starStatToRunStat } from "@/lib/gameEngine";
 
 interface Props {
   runId: string;
@@ -50,20 +51,25 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         .eq("run_id", runId);
       if (error) throw error;
       // Map to card-like objects with run stats overlaid
-      return (data ?? []).map((rp) => ({
-        ...rp.player_cards,
-        // Override card stats with run-specific numerical stats
-        stat_3pt: rp.run_stat_3pt,
-        stat_mid: rp.run_stat_mid,
-        stat_fin: rp.run_stat_fin,
-        stat_dnk: rp.run_stat_dnk,
-        stat_stl: rp.run_stat_stl,
-        stat_blk: rp.run_stat_blk,
-        stat_ast: rp.run_stat_ast,
-        stat_reb: rp.run_stat_reb,
-        stat_int: rp.run_stat_int,
-        rating: rp.run_rating,
-      }));
+      return (data ?? []).map((rp) => {
+        const base = rp.player_cards as any;
+        return {
+          ...base,
+          // Keep raw numerical values for game logic
+          stat_3pt: rp.run_stat_3pt,
+          stat_mid: rp.run_stat_mid,
+          stat_fin: rp.run_stat_fin,
+          stat_dnk: rp.run_stat_dnk,
+          stat_stl: rp.run_stat_stl,
+          stat_blk: rp.run_stat_blk,
+          stat_ast: rp.run_stat_ast,
+          stat_reb: rp.run_stat_reb,
+          stat_int: rp.run_stat_int,
+          // Keep raw run_rating for game engine, convert for display
+          _runRating: rp.run_rating,
+          rating: runRatingToStars(rp.run_rating),
+        };
+      });
     },
     enabled: !!runId,
   });
@@ -132,9 +138,25 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
 
   const allRevealed = revealIndex >= cpuLineup.length && cpuLineup.length > 0;
 
-  const playerLineup = Array.from(selectedIds).map(id => 
-    collection?.find(c => c.player_card_id === id)?.player_cards
-  ).filter(Boolean);
+  const playerLineup = Array.from(selectedIds).map(id => {
+    const card = collection?.find(c => c.player_card_id === id)?.player_cards as any;
+    if (!card) return null;
+    // Overlay run stats: use player_cards.run_* if they exist, otherwise convert star stats
+    return {
+      ...card,
+      stat_3pt: card.run_stat_3pt ?? starStatToRunStat(card.stat_3pt),
+      stat_mid: card.run_stat_mid ?? starStatToRunStat(card.stat_mid),
+      stat_fin: card.run_stat_fin ?? starStatToRunStat(card.stat_fin),
+      stat_dnk: card.run_stat_dnk ?? starStatToRunStat(card.stat_dnk),
+      stat_stl: card.run_stat_stl ?? starStatToRunStat(card.stat_stl),
+      stat_blk: card.run_stat_blk ?? starStatToRunStat(card.stat_blk),
+      stat_ast: card.run_stat_ast ?? starStatToRunStat(card.stat_ast),
+      stat_reb: card.run_stat_reb ?? starStatToRunStat(card.stat_reb),
+      stat_int: card.run_stat_int ?? starStatToRunStat(card.stat_int),
+      _runRating: card.run_rating ?? starStatToRunStat(card.rating),
+      rating: card.run_rating ? runRatingToStars(card.run_rating) : card.rating,
+    };
+  }).filter(Boolean);
 
   return (
     <div className="space-y-8">

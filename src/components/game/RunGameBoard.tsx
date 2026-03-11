@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { PlayerCard } from "@/components/cards/PlayerCard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SCORING_STATS, STAT_LABELS, type StatKey, rollDice, resolveStatRoll } from "@/lib/gameEngine";
+import { SCORING_STATS, STAT_LABELS, type StatKey, rollDice, resolveRunStatRoll, getRunDiceCount } from "@/lib/gameEngine";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,15 +41,14 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
     const pCard = playerLineup[playerIndex];
     const cCard = cpuLineup[cpuIndex];
 
-    const pDice = rollDice(pCard.rating >= 85 ? 2 : 1).dice;
-    const cDice = rollDice(cCard.rating >= 85 ? 2 : 1).dice;
+    const pRunRating = pCard._runRating ?? 60;
+    const cRunRating = cCard._runRating ?? 60;
 
-    // We need star conversions or assume rating/20. The gameEngine uses stars.
-    // Assuming standard rating logic: 99=5, 95=4, 90=3, 85=2, 80=1, else 0
-    const getStars = (r: number) => r >= 99 ? 5 : r >= 95 ? 4 : r >= 90 ? 3 : r >= 85 ? 2 : r >= 80 ? 1 : 0;
+    const pDice = rollDice(getRunDiceCount(pRunRating)).dice;
+    const cDice = rollDice(getRunDiceCount(cRunRating)).dice;
 
-    const pResult = resolveStatRoll(selectedStat, pCard[selectedStat], getStars(pCard.rating), pDice);
-    const cResult = resolveStatRoll(selectedStat, cCard[selectedStat], getStars(cCard.rating), cDice);
+    const pResult = resolveRunStatRoll(selectedStat, pCard[selectedStat], pRunRating, pDice);
+    const cResult = resolveRunStatRoll(selectedStat, cCard[selectedStat], cRunRating, cDice);
 
     const newLogs = [...logs];
     let newPScore = playerScore;

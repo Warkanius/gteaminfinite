@@ -25,6 +25,52 @@ export function getDiceCount(stars: number): 1 | 2 {
   return stars >= 4 ? 2 : 1;
 }
 
+// ─── Runs Mode helpers (0–120 numerical scale) ───
+
+/** Convert run_rating (0–120) to display stars (0–6) for PlayerCard */
+export function runRatingToStars(runRating: number): number {
+  return Math.round(runRating / 20);
+}
+
+/** Dice count for Runs: 2 dice if run_rating >= 80, else 1 */
+export function getRunDiceCount(runRating: number): 1 | 2 {
+  return runRating >= 80 ? 2 : 1;
+}
+
+/** Continuous modifier for Runs: run_rating / 40 (80→2.0x, 100→2.5x, 120→3.0x) */
+export function getRunModifier(runRating: number): number {
+  return runRating / 40;
+}
+
+/** Convert a card's star-based stats to run numerical stats (fallback when no run_* columns) */
+export function starStatToRunStat(starStat: number): number {
+  return starStat * 20;
+}
+
+/** Resolve a stat roll using the Runs 0–120 numerical scale */
+export function resolveRunStatRoll(
+  stat: StatKey,
+  statValue: number,
+  runRating: number,
+  dice: number[],
+): StatRollResult {
+  const diceCount = dice.length as 1 | 2;
+  const diceTotal = dice.reduce((a, b) => a + b, 0);
+  const isDoubles = diceCount === 2 && dice[0] === dice[1];
+  const baseModifier = getRunModifier(runRating);
+  // 120-rated doubles = 3.5x modifier bonus
+  const modifier = (runRating >= 120 && isDoubles) ? 3.5 : baseModifier;
+  const rollResult = Math.round(diceTotal * modifier);
+  const pointMultiplier = getPointMultiplier(stat);
+  const points = rollResult * pointMultiplier;
+  const stars = runRatingToStars(runRating);
+
+  return {
+    stat, statValue, stars, diceCount, dice, diceTotal,
+    isDoubles, modifier, rollResult, pointMultiplier, points,
+  };
+}
+
 /** Point multiplier per stat type (like real basketball) */
 export function getPointMultiplier(stat: StatKey): number {
   if (stat === "stat_3pt") return 3;
