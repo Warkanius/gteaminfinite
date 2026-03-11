@@ -51,20 +51,25 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         .eq("run_id", runId);
       if (error) throw error;
       // Map to card-like objects with run stats overlaid
-      return (data ?? []).map((rp) => ({
-        ...rp.player_cards,
-        // Override card stats with run-specific numerical stats
-        stat_3pt: rp.run_stat_3pt,
-        stat_mid: rp.run_stat_mid,
-        stat_fin: rp.run_stat_fin,
-        stat_dnk: rp.run_stat_dnk,
-        stat_stl: rp.run_stat_stl,
-        stat_blk: rp.run_stat_blk,
-        stat_ast: rp.run_stat_ast,
-        stat_reb: rp.run_stat_reb,
-        stat_int: rp.run_stat_int,
-        rating: rp.run_rating,
-      }));
+      return (data ?? []).map((rp) => {
+        const base = rp.player_cards as any;
+        return {
+          ...base,
+          // Keep raw numerical values for game logic
+          stat_3pt: rp.run_stat_3pt,
+          stat_mid: rp.run_stat_mid,
+          stat_fin: rp.run_stat_fin,
+          stat_dnk: rp.run_stat_dnk,
+          stat_stl: rp.run_stat_stl,
+          stat_blk: rp.run_stat_blk,
+          stat_ast: rp.run_stat_ast,
+          stat_reb: rp.run_stat_reb,
+          stat_int: rp.run_stat_int,
+          // Keep raw run_rating for game engine, convert for display
+          _runRating: rp.run_rating,
+          rating: runRatingToStars(rp.run_rating),
+        };
+      });
     },
     enabled: !!runId,
   });
