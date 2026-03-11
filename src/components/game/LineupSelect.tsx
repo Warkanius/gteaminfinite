@@ -10,7 +10,7 @@ import type { GameCard } from "@/pages/Play";
 import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 
 interface LineupSelectProps {
-  onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[]) => void;
+  onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[], badgeMap: Record<string, CardBadge[]>) => void;
   dominationGameId?: string;
 }
 
