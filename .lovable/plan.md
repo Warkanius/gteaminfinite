@@ -1,92 +1,39 @@
 
 
-# Phase 2: Admin Panel — Full Game Customization
+# Fix: Runs Mode Rating System
 
-## Overview
-Build out all 7 admin pages replacing the current placeholder stubs. Each page provides full CRUD (create, read, update, delete) for its game data, accessible only to users with the admin role.
+## Problems Identified
 
----
+There are two core issues with how The Runs handles ratings:
 
-## 1. Admin Player Card Manager (`/admin/players`)
-**File:** `src/pages/admin/AdminPlayers.tsx`
+1. **Visual: PlayerCard treats `run_rating` (0–120) as star count.** When CPU cards get `rating: run_rating` (e.g. 80), the `StarRating` component renders 80 stars with scale-breaker glow. It expects 0–6.
 
-- Data table listing all player cards with columns: Name, Rating, Gem Tier, Position, Team
-- Filter/search bar by name, gem tier, position
-- "Add Player" button opens a dialog/drawer form with:
-  - Name, Position 1, Position 2
-  - 9 stat sliders or number inputs (3PT, MID, FIN, DNK, AST, STL, REB, BLK, INT)
-  - Gem tier dropdown (fetched from `gem_tiers` table)
-  - Team dropdown (fetched from `teams` table)
-  - Collection reward toggle
-  - Auto-calculated overall rating displayed live
-- Edit button on each row opens the same form pre-filled
-- Delete with confirmation dialog
-- **Badges & Traits sub-section** on each player form:
-  - Multi-select badges from `badges` table, each with a tier dropdown (Base/Gold/Diamond/HOF/Actolytrene)
-  - Multi-select traits from `signature_traits` table, each with tier + optional target stat
-  - Saves to `player_card_badges` and `player_card_traits` join tables
+2. **Gameplay: Player lineup cards don't use run stats.** The user's cards come straight from `user_collections → player_cards` with standard star-based stats (0–6). Only CPU cards get run stats overlaid. The game engine then treats run numerical stats (0–120) and star stats (0–6) identically in `resolveStatRoll`, producing nonsensical results.
 
-## 2. Admin Packs & Odds Manager (`/admin/packs`)
-**File:** `src/pages/admin/AdminPacks.tsx`
+3. **Game engine mismatch.** `RunGameBoard` calls `resolveStatRoll` which uses `getStarModifier(stars)` — a lookup table for 0–5. But it feeds in `getStars(run_rating)` which converts 0–120 back to 0–5 poorly. The stat values themselves (0–120 for CPU, 0–6 for player) are also incompatible.
 
-- List of all packs with name, type, cost, 10-box cost
-- Add/Edit pack form: name, pack_type, cost, ten_box_cost
-- **Pack Players tab**: assign player cards to pack slots (slot_number) via `pack_players` table
-- **Odds Table tab**: manage `pack_odds` rows for this pack type — dice_roll range, result_slot, description
-- Delete pack with cascade warning
+## Plan
 
-## 3. Admin Teams & Runs (`/admin/teams`)
-**File:** `src/pages/admin/AdminTeams.tsx`
+### 1. Convert run_rating to display stars for PlayerCard
 
-- **Teams tab**: list all teams, add/edit (name, category, unlock_cost), assign player cards to team via `player_cards.team_id`
-- **Domination tab**: list domination road games, add/edit (road_name, opponent_name, game_order, difficulty_stars, coin_reward, pack_reward)
-- **Runs tab**: list runs, add/edit run names
+Add a utility to convert the 0–120 numerical scale back to star display:
+- `run_rating / 20` gives the star equivalent (e.g. 80 → 4 stars, 100 → 5 stars)
+- In `RunLineupSelect` and `RunGameBoard`, pass a display-friendly version of the card to `PlayerCard` with `rating` converted to stars, while keeping the raw numerical values for game logic
 
-## 4. Admin Badges & Traits (`/admin/badges`)
-**File:** `src/pages/admin/AdminBadgesTraits.tsx`
+### 2. Overlay run stats on player lineup cards
 
-- **Badges tab**: table of all badges with name, abbreviation, effect_type, affected_stat
-  - Expand/edit to see all 5 tier descriptions (base, gold, diamond, hof, actolytrene)
-- **Signature Traits tab**: table of all traits with name, abbreviation, condition_type
-  - Expand/edit to see all 5 tier descriptions
+In `RunLineupSelect`, when the user selects cards from their collection, check `player_cards.run_*` columns. If those exist, overlay them onto the card data before passing to the game board — same pattern already used for CPU cards. If a user's card has no `run_*` stats, fall back to a conversion: `star_stat * 20`.
 
-## 5. Admin Challenges (`/admin/challenges`)
-**File:** `src/pages/admin/AdminChallenges.tsx`
+### 3. Adapt RunGameBoard engine for numerical scale
 
-- List challenges with name, type, coin/gem rewards
-- Add/edit form: name, description, challenge_type, coin_reward, gem_reward, conditions (JSON editor or structured form)
+Rewrite the roll logic in `RunGameBoard.handleRoll` to work natively with the 0–120 numerical scale instead of trying to convert back to stars:
+- **Dice count**: 2 dice if `run_rating >= 80` (equivalent to old 4-star threshold), else 1
+- **Modifier**: Use `run_rating / 40` as a continuous modifier (so 80 → 2.0x, 100 → 2.5x, 120 → 3.0x) — mirrors the old star modifier table but works on the numerical scale
+- **Stat value display**: Show the 0–120 numerical stat in the stat selector dropdown
 
-## 6. Admin Currencies (`/admin/currencies`)
-**File:** `src/pages/admin/AdminCurrencies.tsx`
+### Files to modify
 
-- View/edit player profiles' coin and gem balances (admin override)
-- Summary stats: total coins/gems in circulation
-- Manual award form: select user, add coins or gems
-
-## 7. Admin Rules Config (`/admin/rules`)
-**File:** `src/pages/admin/AdminRules.tsx`
-
-- List all `rule_config` entries (key, value, description)
-- Edit value (JSON editor) and description for each rule
-- Add new rule config entries
-- Covers: star conversion key, game mode settings, rating roll modifiers, doubles rules
-
----
-
-## Shared Components
-
-- **`src/components/admin/DataTable.tsx`** — Reusable sortable/filterable table component used across all admin pages
-- **`src/components/admin/FormDialog.tsx`** — Reusable dialog wrapper for add/edit forms with save/cancel actions
-- **`src/components/admin/StatInput.tsx`** — Number input with label, used for the 9 player stats
-- **`src/components/admin/JsonEditor.tsx`** — Simple JSON textarea editor for conditions and rule values
-
-## Routing Update
-- Update `src/App.tsx` to import each admin page instead of `Placeholder` for admin routes
-
-## Technical Details
-- All data fetching via `@tanstack/react-query` with `supabase` client
-- Mutations use `useMutation` with `queryClient.invalidateQueries` for optimistic UI
-- No database schema changes needed — all tables and RLS policies already exist
-- Admin-only access enforced by existing RLS policies (`has_role(auth.uid(), 'admin')`)
-- Client-side role check in sidebar already hides admin nav for non-admins
+- **`src/components/game/RunLineupSelect.tsx`** — Overlay `run_*` stats on player cards; convert `rating` to stars for display
+- **`src/components/game/RunGameBoard.tsx`** — Rewrite roll logic for 0–120 scale; convert rating to stars before passing to `PlayerCard`
+- **`src/lib/gameEngine.ts`** — Add `getRunStarModifier(runRating: number)` and `getRunDiceCount(runRating: number)` helpers for the numerical scale
 
