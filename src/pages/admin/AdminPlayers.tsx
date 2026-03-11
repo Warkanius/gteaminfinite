@@ -388,6 +388,43 @@ export default function AdminPlayers() {
             </div>
           </div>
 
+          {/* Run Ratings */}
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Run Ratings (Numerical)</h3>
+              {form.run_rating != null && (
+                <Badge variant="secondary" className="text-lg font-mono">RUN OVR {form.run_rating}</Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              These are the persistent numerical ratings used in The Runs mode (0–120). Leave empty to auto-randomize when adding to a run roster.
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">OVR</Label>
+                <Input
+                  type="number" min={0} max={120}
+                  value={form.run_rating ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, run_rating: e.target.value ? Number(e.target.value) : null }))}
+                  placeholder="—"
+                  className="h-9 text-center font-mono"
+                />
+              </div>
+              {RUN_STAT_KEYS.map((k) => (
+                <div key={k} className="space-y-1">
+                  <Label className="text-xs">{RUN_STAT_LABELS[k]}</Label>
+                  <Input
+                    type="number" min={0} max={200}
+                    value={(form as any)[k] ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value ? Number(e.target.value) : null }))}
+                    placeholder="—"
+                    className="h-9 text-center font-mono"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Card Appearance */}
           <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
             <div>
