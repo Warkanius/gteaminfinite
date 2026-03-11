@@ -48,6 +48,8 @@ type FormState = Partial<PlayerCard> & { badges: { badge_id: string; tier: strin
 const emptyForm = (): FormState => ({
   name: "", position1: null, position2: null,
   stat_3pt: 0, stat_mid: 0, stat_fin: 0, stat_dnk: 0, stat_ast: 0, stat_stl: 0, stat_reb: 0, stat_blk: 0, stat_int: 0,
+  run_rating: null, run_stat_3pt: null, run_stat_mid: null, run_stat_fin: null, run_stat_dnk: null,
+  run_stat_stl: null, run_stat_blk: null, run_stat_ast: null, run_stat_reb: null, run_stat_int: null,
   gem_tier_id: null, team_id: null, is_collection_reward: false, gem_name: null,
   card_color_primary: null, card_color_secondary: null, card_glow_color: null, card_animation: null,
   badges: [], traits: [],
