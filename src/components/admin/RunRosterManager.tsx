@@ -51,6 +51,19 @@ export function RunRosterManager({ runId }: Props) {
   const [search, setSearch] = useState("");
   const [importTeamId, setImportTeamId] = useState<string>("");
   const [pendingPlayers, setPendingPlayers] = useState<PendingPlayer[]>([]);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [displayLimit, setDisplayLimit] = useState(50);
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset display limit when search changes
+  useEffect(() => {
+    setDisplayLimit(50);
+  }, [debouncedSearch]);
 
   // Current roster
   const { data: rosterEntries = [], isLoading: rosterLoading } = useQuery({
