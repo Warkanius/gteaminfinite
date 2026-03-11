@@ -83,6 +83,20 @@ function boostAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
   return mode === "runs" ? runMap[tier] : starMap[tier];
 }
 
+// ─── Passive badge helpers ───
+
+/** Hidden Gem tier level (0 = no badge) */
+function hiddenGemLevel(tier: BadgeTier): number {
+  const map: Record<BadgeTier, number> = { base: 1, gold: 1, diamond: 1, hof: 1, actolytrene: 1 };
+  return map[tier];
+}
+
+/** Mr. Versatile: extra Signature Trait slots per tier */
+function versatileSlots(tier: BadgeTier): number {
+  const map: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 3, hof: 4, actolytrene: 5 };
+  return map[tier];
+}
+
 // ─── Badge matching ───
 
 /** Get badges that match a specific stat and effect type */
