@@ -1,79 +1,92 @@
 
 
-# The Runs — Basketball Possession System Overhaul
+# Phase 2: Admin Panel — Full Game Customization
 
-## Current Problems
-- Each roll resolves as a simultaneous same-stat contest (5v5 style) instead of a proper basketball possession
-- No distinct offense/defense mechanic — both sides roll the same stat
-- No rebound system
-- No badge integration
-- "Attack" terminology doesn't fit basketball
-- Players auto-rotate instead of user choosing shooter
+## Overview
+Build out all 7 admin pages replacing the current placeholder stubs. Each page provides full CRUD (create, read, update, delete) for its game data, accessible only to users with the admin role.
 
-## New Game Flow
+---
 
-Each possession follows this sequence:
+## 1. Admin Player Card Manager (`/admin/players`)
+**File:** `src/pages/admin/AdminPlayers.tsx`
 
-```text
-1. OFFENSE CHOOSES
-   → Player picks which of their 3 cards shoots
-   → Player picks a scoring stat (3PT, MID, FIN, DNK, INT)
+- Data table listing all player cards with columns: Name, Rating, Gem Tier, Position, Team
+- Filter/search bar by name, gem tier, position
+- "Add Player" button opens a dialog/drawer form with:
+  - Name, Position 1, Position 2
+  - 9 stat sliders or number inputs (3PT, MID, FIN, DNK, AST, STL, REB, BLK, INT)
+  - Gem tier dropdown (fetched from `gem_tiers` table)
+  - Team dropdown (fetched from `teams` table)
+  - Collection reward toggle
+  - Auto-calculated overall rating displayed live
+- Edit button on each row opens the same form pre-filled
+- Delete with confirmation dialog
+- **Badges & Traits sub-section** on each player form:
+  - Multi-select badges from `badges` table, each with a tier dropdown (Base/Gold/Diamond/HOF/Actolytrene)
+  - Multi-select traits from `signature_traits` table, each with tier + optional target stat
+  - Saves to `player_card_badges` and `player_card_traits` join tables
 
-2. SHOT CONTEST
-   → Offense rolls dice × modifier using their chosen stat
-   → Defense rolls dice × modifier using counter stat:
-       • 3PT / MID / INT → defender's STL (direct slot matchup)
-       • FIN / DNK       → slot 3's BLK (rim protector)
+## 2. Admin Packs & Odds Manager (`/admin/packs`)
+**File:** `src/pages/admin/AdminPacks.tsx`
 
-3. RESOLUTION
-   → Offense roll > Defense roll = BUCKET (points per stat: 3PT=3, MID/FIN/DNK=2, INT=1)
-   → Defense roll ≥ Offense roll = MISS → triggers REBOUND
+- List of all packs with name, type, cost, 10-box cost
+- Add/Edit pack form: name, pack_type, cost, ten_box_cost
+- **Pack Players tab**: assign player cards to pack slots (slot_number) via `pack_players` table
+- **Odds Table tab**: manage `pack_odds` rows for this pack type — dice_roll range, result_slot, description
+- Delete pack with cascade warning
 
-4. REBOUND (on miss only)
-   → Each team randomly selects a rebounder:
-       Slot 3 = 60% chance, Slot 2 = 25%, Slot 1 = 15%
-   → Each selected rebounder rolls using (REB + BLK) / 2 as their stat
-   → Higher roll wins possession
-   → Winner's team gets next possession (breaks normal alternation)
+## 3. Admin Teams & Runs (`/admin/teams`)
+**File:** `src/pages/admin/AdminTeams.tsx`
 
-5. POSSESSION CHANGE
-   → On a made basket: possession goes to the other team
-   → On a miss: possession goes to the rebound winner
-```
+- **Teams tab**: list all teams, add/edit (name, category, unlock_cost), assign player cards to team via `player_cards.team_id`
+- **Domination tab**: list domination road games, add/edit (road_name, opponent_name, game_order, difficulty_stars, coin_reward, pack_reward)
+- **Runs tab**: list runs, add/edit run names
 
-CPU offense mirrors this: CPU randomly picks a card and stat, player's matching slot defends with STL (perimeter) or slot 3 BLK (inside).
+## 4. Admin Badges & Traits (`/admin/badges`)
+**File:** `src/pages/admin/AdminBadgesTraits.tsx`
 
-## Technical Changes
+- **Badges tab**: table of all badges with name, abbreviation, effect_type, affected_stat
+  - Expand/edit to see all 5 tier descriptions (base, gold, diamond, hof, actolytrene)
+- **Signature Traits tab**: table of all traits with name, abbreviation, condition_type
+  - Expand/edit to see all 5 tier descriptions
 
-### 1. `src/lib/gameEngine.ts` — New helpers
-- `resolveRunShotContest(offenseStat, offenseValue, offRating, offDice, defenseStat, defenseValue, defRating, defDice)` — offense vs defense with different stats
-- `resolveRunRebound(teamSlots: {reb: number, blk: number}[], rating: number, dice: number[])` — combined (REB+BLK)/2 roll
-- `pickRebounder()` — weighted random: slot 3 = 60%, slot 2 = 25%, slot 1 = 15%
-- `getDefenseStat(offenseStat)` — returns `"stat_stl"` for perimeter, `"stat_blk"` for inside
+## 5. Admin Challenges (`/admin/challenges`)
+**File:** `src/pages/admin/AdminChallenges.tsx`
 
-### 2. `src/components/game/RunGameBoard.tsx` — Full rewrite of game logic
-- **State**: Replace `playerIndex`/`cpuIndex` rotation with `possession: "player" | "cpu"` and free card selection
-- **Offense UI (player's turn)**: Player picks card (from 3), picks stat, clicks "Shoot" (not "Attack")
-- **Defense UI (CPU's turn)**: Show which CPU card is shooting and what stat. Player clicks "Contest" to roll defense
-- **Shot resolution**: Offense stat vs defense counter stat (STL or slot 3 BLK)
-- **Rebound phase**: On miss, show rebound animation/log. Weighted slot pick → both rebounders roll → winner gets possession
-- **Badge integration**: Before resolving rolls, check if shooter/defender has relevant badges from `player_card_badges` table. Apply badge modifiers (reroll, stat boost) based on badge tier
+- List challenges with name, type, coin/gem rewards
+- Add/edit form: name, description, challenge_type, coin_reward, gem_reward, conditions (JSON editor or structured form)
 
-### 3. Badge Integration
-- Fetch badges for all 6 cards (3 player + 3 CPU) via `player_card_badges` joined with `badges` at lineup confirmation time
-- During shot resolution, check if the shooter has a badge with `affected_stat` matching the chosen stat
-- During defense, check if defender has a badge affecting STL or BLK
-- Apply badge effects per their `effect_type` (e.g., reroll = roll again and take better result)
+## 6. Admin Currencies (`/admin/currencies`)
+**File:** `src/pages/admin/AdminCurrencies.tsx`
 
-### 4. UI Terminology
-- "Attack" → "Shoot"
-- "Defend" → "Contest"
-- "Your Attack" → "Your Possession"
-- "CPU Attack" → "CPU Possession"
-- Add card selector UI: 3 small card thumbnails the player taps to pick their shooter
+- View/edit player profiles' coin and gem balances (admin override)
+- Summary stats: total coins/gems in circulation
+- Manual award form: select user, add coins or gems
 
-### Files to modify
-- **`src/lib/gameEngine.ts`** — Add defense stat mapping, rebound helpers, shot contest resolver
-- **`src/components/game/RunGameBoard.tsx`** — Full rewrite of possession/roll/rebound logic and UI
-- **`src/components/game/RunLineupSelect.tsx`** — Fetch badges for selected cards and pass them through
+## 7. Admin Rules Config (`/admin/rules`)
+**File:** `src/pages/admin/AdminRules.tsx`
+
+- List all `rule_config` entries (key, value, description)
+- Edit value (JSON editor) and description for each rule
+- Add new rule config entries
+- Covers: star conversion key, game mode settings, rating roll modifiers, doubles rules
+
+---
+
+## Shared Components
+
+- **`src/components/admin/DataTable.tsx`** — Reusable sortable/filterable table component used across all admin pages
+- **`src/components/admin/FormDialog.tsx`** — Reusable dialog wrapper for add/edit forms with save/cancel actions
+- **`src/components/admin/StatInput.tsx`** — Number input with label, used for the 9 player stats
+- **`src/components/admin/JsonEditor.tsx`** — Simple JSON textarea editor for conditions and rule values
+
+## Routing Update
+- Update `src/App.tsx` to import each admin page instead of `Placeholder` for admin routes
+
+## Technical Details
+- All data fetching via `@tanstack/react-query` with `supabase` client
+- Mutations use `useMutation` with `queryClient.invalidateQueries` for optimistic UI
+- No database schema changes needed — all tables and RLS policies already exist
+- Admin-only access enforced by existing RLS policies (`has_role(auth.uid(), 'admin')`)
+- Client-side role check in sidebar already hides admin nav for non-admins
 
