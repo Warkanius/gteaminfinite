@@ -40,19 +40,32 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
     enabled: !!user,
   });
 
-  // Fetch CPU roster
+  // Fetch CPU roster from run_players (the actual run roster, not team-based)
   const { data: cpuRoster, isLoading: isRosterLoading } = useQuery({
-    queryKey: ["team-roster", teamId],
+    queryKey: ["run-players-roster", runId],
     queryFn: async () => {
-      if (!teamId) return [];
       const { data, error } = await supabase
-        .from("player_cards")
-        .select(`*, gem_tiers(*)`)
-        .eq("team_id", teamId);
+        .from("run_players")
+        .select(`*, player_cards(*, gem_tiers(*))`)
+        .eq("run_id", runId);
       if (error) throw error;
-      return data;
+      // Map to card-like objects with run stats overlaid
+      return (data ?? []).map((rp) => ({
+        ...rp.player_cards,
+        // Override card stats with run-specific numerical stats
+        stat_3pt: rp.run_stat_3pt,
+        stat_mid: rp.run_stat_mid,
+        stat_fin: rp.run_stat_fin,
+        stat_dnk: rp.run_stat_dnk,
+        stat_stl: rp.run_stat_stl,
+        stat_blk: rp.run_stat_blk,
+        stat_ast: rp.run_stat_ast,
+        stat_reb: rp.run_stat_reb,
+        stat_int: rp.run_stat_int,
+        rating: rp.run_rating,
+      }));
     },
-    enabled: !!teamId,
+    enabled: !!runId,
   });
 
   const handleCardClick = (cardId: string) => {
