@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { PlayerCard } from "@/components/cards/PlayerCard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SCORING_STATS, STAT_LABELS, type StatKey, rollDice, resolveStatRoll } from "@/lib/gameEngine";
+import { SCORING_STATS, STAT_LABELS, type StatKey, rollDice, resolveRunStatRoll, getRunDiceCount } from "@/lib/gameEngine";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
