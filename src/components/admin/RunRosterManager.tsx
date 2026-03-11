@@ -15,14 +15,19 @@ interface Props {
 }
 
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_stl", "stat_blk", "stat_ast", "stat_reb", "stat_int"] as const;
+const RUN_STAT_KEYS = ["run_stat_3pt", "run_stat_mid", "run_stat_fin", "run_stat_dnk", "run_stat_stl", "run_stat_blk", "run_stat_ast", "run_stat_reb", "run_stat_int"] as const;
 const STAT_LABELS: Record<string, string> = {
   stat_3pt: "3PT", stat_mid: "MID", stat_fin: "FIN", stat_dnk: "DNK",
   stat_stl: "STL", stat_blk: "BLK", stat_ast: "AST", stat_reb: "REB", stat_int: "INT",
 };
 
-/** Convert star rating (0-6) to numerical (0-120). 1★=20, 5★=100, 6★=120 */
-function starToNumerical(stars: number): number {
-  return stars * 20;
+/** Convert star rating (0-6) to a randomized numerical value (0-120).
+ *  Base = stars * 20, then add random variance of ±15, clamped to [0, 120]. */
+function randomizeFromStar(stars: number): number {
+  const base = stars * 20;
+  if (base === 0) return 0;
+  const variance = Math.floor(Math.random() * 31) - 15; // -15 to +15
+  return Math.max(0, Math.min(120, base + variance));
 }
 
 interface PendingPlayer {
