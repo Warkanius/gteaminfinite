@@ -658,18 +658,48 @@ export type Database = {
           id: string
           player_card_id: string
           run_id: string
+          run_rating: number
+          run_stat_3pt: number
+          run_stat_ast: number
+          run_stat_blk: number
+          run_stat_dnk: number
+          run_stat_fin: number
+          run_stat_int: number
+          run_stat_mid: number
+          run_stat_reb: number
+          run_stat_stl: number
         }
         Insert: {
           created_at?: string
           id?: string
           player_card_id: string
           run_id: string
+          run_rating?: number
+          run_stat_3pt?: number
+          run_stat_ast?: number
+          run_stat_blk?: number
+          run_stat_dnk?: number
+          run_stat_fin?: number
+          run_stat_int?: number
+          run_stat_mid?: number
+          run_stat_reb?: number
+          run_stat_stl?: number
         }
         Update: {
           created_at?: string
           id?: string
           player_card_id?: string
           run_id?: string
+          run_rating?: number
+          run_stat_3pt?: number
+          run_stat_ast?: number
+          run_stat_blk?: number
+          run_stat_dnk?: number
+          run_stat_fin?: number
+          run_stat_int?: number
+          run_stat_mid?: number
+          run_stat_reb?: number
+          run_stat_stl?: number
         }
         Relationships: [
           {
