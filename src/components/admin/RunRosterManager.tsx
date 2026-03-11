@@ -135,8 +135,10 @@ export function RunRosterManager({ runId }: Props) {
     return allPlayers.filter((p) => p.team_id === importTeamId);
   }, [importTeamId, allPlayers]);
 
-  // Convert a player card to a PendingPlayer with numerical ratings
+  // Convert a player card to a PendingPlayer
+  // If the card already has stored run ratings, use those; otherwise randomize from star ratings
   function toPending(p: typeof allPlayers[0]): PendingPlayer {
+    const hasRunRatings = p.run_rating != null;
     return {
       id: p.id,
       name: p.name,
@@ -145,16 +147,16 @@ export function RunRosterManager({ runId }: Props) {
       position2: p.position2,
       gem_name: p.gem_name,
       badges: badgesByPlayer.get(p.id) || [],
-      run_rating: starToNumerical(p.rating),
-      run_stat_3pt: starToNumerical(p.stat_3pt),
-      run_stat_mid: starToNumerical(p.stat_mid),
-      run_stat_fin: starToNumerical(p.stat_fin),
-      run_stat_dnk: starToNumerical(p.stat_dnk),
-      run_stat_stl: starToNumerical(p.stat_stl),
-      run_stat_blk: starToNumerical(p.stat_blk),
-      run_stat_ast: starToNumerical(p.stat_ast),
-      run_stat_reb: starToNumerical(p.stat_reb),
-      run_stat_int: starToNumerical(p.stat_int),
+      run_rating: hasRunRatings ? p.run_rating! : randomizeFromStar(p.rating),
+      run_stat_3pt: hasRunRatings ? p.run_stat_3pt! : randomizeFromStar(p.stat_3pt),
+      run_stat_mid: hasRunRatings ? p.run_stat_mid! : randomizeFromStar(p.stat_mid),
+      run_stat_fin: hasRunRatings ? p.run_stat_fin! : randomizeFromStar(p.stat_fin),
+      run_stat_dnk: hasRunRatings ? p.run_stat_dnk! : randomizeFromStar(p.stat_dnk),
+      run_stat_stl: hasRunRatings ? p.run_stat_stl! : randomizeFromStar(p.stat_stl),
+      run_stat_blk: hasRunRatings ? p.run_stat_blk! : randomizeFromStar(p.stat_blk),
+      run_stat_ast: hasRunRatings ? p.run_stat_ast! : randomizeFromStar(p.stat_ast),
+      run_stat_reb: hasRunRatings ? p.run_stat_reb! : randomizeFromStar(p.stat_reb),
+      run_stat_int: hasRunRatings ? p.run_stat_int! : randomizeFromStar(p.stat_int),
     };
   }
 
