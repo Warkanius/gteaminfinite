@@ -202,6 +202,7 @@ export function RunRosterManager({ runId }: Props) {
   // Confirm all pending players → insert into run_players
   const confirmPending = useMutation({
     mutationFn: async () => {
+      // 1. Insert into run_players for this specific run
       const rows = pendingPlayers.map((p) => ({
         run_id: runId,
         player_card_id: p.id,
@@ -218,10 +219,28 @@ export function RunRosterManager({ runId }: Props) {
       }));
       const { error } = await supabase.from("run_players").insert(rows);
       if (error) throw error;
+
+      // 2. Also persist run ratings to the player_cards table (general database)
+      for (const p of pendingPlayers) {
+        const { error: updateErr } = await supabase.from("player_cards").update({
+          run_rating: Math.round(p.run_rating),
+          run_stat_3pt: Math.round(p.run_stat_3pt),
+          run_stat_mid: Math.round(p.run_stat_mid),
+          run_stat_fin: Math.round(p.run_stat_fin),
+          run_stat_dnk: Math.round(p.run_stat_dnk),
+          run_stat_stl: Math.round(p.run_stat_stl),
+          run_stat_blk: Math.round(p.run_stat_blk),
+          run_stat_ast: Math.round(p.run_stat_ast),
+          run_stat_reb: Math.round(p.run_stat_reb),
+          run_stat_int: Math.round(p.run_stat_int),
+        }).eq("id", p.id);
+        if (updateErr) console.error("Failed to save run ratings for", p.name, updateErr);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["run-roster", runId] });
-      toast.success(`${pendingPlayers.length} player(s) confirmed and added.`);
+      qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
+      toast.success(`${pendingPlayers.length} player(s) confirmed. Run ratings saved to cards.`);
       setPendingPlayers([]);
     },
     onError: (e) => toast.error(e.message),
