@@ -13,7 +13,7 @@ import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 interface Props {
   runId: string;
   teamId: string | null;
-  onLineupConfirmed: (playerLineup: any[], cpuLineup: any[]) => void;
+  onLineupConfirmed: (playerLineup: any[], cpuLineup: any[], badgeMap: Record<string, CardBadge[]>) => void;
 }
 
 export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
