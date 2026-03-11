@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import type { GameCard } from "@/pages/Play";
+import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 
 interface LineupSelectProps {
   onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[]) => void;
