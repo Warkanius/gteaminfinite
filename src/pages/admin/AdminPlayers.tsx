@@ -28,6 +28,11 @@ type PlayerCard = Tables<"player_cards"> & {
 };
 
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"] as const;
+const RUN_STAT_KEYS = ["run_stat_3pt", "run_stat_mid", "run_stat_fin", "run_stat_dnk", "run_stat_stl", "run_stat_blk", "run_stat_ast", "run_stat_reb", "run_stat_int"] as const;
+const RUN_STAT_LABELS: Record<string, string> = {
+  run_stat_3pt: "3PT", run_stat_mid: "MID", run_stat_fin: "FIN", run_stat_dnk: "DNK",
+  run_stat_stl: "STL", run_stat_blk: "BLK", run_stat_ast: "AST", run_stat_reb: "REB", run_stat_int: "INT",
+};
 const STAT_LABELS: Record<string, string> = {
   stat_3pt: "3PT", stat_mid: "MID", stat_fin: "FIN", stat_dnk: "DNK",
   stat_ast: "AST", stat_stl: "STL", stat_reb: "REB", stat_blk: "BLK", stat_int: "INT",
@@ -43,6 +48,8 @@ type FormState = Partial<PlayerCard> & { badges: { badge_id: string; tier: strin
 const emptyForm = (): FormState => ({
   name: "", position1: null, position2: null,
   stat_3pt: 0, stat_mid: 0, stat_fin: 0, stat_dnk: 0, stat_ast: 0, stat_stl: 0, stat_reb: 0, stat_blk: 0, stat_int: 0,
+  run_rating: null, run_stat_3pt: null, run_stat_mid: null, run_stat_fin: null, run_stat_dnk: null,
+  run_stat_stl: null, run_stat_blk: null, run_stat_ast: null, run_stat_reb: null, run_stat_int: null,
   gem_tier_id: null, team_id: null, is_collection_reward: false, gem_name: null,
   card_color_primary: null, card_color_secondary: null, card_glow_color: null, card_animation: null,
   badges: [], traits: [],
@@ -379,6 +386,43 @@ export default function AdminPlayers() {
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
               {STAT_KEYS.map((k) => (
                 <StatInput key={k} label={STAT_LABELS[k]} value={(form as any)[k] ?? 0} onChange={(v) => setForm((f) => ({ ...f, [k]: v }))} max={99} />
+              ))}
+            </div>
+          </div>
+
+          {/* Run Ratings */}
+          <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Run Ratings (Numerical)</h3>
+              {form.run_rating != null && (
+                <Badge variant="secondary" className="text-lg font-mono">RUN OVR {form.run_rating}</Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              These are the persistent numerical ratings used in The Runs mode (0–120). Leave empty to auto-randomize when adding to a run roster.
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">OVR</Label>
+                <Input
+                  type="number" min={0} max={120}
+                  value={form.run_rating ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, run_rating: e.target.value ? Number(e.target.value) : null }))}
+                  placeholder="—"
+                  className="h-9 text-center font-mono"
+                />
+              </div>
+              {RUN_STAT_KEYS.map((k) => (
+                <div key={k} className="space-y-1">
+                  <Label className="text-xs">{RUN_STAT_LABELS[k]}</Label>
+                  <Input
+                    type="number" min={0} max={200}
+                    value={(form as any)[k] ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value ? Number(e.target.value) : null }))}
+                    placeholder="—"
+                    className="h-9 text-center font-mono"
+                  />
+                </div>
               ))}
             </div>
           </div>

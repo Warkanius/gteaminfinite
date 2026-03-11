@@ -15,14 +15,19 @@ interface Props {
 }
 
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_stl", "stat_blk", "stat_ast", "stat_reb", "stat_int"] as const;
+const RUN_STAT_KEYS = ["run_stat_3pt", "run_stat_mid", "run_stat_fin", "run_stat_dnk", "run_stat_stl", "run_stat_blk", "run_stat_ast", "run_stat_reb", "run_stat_int"] as const;
 const STAT_LABELS: Record<string, string> = {
   stat_3pt: "3PT", stat_mid: "MID", stat_fin: "FIN", stat_dnk: "DNK",
   stat_stl: "STL", stat_blk: "BLK", stat_ast: "AST", stat_reb: "REB", stat_int: "INT",
 };
 
-/** Convert star rating (0-6) to numerical (0-120). 1★=20, 5★=100, 6★=120 */
-function starToNumerical(stars: number): number {
-  return stars * 20;
+/** Convert star rating (0-6) to a randomized numerical value (0-120).
+ *  Base = stars * 20, then add random variance of ±15, clamped to [0, 120]. */
+function randomizeFromStar(stars: number): number {
+  const base = stars * 20;
+  if (base === 0) return 0;
+  const variance = Math.floor(Math.random() * 31) - 15; // -15 to +15
+  return Math.max(0, Math.min(120, base + variance));
 }
 
 interface PendingPlayer {
@@ -86,7 +91,7 @@ export function RunRosterManager({ runId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("player_cards")
-        .select("id, name, rating, position1, position2, team_id, gem_name, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int")
+        .select("id, name, rating, position1, position2, team_id, gem_name, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int, run_rating, run_stat_3pt, run_stat_mid, run_stat_fin, run_stat_dnk, run_stat_stl, run_stat_blk, run_stat_ast, run_stat_reb, run_stat_int")
         .order("name");
       if (error) throw error;
       return data;
@@ -130,8 +135,10 @@ export function RunRosterManager({ runId }: Props) {
     return allPlayers.filter((p) => p.team_id === importTeamId);
   }, [importTeamId, allPlayers]);
 
-  // Convert a player card to a PendingPlayer with numerical ratings
+  // Convert a player card to a PendingPlayer
+  // If the card already has stored run ratings, use those; otherwise randomize from star ratings
   function toPending(p: typeof allPlayers[0]): PendingPlayer {
+    const hasRunRatings = p.run_rating != null;
     return {
       id: p.id,
       name: p.name,
@@ -140,16 +147,16 @@ export function RunRosterManager({ runId }: Props) {
       position2: p.position2,
       gem_name: p.gem_name,
       badges: badgesByPlayer.get(p.id) || [],
-      run_rating: starToNumerical(p.rating),
-      run_stat_3pt: starToNumerical(p.stat_3pt),
-      run_stat_mid: starToNumerical(p.stat_mid),
-      run_stat_fin: starToNumerical(p.stat_fin),
-      run_stat_dnk: starToNumerical(p.stat_dnk),
-      run_stat_stl: starToNumerical(p.stat_stl),
-      run_stat_blk: starToNumerical(p.stat_blk),
-      run_stat_ast: starToNumerical(p.stat_ast),
-      run_stat_reb: starToNumerical(p.stat_reb),
-      run_stat_int: starToNumerical(p.stat_int),
+      run_rating: hasRunRatings ? p.run_rating! : randomizeFromStar(p.rating),
+      run_stat_3pt: hasRunRatings ? p.run_stat_3pt! : randomizeFromStar(p.stat_3pt),
+      run_stat_mid: hasRunRatings ? p.run_stat_mid! : randomizeFromStar(p.stat_mid),
+      run_stat_fin: hasRunRatings ? p.run_stat_fin! : randomizeFromStar(p.stat_fin),
+      run_stat_dnk: hasRunRatings ? p.run_stat_dnk! : randomizeFromStar(p.stat_dnk),
+      run_stat_stl: hasRunRatings ? p.run_stat_stl! : randomizeFromStar(p.stat_stl),
+      run_stat_blk: hasRunRatings ? p.run_stat_blk! : randomizeFromStar(p.stat_blk),
+      run_stat_ast: hasRunRatings ? p.run_stat_ast! : randomizeFromStar(p.stat_ast),
+      run_stat_reb: hasRunRatings ? p.run_stat_reb! : randomizeFromStar(p.stat_reb),
+      run_stat_int: hasRunRatings ? p.run_stat_int! : randomizeFromStar(p.stat_int),
     };
   }
 
@@ -195,6 +202,7 @@ export function RunRosterManager({ runId }: Props) {
   // Confirm all pending players → insert into run_players
   const confirmPending = useMutation({
     mutationFn: async () => {
+      // 1. Insert into run_players for this specific run
       const rows = pendingPlayers.map((p) => ({
         run_id: runId,
         player_card_id: p.id,
@@ -211,10 +219,28 @@ export function RunRosterManager({ runId }: Props) {
       }));
       const { error } = await supabase.from("run_players").insert(rows);
       if (error) throw error;
+
+      // 2. Also persist run ratings to the player_cards table (general database)
+      for (const p of pendingPlayers) {
+        const { error: updateErr } = await supabase.from("player_cards").update({
+          run_rating: Math.round(p.run_rating),
+          run_stat_3pt: Math.round(p.run_stat_3pt),
+          run_stat_mid: Math.round(p.run_stat_mid),
+          run_stat_fin: Math.round(p.run_stat_fin),
+          run_stat_dnk: Math.round(p.run_stat_dnk),
+          run_stat_stl: Math.round(p.run_stat_stl),
+          run_stat_blk: Math.round(p.run_stat_blk),
+          run_stat_ast: Math.round(p.run_stat_ast),
+          run_stat_reb: Math.round(p.run_stat_reb),
+          run_stat_int: Math.round(p.run_stat_int),
+        }).eq("id", p.id);
+        if (updateErr) console.error("Failed to save run ratings for", p.name, updateErr);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["run-roster", runId] });
-      toast.success(`${pendingPlayers.length} player(s) confirmed and added.`);
+      qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
+      toast.success(`${pendingPlayers.length} player(s) confirmed. Run ratings saved to cards.`);
       setPendingPlayers([]);
     },
     onError: (e) => toast.error(e.message),
