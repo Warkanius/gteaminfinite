@@ -7,21 +7,27 @@ import { DiceRoll } from "@/components/game/DiceRoll";
 import { StatResult } from "@/components/game/StatResult";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Dice5 } from "lucide-react";
 import {
   STATS, STAT_LABELS, getDiceCount, resolveStatRoll, buildCardResult,
   rollDice, type StatRollResult, type CardGameResult, type StatKey,
 } from "@/lib/gameEngine";
+import {
+  resolveBadgeEffects, getTeammateBadges,
+  type CardBadge, type BadgeActivation,
+} from "@/lib/badgeEngine";
 import type { GameCard, FullGameResult } from "@/pages/Play";
 
 interface GameBoardProps {
   userLineup: GameCard[];
   cpuLineup: GameCard[];
+  badgeMap: Record<string, CardBadge[]>;
   onComplete: (result: FullGameResult) => void;
   difficultyStars?: number;
 }
 
-export function GameBoard({ userLineup, cpuLineup, onComplete, difficultyStars }: GameBoardProps) {
+export function GameBoard({ userLineup, cpuLineup, badgeMap, onComplete, difficultyStars }: GameBoardProps) {
   const [playerIdx, setPlayerIdx] = useState(0);
   const [statIdx, setStatIdx] = useState(0);
   const [useOwnDice, setUseOwnDice] = useState(false);
