@@ -22,13 +22,15 @@ interface FormDialogProps {
 export function FormDialog({ open, onOpenChange, title, description, onSave, saving, children, className }: FormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={className ?? "max-w-2xl max-h-[85vh] overflow-y-auto"}>
-        <DialogHeader>
+      <DialogContent className={className ?? "max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"}>
+        <DialogHeader className="shrink-0">
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        {children}
-        <DialogFooter>
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {children}
+        </div>
+        <DialogFooter className="shrink-0 border-t pt-4 mt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
