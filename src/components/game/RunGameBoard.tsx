@@ -26,6 +26,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
   
   const [selectedStat, setSelectedStat] = useState<StatKey>("stat_3pt");
   const [isRolling, setIsRolling] = useState(false);
+  const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [logs, setLogs] = useState<{ msg: string; pPts: number; cPts: number }[]>([]);
 
   const checkWinner = (pScore: number, cScore: number) => {
