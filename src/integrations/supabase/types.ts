@@ -514,6 +514,16 @@ export type Database = {
           position1: string | null
           position2: string | null
           rating: number
+          run_rating: number | null
+          run_stat_3pt: number | null
+          run_stat_ast: number | null
+          run_stat_blk: number | null
+          run_stat_dnk: number | null
+          run_stat_fin: number | null
+          run_stat_int: number | null
+          run_stat_mid: number | null
+          run_stat_reb: number | null
+          run_stat_stl: number | null
           stat_3pt: number
           stat_ast: number
           stat_blk: number
@@ -540,6 +550,16 @@ export type Database = {
           position1?: string | null
           position2?: string | null
           rating?: number
+          run_rating?: number | null
+          run_stat_3pt?: number | null
+          run_stat_ast?: number | null
+          run_stat_blk?: number | null
+          run_stat_dnk?: number | null
+          run_stat_fin?: number | null
+          run_stat_int?: number | null
+          run_stat_mid?: number | null
+          run_stat_reb?: number | null
+          run_stat_stl?: number | null
           stat_3pt?: number
           stat_ast?: number
           stat_blk?: number
@@ -566,6 +586,16 @@ export type Database = {
           position1?: string | null
           position2?: string | null
           rating?: number
+          run_rating?: number | null
+          run_stat_3pt?: number | null
+          run_stat_ast?: number | null
+          run_stat_blk?: number | null
+          run_stat_dnk?: number | null
+          run_stat_fin?: number | null
+          run_stat_int?: number | null
+          run_stat_mid?: number | null
+          run_stat_reb?: number | null
+          run_stat_stl?: number | null
           stat_3pt?: number
           stat_ast?: number
           stat_blk?: number
