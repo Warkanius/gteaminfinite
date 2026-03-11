@@ -91,7 +91,7 @@ export function RunRosterManager({ runId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("player_cards")
-        .select("id, name, rating, position1, position2, team_id, gem_name, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int")
+        .select("id, name, rating, position1, position2, team_id, gem_name, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int, run_rating, run_stat_3pt, run_stat_mid, run_stat_fin, run_stat_dnk, run_stat_stl, run_stat_blk, run_stat_ast, run_stat_reb, run_stat_int")
         .order("name");
       if (error) throw error;
       return data;
