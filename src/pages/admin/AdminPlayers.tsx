@@ -28,6 +28,11 @@ type PlayerCard = Tables<"player_cards"> & {
 };
 
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"] as const;
+const RUN_STAT_KEYS = ["run_stat_3pt", "run_stat_mid", "run_stat_fin", "run_stat_dnk", "run_stat_stl", "run_stat_blk", "run_stat_ast", "run_stat_reb", "run_stat_int"] as const;
+const RUN_STAT_LABELS: Record<string, string> = {
+  run_stat_3pt: "3PT", run_stat_mid: "MID", run_stat_fin: "FIN", run_stat_dnk: "DNK",
+  run_stat_stl: "STL", run_stat_blk: "BLK", run_stat_ast: "AST", run_stat_reb: "REB", run_stat_int: "INT",
+};
 const STAT_LABELS: Record<string, string> = {
   stat_3pt: "3PT", stat_mid: "MID", stat_fin: "FIN", stat_dnk: "DNK",
   stat_ast: "AST", stat_stl: "STL", stat_reb: "REB", stat_blk: "BLK", stat_int: "INT",
