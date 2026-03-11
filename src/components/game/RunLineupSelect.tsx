@@ -7,6 +7,7 @@ import { RevealCard, RevealCardHandle } from "@/components/packs/RevealCard";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Dices } from "lucide-react";
+import { runRatingToStars, starStatToRunStat } from "@/lib/gameEngine";
 
 interface Props {
   runId: string;
