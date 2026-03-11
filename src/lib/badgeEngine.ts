@@ -334,6 +334,49 @@ export function resolveBadgeEffects(
   };
 }
 
+// ─── Passive badge API ───
+
+/**
+ * Hidden Gem: Protects a card from difficulty-based performance penalties.
+ * When a card has this badge and the difficulty is higher than the card's rating,
+ * the negative scaling modifier is nullified (clamped to 1.0 instead of < 1.0).
+ * It does NOT grant a bonus when difficulty is lower — it only prevents the penalty.
+ *
+ * Returns true if the card has the Hidden Gem badge (any tier — effect is binary).
+ */
+export function hasHiddenGem(badges: CardBadge[]): boolean {
+  return badges.some(
+    (b) => b.effect_type === "passive" && b.name.toLowerCase().includes("hidden gem"),
+  );
+}
+
+/**
+ * Mr. Versatile: Grants extra Signature Trait slots based on tier.
+ * Base = +1 slot, Gold = +2, Diamond = +3, HOF = +4, Actolytrene = +5.
+ *
+ * Returns the number of additional trait slots (0 if no badge).
+ */
+export function getMrVersatileSlots(badges: CardBadge[]): {
+  extraSlots: number;
+  activation: BadgeActivation | null;
+} {
+  const badge = badges.find(
+    (b) => b.effect_type === "passive" && b.name.toLowerCase().includes("versatile"),
+  );
+  if (!badge) return { extraSlots: 0, activation: null };
+
+  const slots = versatileSlots(badge.tier);
+  return {
+    extraSlots: slots,
+    activation: {
+      badgeName: badge.name,
+      abbreviation: badge.abbreviation,
+      tier: badge.tier,
+      effect: `+${slots} Signature Trait slot${slots > 1 ? "s" : ""}`,
+    },
+  };
+}
+
 /**
  * Fetch badges for a list of card IDs from the database.
  * Returns a map of cardId → CardBadge[].
