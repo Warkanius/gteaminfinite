@@ -334,19 +334,22 @@ export default function AdminTeams() {
             <div className="space-y-2"><Label>Name</Label><Input value={runForm.name} onChange={(e) => setRunForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. 3v3 Endless" /></div>
             <div className="space-y-2"><Label>Target Score</Label><Input type="number" value={runForm.target_score} onChange={(e) => setRunForm((f) => ({ ...f, target_score: Number(e.target.value) }))} /></div>
           </div>
-          <div className="space-y-2">
-            <Label>Opponent Roster (Team)</Label>
-            <Select value={runForm.team_id || "none"} onValueChange={(val) => setRunForm(f => ({ ...f, team_id: val === "none" ? null : val }))}>
-              <SelectTrigger><SelectValue placeholder="Select a team..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {teams.map(t => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Select a team to act as the pool of opponents for this run.</p>
-          </div>
+
+          {runEditId && (
+            <div className="space-y-2 p-4 border rounded-lg bg-card">
+              <h3 className="font-semibold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
+                <Users className="h-3.5 w-3.5" /> Opponent Roster
+              </h3>
+              <RunRosterManager runId={runEditId} />
+            </div>
+          )}
+
+          {!runEditId && (
+            <p className="text-xs text-muted-foreground border rounded-md p-3 bg-muted/30">
+              💡 Save the run first, then edit it to manage the opponent roster.
+            </p>
+          )}
+
           <div className="space-y-2">
             <Label>Milestone Rewards (JSON)</Label>
             <textarea 
