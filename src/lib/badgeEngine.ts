@@ -7,7 +7,9 @@
  *   debuff  — reduce opponent's stat before rolling (Lockdown, Intimidator…)
  *   cancel  — nullify an opponent's debuff badge if tier ≥ theirs (Art of F You)
  *   boost   — increase a teammate's stat (Floor General)
- *   passive — special per-badge logic (Hidden Gem, Mr. Versatile — future)
+ *   passive — special per-badge logic:
+ *     Hidden Gem   — protects from difficulty penalties (does NOT upgrade roll)
+ *     Mr. Versatile — adds extra Signature Trait slots per tier level
  */
 
 import { rollDice, type StatKey } from "@/lib/gameEngine";
@@ -79,6 +81,20 @@ function boostAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
   const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 3, hof: 4, actolytrene: 5 };
   const runMap: Record<BadgeTier, number> = { base: 10, gold: 20, diamond: 30, hof: 40, actolytrene: 50 };
   return mode === "runs" ? runMap[tier] : starMap[tier];
+}
+
+// ─── Passive badge helpers ───
+
+/** Hidden Gem tier level (0 = no badge) */
+function hiddenGemLevel(tier: BadgeTier): number {
+  const map: Record<BadgeTier, number> = { base: 1, gold: 1, diamond: 1, hof: 1, actolytrene: 1 };
+  return map[tier];
+}
+
+/** Mr. Versatile: extra Signature Trait slots per tier */
+function versatileSlots(tier: BadgeTier): number {
+  const map: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 3, hof: 4, actolytrene: 5 };
+  return map[tier];
 }
 
 // ─── Badge matching ───
@@ -315,6 +331,49 @@ export function resolveBadgeEffects(
     finalDice,
     totalBonus: rerollBonus + bonusBadgeVal,
     activations: allActivations,
+  };
+}
+
+// ─── Passive badge API ───
+
+/**
+ * Hidden Gem: Protects a card from difficulty-based performance penalties.
+ * When a card has this badge and the difficulty is higher than the card's rating,
+ * the negative scaling modifier is nullified (clamped to 1.0 instead of < 1.0).
+ * It does NOT grant a bonus when difficulty is lower — it only prevents the penalty.
+ *
+ * Returns true if the card has the Hidden Gem badge (any tier — effect is binary).
+ */
+export function hasHiddenGem(badges: CardBadge[]): boolean {
+  return badges.some(
+    (b) => b.effect_type === "passive" && b.name.toLowerCase().includes("hidden gem"),
+  );
+}
+
+/**
+ * Mr. Versatile: Grants extra Signature Trait slots based on tier.
+ * Base = +1 slot, Gold = +2, Diamond = +3, HOF = +4, Actolytrene = +5.
+ *
+ * Returns the number of additional trait slots (0 if no badge).
+ */
+export function getMrVersatileSlots(badges: CardBadge[]): {
+  extraSlots: number;
+  activation: BadgeActivation | null;
+} {
+  const badge = badges.find(
+    (b) => b.effect_type === "passive" && b.name.toLowerCase().includes("versatile"),
+  );
+  if (!badge) return { extraSlots: 0, activation: null };
+
+  const slots = versatileSlots(badge.tier);
+  return {
+    extraSlots: slots,
+    activation: {
+      badgeName: badge.name,
+      abbreviation: badge.abbreviation,
+      tier: badge.tier,
+      effect: `+${slots} Signature Trait slot${slots > 1 ? "s" : ""}`,
+    },
   };
 }
 
