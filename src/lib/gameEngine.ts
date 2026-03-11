@@ -47,6 +47,90 @@ export function starStatToRunStat(starStat: number): number {
   return starStat * 20;
 }
 
+/** Map an offensive stat to the appropriate defensive stat */
+export function getDefenseStat(offenseStat: StatKey): StatKey {
+  // Inside moves → BLK (rim protector)
+  if (offenseStat === "stat_fin" || offenseStat === "stat_dnk") return "stat_blk";
+  // Perimeter → STL (direct matchup)
+  return "stat_stl";
+}
+
+/** Whether a stat is an "inside" move (defended by slot 3's BLK) */
+export function isInsideStat(stat: StatKey): boolean {
+  return stat === "stat_fin" || stat === "stat_dnk";
+}
+
+/** Pick a rebounder slot using weighted probability: slot 3=60%, slot 2=25%, slot 1=15% */
+export function pickRebounderSlot(): number {
+  const roll = Math.random();
+  if (roll < 0.60) return 2; // slot 3 (0-indexed)
+  if (roll < 0.85) return 1; // slot 2
+  return 0; // slot 1
+}
+
+/** Resolve a rebound roll using combined (REB + BLK) / 2 stat */
+export function resolveRunReboundRoll(
+  reb: number,
+  blk: number,
+  runRating: number,
+  dice: number[],
+): number {
+  const combinedStat = (reb + blk) / 2;
+  const modifier = getRunModifier(runRating);
+  const diceTotal = dice.reduce((a, b) => a + b, 0);
+  return Math.round(diceTotal * modifier * (combinedStat / 60));
+}
+
+/** Resolve a shot contest: offense stat roll vs defense counter stat roll */
+export interface ShotContestResult {
+  offenseRoll: number;
+  defenseRoll: number;
+  made: boolean;
+  points: number;
+  offenseDice: number[];
+  defenseDice: number[];
+  offenseModifier: number;
+  defenseModifier: number;
+  offenseStat: StatKey;
+  defenseStat: StatKey;
+}
+
+export function resolveRunShotContest(
+  offenseStat: StatKey,
+  offenseStatValue: number,
+  offRating: number,
+  offDice: number[],
+  defenseStat: StatKey,
+  defenseStatValue: number,
+  defRating: number,
+  defDice: number[],
+): ShotContestResult {
+  const offMod = getRunModifier(offRating);
+  const defMod = getRunModifier(defRating);
+  const offTotal = offDice.reduce((a, b) => a + b, 0);
+  const defTotal = defDice.reduce((a, b) => a + b, 0);
+  
+  // Scale by stat value (normalized to ~60 as midpoint)
+  const offenseRoll = Math.round(offTotal * offMod * (offenseStatValue / 60));
+  const defenseRoll = Math.round(defTotal * defMod * (defenseStatValue / 60));
+  
+  const made = offenseRoll > defenseRoll;
+  const points = made ? getPointMultiplier(offenseStat) : 0;
+
+  return {
+    offenseRoll,
+    defenseRoll,
+    made,
+    points,
+    offenseDice: offDice,
+    defenseDice: defDice,
+    offenseModifier: offMod,
+    defenseModifier: defMod,
+    offenseStat,
+    defenseStat,
+  };
+}
+
 /** Resolve a stat roll using the Runs 0–120 numerical scale */
 export function resolveRunStatRoll(
   stat: StatKey,
