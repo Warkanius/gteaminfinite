@@ -417,7 +417,7 @@ export function RunRosterManager({ runId }: Props) {
           <div className="py-12 text-center text-sm text-muted-foreground">No players found.</div>
         ) : (
           <div className="divide-y divide-border">
-            {sorted.map((player) => {
+            {sorted.slice(0, displayLimit).map((player) => {
               const inRoster = rosterCardIds.has(player.id);
               const inPending = pendingIds.has(player.id);
               return (
@@ -446,6 +446,14 @@ export function RunRosterManager({ runId }: Props) {
                 </label>
               );
             })}
+            {sorted.length > displayLimit && (
+              <div className="px-3 py-3 text-center">
+                <p className="text-xs text-muted-foreground mb-2">Showing {displayLimit} of {sorted.length} players</p>
+                <Button variant="outline" size="sm" onClick={() => setDisplayLimit((l) => l + 50)}>
+                  Show More
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>
