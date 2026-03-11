@@ -7,25 +7,58 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Search, Users, Loader2, Upload } from "lucide-react";
+import { Search, Users, Loader2, Upload, Check, X } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
   runId: string;
 }
 
+const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_stl", "stat_blk", "stat_ast", "stat_reb", "stat_int"] as const;
+const STAT_LABELS: Record<string, string> = {
+  stat_3pt: "3PT", stat_mid: "MID", stat_fin: "FIN", stat_dnk: "DNK",
+  stat_stl: "STL", stat_blk: "BLK", stat_ast: "AST", stat_reb: "REB", stat_int: "INT",
+};
+
+/** Convert star rating (0-6) to numerical (0-120). 1★=20, 5★=100, 6★=120 */
+function starToNumerical(stars: number): number {
+  return stars * 20;
+}
+
+interface PendingPlayer {
+  id: string;
+  name: string;
+  rating: number;
+  position1: string | null;
+  position2: string | null;
+  gem_name: string | null;
+  badges: { name: string; tier: string }[];
+  // Converted stats the admin can edit
+  run_rating: number;
+  run_stat_3pt: number;
+  run_stat_mid: number;
+  run_stat_fin: number;
+  run_stat_dnk: number;
+  run_stat_stl: number;
+  run_stat_blk: number;
+  run_stat_ast: number;
+  run_stat_reb: number;
+  run_stat_int: number;
+}
+
 export function RunRosterManager({ runId }: Props) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [importTeamId, setImportTeamId] = useState<string>("");
+  const [pendingPlayers, setPendingPlayers] = useState<PendingPlayer[]>([]);
 
-  // Current roster player_card_ids
+  // Current roster
   const { data: rosterEntries = [], isLoading: rosterLoading } = useQuery({
     queryKey: ["run-roster", runId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("run_players")
-        .select("id, player_card_id")
+        .select("id, player_card_id, run_rating, run_stat_3pt, run_stat_mid, run_stat_fin, run_stat_dnk, run_stat_stl, run_stat_blk, run_stat_ast, run_stat_reb, run_stat_int")
         .eq("run_id", runId);
       if (error) throw error;
       return data;
@@ -40,12 +73,34 @@ export function RunRosterManager({ runId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("player_cards")
-        .select("id, name, rating, position1, position2, team_id, gem_name")
+        .select("id, name, rating, position1, position2, team_id, gem_name, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int")
         .order("name");
       if (error) throw error;
       return data;
     },
   });
+
+  // All badges for players (fetch once)
+  const { data: allBadges = [] } = useQuery({
+    queryKey: ["admin-all-player-badges"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("player_card_badges")
+        .select("player_card_id, tier, badges(name)");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const badgesByPlayer = useMemo(() => {
+    const map = new Map<string, { name: string; tier: string }[]>();
+    for (const b of allBadges) {
+      const list = map.get(b.player_card_id) || [];
+      list.push({ name: (b as any).badges?.name ?? "?", tier: b.tier });
+      map.set(b.player_card_id, list);
+    }
+    return map;
+  }, [allBadges]);
 
   // Teams
   const { data: teams = [] } = useQuery({
@@ -57,40 +112,106 @@ export function RunRosterManager({ runId }: Props) {
     },
   });
 
-  // Players in selected team
   const teamPlayersForImport = useMemo(() => {
     if (!importTeamId) return [];
     return allPlayers.filter((p) => p.team_id === importTeamId);
   }, [importTeamId, allPlayers]);
 
-  // Toggle single player
-  const togglePlayer = useMutation({
-    mutationFn: async ({ cardId, add }: { cardId: string; add: boolean }) => {
-      if (add) {
-        const { error } = await supabase.from("run_players").insert({ run_id: runId, player_card_id: cardId });
-        if (error) throw error;
+  // Convert a player card to a PendingPlayer with numerical ratings
+  function toPending(p: typeof allPlayers[0]): PendingPlayer {
+    return {
+      id: p.id,
+      name: p.name,
+      rating: p.rating,
+      position1: p.position1,
+      position2: p.position2,
+      gem_name: p.gem_name,
+      badges: badgesByPlayer.get(p.id) || [],
+      run_rating: starToNumerical(p.rating),
+      run_stat_3pt: starToNumerical(p.stat_3pt),
+      run_stat_mid: starToNumerical(p.stat_mid),
+      run_stat_fin: starToNumerical(p.stat_fin),
+      run_stat_dnk: starToNumerical(p.stat_dnk),
+      run_stat_stl: starToNumerical(p.stat_stl),
+      run_stat_blk: starToNumerical(p.stat_blk),
+      run_stat_ast: starToNumerical(p.stat_ast),
+      run_stat_reb: starToNumerical(p.stat_reb),
+      run_stat_int: starToNumerical(p.stat_int),
+    };
+  }
+
+  // Add players to pending review
+  function addToPending(playerIds: string[]) {
+    const existingPendingIds = new Set(pendingPlayers.map((p) => p.id));
+    const newPlayers = playerIds
+      .filter((id) => !rosterCardIds.has(id) && !existingPendingIds.has(id))
+      .map((id) => allPlayers.find((p) => p.id === id))
+      .filter(Boolean)
+      .map((p) => toPending(p!));
+
+    if (newPlayers.length === 0) {
+      toast.info("All selected players are already in the roster or pending.");
+      return;
+    }
+    setPendingPlayers((prev) => [...prev, ...newPlayers]);
+    toast.success(`${newPlayers.length} player(s) added to review.`);
+  }
+
+  // Toggle single player in/out of pending or roster
+  function handleToggle(cardId: string, checked: boolean) {
+    if (checked) {
+      addToPending([cardId]);
+    } else {
+      // If in pending, remove from pending
+      if (pendingPlayers.some((p) => p.id === cardId)) {
+        setPendingPlayers((prev) => prev.filter((p) => p.id !== cardId));
       } else {
-        const { error } = await supabase.from("run_players").delete().eq("run_id", runId).eq("player_card_id", cardId);
-        if (error) throw error;
+        // Remove from roster
+        removeFromRoster.mutate(cardId);
       }
+    }
+  }
+
+  // Update a pending player's stat
+  function updatePendingStat(playerId: string, key: string, value: number) {
+    setPendingPlayers((prev) =>
+      prev.map((p) => (p.id === playerId ? { ...p, [key]: Math.max(0, Math.min(200, value)) } : p))
+    );
+  }
+
+  // Confirm all pending players → insert into run_players
+  const confirmPending = useMutation({
+    mutationFn: async () => {
+      const rows = pendingPlayers.map((p) => ({
+        run_id: runId,
+        player_card_id: p.id,
+        run_rating: p.run_rating,
+        run_stat_3pt: p.run_stat_3pt,
+        run_stat_mid: p.run_stat_mid,
+        run_stat_fin: p.run_stat_fin,
+        run_stat_dnk: p.run_stat_dnk,
+        run_stat_stl: p.run_stat_stl,
+        run_stat_blk: p.run_stat_blk,
+        run_stat_ast: p.run_stat_ast,
+        run_stat_reb: p.run_stat_reb,
+        run_stat_int: p.run_stat_int,
+      }));
+      const { error } = await supabase.from("run_players").insert(rows);
+      if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["run-roster", runId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["run-roster", runId] });
+      toast.success(`${pendingPlayers.length} player(s) confirmed and added.`);
+      setPendingPlayers([]);
+    },
     onError: (e) => toast.error(e.message),
   });
 
-  // Mass import from team
-  const importTeam = useMutation({
-    mutationFn: async (teamId: string) => {
-      const teamPlayers = allPlayers.filter((p) => p.team_id === teamId);
-      const newPlayers = teamPlayers.filter((p) => !rosterCardIds.has(p.id));
-      if (newPlayers.length === 0) {
-        toast.info("All players from this team are already in the roster.");
-        return;
-      }
-      const rows = newPlayers.map((p) => ({ run_id: runId, player_card_id: p.id }));
-      const { error } = await supabase.from("run_players").insert(rows);
+  // Remove from roster
+  const removeFromRoster = useMutation({
+    mutationFn: async (cardId: string) => {
+      const { error } = await supabase.from("run_players").delete().eq("run_id", runId).eq("player_card_id", cardId);
       if (error) throw error;
-      toast.success(`Added ${newPlayers.length} players from team.`);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["run-roster", runId] }),
     onError: (e) => toast.error(e.message),
@@ -109,6 +230,8 @@ export function RunRosterManager({ runId }: Props) {
     onError: (e) => toast.error(e.message),
   });
 
+  const pendingIds = useMemo(() => new Set(pendingPlayers.map((p) => p.id)), [pendingPlayers]);
+
   const filtered = useMemo(() => {
     if (!search) return allPlayers;
     const q = search.toLowerCase();
@@ -120,20 +243,100 @@ export function RunRosterManager({ runId }: Props) {
     );
   }, [search, allPlayers]);
 
-  // Sort: roster players first, then alphabetical
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
-      const aIn = rosterCardIds.has(a.id) ? 0 : 1;
-      const bIn = rosterCardIds.has(b.id) ? 0 : 1;
+      const aIn = rosterCardIds.has(a.id) ? 0 : pendingIds.has(a.id) ? 1 : 2;
+      const bIn = rosterCardIds.has(b.id) ? 0 : pendingIds.has(b.id) ? 1 : 2;
       if (aIn !== bIn) return aIn - bIn;
       return a.name.localeCompare(b.name);
     });
-  }, [filtered, rosterCardIds]);
+  }, [filtered, rosterCardIds, pendingIds]);
 
   const isLoading = rosterLoading || playersLoading;
 
+  const tierColor: Record<string, string> = {
+    base: "bg-muted text-muted-foreground",
+    gold: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+    hof: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+    diamond: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+    actolytrene: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+  };
+
   return (
     <div className="space-y-4">
+      {/* Pending Review Section */}
+      {pendingPlayers.length > 0 && (
+        <div className="border-2 border-primary/50 rounded-lg bg-primary/5 p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-primary flex items-center gap-2">
+              <Check className="h-4 w-4" /> Review Converted Ratings ({pendingPlayers.length})
+            </h4>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" className="text-destructive text-xs" onClick={() => setPendingPlayers([])}>
+                <X className="h-3 w-3 mr-1" /> Discard All
+              </Button>
+              <Button size="sm" onClick={() => confirmPending.mutate()} disabled={confirmPending.isPending}>
+                {confirmPending.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                Confirm All
+              </Button>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Key: 1★=20 · 2★=40 · 3★=60 · 4★=80 · 5★=100 · 6★=120. Adjust values before confirming.
+          </p>
+
+          <ScrollArea className="max-h-[400px]">
+            <div className="space-y-1">
+              {/* Header */}
+              <div className="grid grid-cols-[1fr_repeat(6,48px)_auto] gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sticky top-0 bg-primary/5 z-10">
+                <span>Player</span>
+                <span className="text-center">3PT</span>
+                <span className="text-center">MID</span>
+                <span className="text-center">FIN</span>
+                <span className="text-center">DNK</span>
+                <span className="text-center">STL</span>
+                <span className="text-center">BLK</span>
+                <span className="text-center">×</span>
+              </div>
+
+              {pendingPlayers.map((p) => (
+                <div key={p.id} className="grid grid-cols-[1fr_repeat(6,48px)_auto] gap-1 px-2 py-1.5 items-center border-b border-border/30">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-xs truncate">{p.name}</span>
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">{p.rating}★</Badge>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 flex-wrap">
+                      {p.position1 && <span>{p.position1}{p.position2 ? `/${p.position2}` : ""}</span>}
+                      {p.badges.length > 0 && p.badges.map((b, i) => (
+                        <Badge key={i} variant="outline" className={`text-[8px] px-1 py-0 ${tierColor[b.tier] || ""}`}>
+                          {b.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  {(["run_stat_3pt", "run_stat_mid", "run_stat_fin", "run_stat_dnk", "run_stat_stl", "run_stat_blk"] as const).map((key) => (
+                    <Input
+                      key={key}
+                      type="number"
+                      min={0}
+                      max={200}
+                      value={(p as any)[key]}
+                      onChange={(e) => updatePendingStat(p.id, key, Number(e.target.value) || 0)}
+                      className="h-7 text-[11px] text-center font-mono px-1"
+                    />
+                  ))}
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setPendingPlayers((prev) => prev.filter((x) => x.id !== p.id))}>
+                    <X className="h-3 w-3 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
+
       {/* Mass Import Section */}
       <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -147,25 +350,24 @@ export function RunRosterManager({ runId }: Props) {
             <SelectContent>
               <SelectItem value="pick" disabled>Select a team…</SelectItem>
               {teams.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Button
             size="sm"
-            disabled={!importTeamId || importTeam.isPending}
-            onClick={() => importTeamId && importTeam.mutate(importTeamId)}
+            disabled={!importTeamId}
+            onClick={() => {
+              const ids = teamPlayersForImport.map((p) => p.id);
+              addToPending(ids);
+            }}
           >
-            {importTeam.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Import"}
+            Import to Review
           </Button>
         </div>
         {importTeamId && (
           <p className="text-xs text-muted-foreground">
-            {teamPlayersForImport.length} players in this team
-            {" · "}
-            {teamPlayersForImport.filter((p) => rosterCardIds.has(p.id)).length} already in roster
+            {teamPlayersForImport.length} players · {teamPlayersForImport.filter((p) => rosterCardIds.has(p.id)).length} already in roster
           </p>
         )}
       </div>
@@ -174,7 +376,10 @@ export function RunRosterManager({ runId }: Props) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Users className="h-4 w-4" />
-          <span className="font-medium text-foreground">{rosterCardIds.size}</span> players in roster
+          <span className="font-medium text-foreground">{rosterCardIds.size}</span> in roster
+          {pendingPlayers.length > 0 && (
+            <span className="text-primary font-medium">· {pendingPlayers.length} pending review</span>
+          )}
         </div>
         {rosterCardIds.size > 0 && (
           <Button variant="ghost" size="sm" className="text-destructive text-xs" onClick={() => clearRoster.mutate()} disabled={clearRoster.isPending}>
@@ -186,12 +391,7 @@ export function RunRosterManager({ runId }: Props) {
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search all players by name, position, gem…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+        <Input placeholder="Search players by name, position, gem…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
       </div>
 
       {/* Player List */}
@@ -206,23 +406,24 @@ export function RunRosterManager({ runId }: Props) {
           <div className="divide-y divide-border">
             {sorted.map((player) => {
               const inRoster = rosterCardIds.has(player.id);
+              const inPending = pendingIds.has(player.id);
               return (
                 <label
                   key={player.id}
-                  className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors ${inRoster ? "bg-primary/5" : ""}`}
+                  className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors ${
+                    inRoster ? "bg-primary/5" : inPending ? "bg-yellow-500/5" : ""
+                  }`}
                 >
                   <Checkbox
-                    checked={inRoster}
-                    onCheckedChange={(checked) =>
-                      togglePlayer.mutate({ cardId: player.id, add: !!checked })
-                    }
+                    checked={inRoster || inPending}
+                    onCheckedChange={(checked) => handleToggle(player.id, !!checked)}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm truncate">{player.name}</span>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
-                        {player.rating}
-                      </Badge>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{player.rating}★</Badge>
+                      {inRoster && <Badge className="text-[9px] px-1 py-0 bg-primary/20 text-primary border-primary/30">Roster</Badge>}
+                      {inPending && <Badge className="text-[9px] px-1 py-0 bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Pending</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground flex gap-2">
                       {player.position1 && <span>{player.position1}{player.position2 ? ` / ${player.position2}` : ""}</span>}
