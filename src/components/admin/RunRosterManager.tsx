@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,19 @@ export function RunRosterManager({ runId }: Props) {
   const [search, setSearch] = useState("");
   const [importTeamId, setImportTeamId] = useState<string>("");
   const [pendingPlayers, setPendingPlayers] = useState<PendingPlayer[]>([]);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [displayLimit, setDisplayLimit] = useState(50);
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset display limit when search changes
+  useEffect(() => {
+    setDisplayLimit(50);
+  }, [debouncedSearch]);
 
   // Current roster
   const { data: rosterEntries = [], isLoading: rosterLoading } = useQuery({
@@ -233,15 +246,15 @@ export function RunRosterManager({ runId }: Props) {
   const pendingIds = useMemo(() => new Set(pendingPlayers.map((p) => p.id)), [pendingPlayers]);
 
   const filtered = useMemo(() => {
-    if (!search) return allPlayers;
-    const q = search.toLowerCase();
+    if (!debouncedSearch) return allPlayers;
+    const q = debouncedSearch.toLowerCase();
     return allPlayers.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         (p.position1 ?? "").toLowerCase().includes(q) ||
         (p.gem_name ?? "").toLowerCase().includes(q)
     );
-  }, [search, allPlayers]);
+  }, [debouncedSearch, allPlayers]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -404,7 +417,7 @@ export function RunRosterManager({ runId }: Props) {
           <div className="py-12 text-center text-sm text-muted-foreground">No players found.</div>
         ) : (
           <div className="divide-y divide-border">
-            {sorted.map((player) => {
+            {sorted.slice(0, displayLimit).map((player) => {
               const inRoster = rosterCardIds.has(player.id);
               const inPending = pendingIds.has(player.id);
               return (
@@ -433,6 +446,14 @@ export function RunRosterManager({ runId }: Props) {
                 </label>
               );
             })}
+            {sorted.length > displayLimit && (
+              <div className="px-3 py-3 text-center">
+                <p className="text-xs text-muted-foreground mb-2">Showing {displayLimit} of {sorted.length} players</p>
+                <Button variant="outline" size="sm" onClick={() => setDisplayLimit((l) => l + 50)}>
+                  Show More
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>
