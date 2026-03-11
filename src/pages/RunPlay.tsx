@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { RunLineupSelect } from "@/components/game/RunLineupSelect";
 import { RunGameBoard } from "@/components/game/RunGameBoard";
+import type { CardBadge } from "@/lib/badgeEngine";
 
 export default function RunPlay() {
   const { runId } = useParams<{ runId: string }>();
@@ -15,6 +16,7 @@ export default function RunPlay() {
 
   const [playerLineup, setPlayerLineup] = useState<any[]>([]);
   const [cpuLineup, setCpuLineup] = useState<any[]>([]);
+  const [badgeMap, setBadgeMap] = useState<Record<string, CardBadge[]>>({});
   const [phase, setPhase] = useState<"lineup" | "game">("lineup");
 
   const { data: run, isLoading } = useQuery({
@@ -53,9 +55,10 @@ export default function RunPlay() {
         <RunLineupSelect
           runId={run.id}
           teamId={run.team_id}
-          onLineupConfirmed={(player, cpu) => {
+          onLineupConfirmed={(player, cpu, badges) => {
             setPlayerLineup(player);
             setCpuLineup(cpu);
+            setBadgeMap(badges);
             setPhase("game");
           }}
         />
@@ -66,6 +69,7 @@ export default function RunPlay() {
           run={run}
           playerLineup={playerLineup}
           cpuLineup={cpuLineup}
+          badgeMap={badgeMap}
           onGameComplete={() => navigate("/runs")}
         />
       )}

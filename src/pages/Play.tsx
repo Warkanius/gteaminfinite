@@ -4,6 +4,7 @@ import { LineupSelect } from "@/components/game/LineupSelect";
 import { GameBoard } from "@/components/game/GameBoard";
 import { GameResults } from "@/components/game/GameResults";
 import type { CardGameResult } from "@/lib/gameEngine";
+import type { CardBadge } from "@/lib/badgeEngine";
 
 export interface GameCard {
   id: string;
@@ -52,13 +53,15 @@ export default function Play() {
   const [phase, setPhase] = useState<Phase>("lineup");
   const [userLineup, setUserLineup] = useState<GameCard[]>([]);
   const [cpuLineup, setCpuLineup] = useState<GameCard[]>([]);
+  const [badgeMap, setBadgeMap] = useState<Record<string, CardBadge[]>>({});
   const [gameResult, setGameResult] = useState<FullGameResult | null>(null);
 
   const isDomination = !!domState.dominationGameId;
 
-  const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[]) => {
+  const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[], badges: Record<string, CardBadge[]>) => {
     setUserLineup(user);
     setCpuLineup(cpu);
+    setBadgeMap(badges);
     setPhase("game");
   }, []);
 
@@ -71,6 +74,7 @@ export default function Play() {
     setPhase("lineup");
     setUserLineup([]);
     setCpuLineup([]);
+    setBadgeMap({});
     setGameResult(null);
   }, []);
 
@@ -89,6 +93,7 @@ export default function Play() {
         <GameBoard
           userLineup={userLineup}
           cpuLineup={cpuLineup}
+          badgeMap={badgeMap}
           onComplete={handleGameComplete}
           difficultyStars={domState.difficultyStars}
         />
