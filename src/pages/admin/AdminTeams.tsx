@@ -97,11 +97,17 @@ export default function AdminTeams() {
 
   const runSave = useMutation({
     mutationFn: async () => {
+      let parsedMilestones: any;
+      try {
+        parsedMilestones = typeof runForm.milestones === 'string' ? JSON.parse(runForm.milestones) : runForm.milestones;
+      } catch {
+        throw new Error("Milestones JSON is invalid. Please fix the JSON before saving.");
+      }
       const payload = {
         name: runForm.name,
         target_score: runForm.target_score,
-        team_id: runForm.team_id,
-        milestones: typeof runForm.milestones === 'string' ? JSON.parse(runForm.milestones) : runForm.milestones
+        team_id: runForm.team_id || null,
+        milestones: parsedMilestones,
       };
       if (runEditId) { const { error } = await supabase.from("runs").update(payload).eq("id", runEditId); if (error) throw error; }
       else { const { error } = await supabase.from("runs").insert(payload); if (error) throw error; }
