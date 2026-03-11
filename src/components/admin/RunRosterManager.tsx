@@ -185,16 +185,16 @@ export function RunRosterManager({ runId }: Props) {
       const rows = pendingPlayers.map((p) => ({
         run_id: runId,
         player_card_id: p.id,
-        run_rating: p.run_rating,
-        run_stat_3pt: p.run_stat_3pt,
-        run_stat_mid: p.run_stat_mid,
-        run_stat_fin: p.run_stat_fin,
-        run_stat_dnk: p.run_stat_dnk,
-        run_stat_stl: p.run_stat_stl,
-        run_stat_blk: p.run_stat_blk,
-        run_stat_ast: p.run_stat_ast,
-        run_stat_reb: p.run_stat_reb,
-        run_stat_int: p.run_stat_int,
+        run_rating: Math.round(p.run_rating),
+        run_stat_3pt: Math.round(p.run_stat_3pt),
+        run_stat_mid: Math.round(p.run_stat_mid),
+        run_stat_fin: Math.round(p.run_stat_fin),
+        run_stat_dnk: Math.round(p.run_stat_dnk),
+        run_stat_stl: Math.round(p.run_stat_stl),
+        run_stat_blk: Math.round(p.run_stat_blk),
+        run_stat_ast: Math.round(p.run_stat_ast),
+        run_stat_reb: Math.round(p.run_stat_reb),
+        run_stat_int: Math.round(p.run_stat_int),
       }));
       const { error } = await supabase.from("run_players").insert(rows);
       if (error) throw error;
