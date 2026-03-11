@@ -26,6 +26,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
   
   const [selectedStat, setSelectedStat] = useState<StatKey>("stat_3pt");
   const [isRolling, setIsRolling] = useState(false);
+  const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [logs, setLogs] = useState<{ msg: string; pPts: number; cPts: number }[]>([]);
 
   const checkWinner = (pScore: number, cScore: number) => {
@@ -44,31 +45,51 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
     const pRunRating = pCard._runRating ?? 60;
     const cRunRating = cCard._runRating ?? 60;
 
-    const pDice = rollDice(getRunDiceCount(pRunRating)).dice;
-    const cDice = rollDice(getRunDiceCount(cRunRating)).dice;
+    // Determine the stat for this possession
+    const activeStat: StatKey = isPlayerTurn
+      ? selectedStat
+      : SCORING_STATS[Math.floor(Math.random() * SCORING_STATS.length)];
 
-    const pResult = resolveRunStatRoll(selectedStat, pCard[selectedStat], pRunRating, pDice);
-    const cResult = resolveRunStatRoll(selectedStat, cCard[selectedStat], cRunRating, cDice);
+    const offenseCard = isPlayerTurn ? pCard : cCard;
+    const defenseCard = isPlayerTurn ? cCard : pCard;
+    const offRating = isPlayerTurn ? pRunRating : cRunRating;
+    const defRating = isPlayerTurn ? cRunRating : pRunRating;
+
+    const offDice = rollDice(getRunDiceCount(offRating)).dice;
+    const defDice = rollDice(getRunDiceCount(defRating)).dice;
+
+    const offResult = resolveRunStatRoll(activeStat, offenseCard[activeStat], offRating, offDice);
+    const defResult = resolveRunStatRoll(activeStat, defenseCard[activeStat], defRating, defDice);
 
     const newLogs = [...logs];
     let newPScore = playerScore;
     let newCScore = cpuScore;
 
-    if (pResult.rollResult > cResult.rollResult) {
-      newPScore += pResult.points;
-      newLogs.unshift({ msg: `Player ${pCard.name} won ${STAT_LABELS[selectedStat]} roll! (+${pResult.points} pts)`, pPts: pResult.points, cPts: 0 });
-    } else if (cResult.rollResult > pResult.rollResult) {
-      newCScore += cResult.points;
-      newLogs.unshift({ msg: `CPU ${cCard.name} won ${STAT_LABELS[selectedStat]} roll! (+${cResult.points} pts)`, pPts: 0, cPts: cResult.points });
+    const offLabel = isPlayerTurn ? `Your ${pCard.name}` : `CPU ${cCard.name}`;
+    const defLabel = isPlayerTurn ? `CPU ${cCard.name}` : `Your ${pCard.name}`;
+
+    if (offResult.rollResult > defResult.rollResult) {
+      // Offense wins — they score
+      if (isPlayerTurn) {
+        newPScore += offResult.points;
+        newLogs.unshift({ msg: `🏀 ${offLabel} scores on ${STAT_LABELS[activeStat]}! (+${offResult.points} pts)`, pPts: offResult.points, cPts: 0 });
+      } else {
+        newCScore += offResult.points;
+        newLogs.unshift({ msg: `🏀 ${offLabel} scores on ${STAT_LABELS[activeStat]}! (+${offResult.points} pts)`, pPts: 0, cPts: offResult.points });
+      }
+    } else if (defResult.rollResult > offResult.rollResult) {
+      // Defense wins — turnover, no points
+      newLogs.unshift({ msg: `🛡️ ${defLabel} stops ${offLabel} on ${STAT_LABELS[activeStat]}!`, pPts: 0, cPts: 0 });
     } else {
-      newLogs.unshift({ msg: `Tie on ${STAT_LABELS[selectedStat]}! No points.`, pPts: 0, cPts: 0 });
+      newLogs.unshift({ msg: `Tie on ${STAT_LABELS[activeStat]}! No points.`, pPts: 0, cPts: 0 });
     }
 
     setPlayerScore(newPScore);
     setCpuScore(newCScore);
     setLogs(newLogs.slice(0, 10));
 
-    // Next turn
+    // Alternate possession and rotate players
+    setIsPlayerTurn(!isPlayerTurn);
     setPlayerIndex((playerIndex + 1) % 3);
     setCpuIndex((cpuIndex + 1) % 3);
     
@@ -142,6 +163,9 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
           <p className="text-6xl font-display font-bold text-primary">{playerScore}</p>
         </div>
         <div className="text-center space-y-2">
+          <p className={`text-sm font-bold uppercase px-3 py-1 rounded-full ${isPlayerTurn ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
+            {isPlayerTurn ? "🏀 YOUR BALL" : "🛡️ DEFEND"}
+          </p>
           <p className="text-sm font-bold uppercase text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">Target: {targetScore}</p>
           <p className="text-xs text-muted-foreground font-semibold">Win By 2</p>
         </div>
@@ -153,42 +177,53 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, onGameComplete }: P
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Player Side */}
-        <div className="space-y-4 flex flex-col items-center">
-          <h3 className="font-display text-xl">Your Player (Pos {playerIndex + 1})</h3>
+        <div className={`space-y-4 flex flex-col items-center ${isPlayerTurn ? '' : 'opacity-70'}`}>
+          <h3 className="font-display text-xl">{isPlayerTurn ? "🏀 Your Attack" : "🛡️ Your Defense"} (Pos {playerIndex + 1})</h3>
           <div className="transform scale-110 mb-4">
             <PlayerCard card={pCard} />
           </div>
           
           <div className="w-full max-w-xs space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Select Stat to Roll</label>
-              <Select value={selectedStat} onValueChange={(v) => setSelectedStat(v as StatKey)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SCORING_STATS.map(stat => (
-                    <SelectItem key={stat} value={stat}>
-                      {STAT_LABELS[stat]} ({pCard[stat]})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <Button 
-              className="w-full font-display tracking-wider text-lg h-14 bg-primary hover:bg-primary/90" 
-              onClick={handleRoll}
-              disabled={isRolling}
-            >
-              {isRolling ? "ROLLING..." : "ROLL STAT"}
-            </Button>
+            {isPlayerTurn ? (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Select Stat to Attack With</label>
+                  <Select value={selectedStat} onValueChange={(v) => setSelectedStat(v as StatKey)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SCORING_STATS.map(stat => (
+                        <SelectItem key={stat} value={stat}>
+                          {STAT_LABELS[stat]} ({pCard[stat]})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button 
+                  className="w-full font-display tracking-wider text-lg h-14 bg-primary hover:bg-primary/90" 
+                  onClick={handleRoll}
+                  disabled={isRolling}
+                >
+                  {isRolling ? "ROLLING..." : "ATTACK"}
+                </Button>
+              </>
+            ) : (
+              <Button 
+                className="w-full font-display tracking-wider text-lg h-14 bg-destructive hover:bg-destructive/90" 
+                onClick={handleRoll}
+                disabled={isRolling}
+              >
+                {isRolling ? "ROLLING..." : "DEFEND"}
+              </Button>
+            )}
           </div>
         </div>
 
         {/* CPU Side */}
-        <div className="space-y-4 flex flex-col items-center opacity-90">
-          <h3 className="font-display text-xl text-destructive">CPU (Pos {cpuIndex + 1})</h3>
+        <div className={`space-y-4 flex flex-col items-center ${isPlayerTurn ? 'opacity-70' : ''}`}>
+          <h3 className="font-display text-xl text-destructive">{isPlayerTurn ? "🛡️ CPU Defense" : "🏀 CPU Attack"} (Pos {cpuIndex + 1})</h3>
           <div className="transform scale-110 mb-4">
             <PlayerCard card={cCard} />
           </div>
