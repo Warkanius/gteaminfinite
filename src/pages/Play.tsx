@@ -5,6 +5,7 @@ import { GameBoard } from "@/components/game/GameBoard";
 import { GameResults } from "@/components/game/GameResults";
 import type { CardGameResult } from "@/lib/gameEngine";
 import type { CardBadge } from "@/lib/badgeEngine";
+import type { CardTrait } from "@/lib/traitEngine";
 
 export interface GameCard {
   id: string;
