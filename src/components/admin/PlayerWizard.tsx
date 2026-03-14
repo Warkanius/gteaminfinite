@@ -664,17 +664,18 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
                               if (!needsStat) {
                                 addTrait(pendingTraitId, t, null);
                               } else {
-                                // Store tier temporarily, require stat selection
-                                const el = document.querySelector(`[data-pending-trait-tier]`) as any;
-                                if (el) el.dataset.pendingTraitTier = t;
+                                setPendingTraitTier(t);
                               }
                             }}
-                            className="px-2 py-0.5 rounded border text-xs capitalize hover:bg-accent/50 border-border"
+                            className={cn(
+                              "px-2 py-0.5 rounded border text-xs capitalize hover:bg-accent/50 border-border",
+                              pendingTraitTier === t && needsStat ? "border-primary bg-primary/15" : ""
+                            )}
                           >
                             {t}
                           </button>
                         ))}
-                        <button onClick={() => setPendingTraitId(null)} className="text-xs text-muted-foreground hover:text-destructive ml-1">Cancel</button>
+                        <button onClick={() => { setPendingTraitId(null); setPendingTraitTier("base"); }} className="text-xs text-muted-foreground hover:text-destructive ml-1">Cancel</button>
                       </div>
                       {needsStat && (
                         <div className="flex items-center gap-1 flex-wrap">
@@ -682,7 +683,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
                           {STAT_KEYS.map(s => (
                             <button
                               key={s}
-                              onClick={() => addTrait(pendingTraitId, "base", s)}
+                              onClick={() => addTrait(pendingTraitId, pendingTraitTier, s)}
                               className="px-1.5 py-0.5 rounded border text-xs font-mono hover:bg-accent/50 border-border"
                             >
                               {STAT_LABELS[s]}
