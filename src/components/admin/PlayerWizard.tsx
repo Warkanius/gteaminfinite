@@ -104,22 +104,22 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
   // ── Mr. Versatile badge cap logic ──
   const hasMrVersatile = useMemo(() => {
     if (!result) return false;
-    return result.badges.some(b => {
-      const badge = allBadges.find(ab => ab.id === b.badge_id);
-      return badge && badge.effect_type === "passive" && badge.name.toLowerCase().includes("versatile");
+    return result.traits.some(t => {
+      const trait = allTraits.find(at => at.id === t.trait_id);
+      return trait && trait.condition_type === "passive" && trait.abbreviation === "MV";
     });
-  }, [result?.badges, allBadges]);
+  }, [result?.traits, allTraits]);
 
   const mrVersatileSlots = useMemo(() => {
     if (!result || !hasMrVersatile) return 0;
-    const mvBadge = result.badges.find(b => {
-      const badge = allBadges.find(ab => ab.id === b.badge_id);
-      return badge && badge.effect_type === "passive" && badge.name.toLowerCase().includes("versatile");
+    const mvTrait = result.traits.find(t => {
+      const trait = allTraits.find(at => at.id === t.trait_id);
+      return trait && trait.condition_type === "passive" && trait.abbreviation === "MV";
     });
-    if (!mvBadge) return 0;
+    if (!mvTrait) return 0;
     const tierMap: Record<string, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
-    return tierMap[mvBadge.tier] ?? 0;
-  }, [result?.badges, allBadges, hasMrVersatile]);
+    return tierMap[mvTrait.tier] ?? 0;
+  }, [result?.traits, allTraits, hasMrVersatile]);
 
   const maxBadges = 5 + (hasMrVersatile ? mrVersatileSlots : 0);
 
