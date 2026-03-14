@@ -220,8 +220,11 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
                 size="lg"
                 onClick={async () => {
                   const allCardIds = [...playerLineup.map((c: any) => c.id), ...cpuLineup.map((c: any) => c.id)];
-                  const badgeMap = await fetchBadgesForCards(supabase, allCardIds);
-                  onLineupConfirmed(playerLineup, cpuLineup, badgeMap);
+                  const [badgeMap, traitMap] = await Promise.all([
+                    fetchBadgesForCards(supabase, allCardIds),
+                    fetchTraitsForCards(supabase, allCardIds),
+                  ]);
+                  onLineupConfirmed(playerLineup, cpuLineup, badgeMap, traitMap);
                 }}
               >
                 START GAUNTLET
