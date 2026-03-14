@@ -17,14 +17,20 @@ import {
   resolveBadgeEffects, getTeammateBadges,
   type CardBadge, type BadgeActivation,
 } from "@/lib/badgeEngine";
+import {
+  resolveTraitBoosts, resolveTeammateTraitBoosts, getTeammateTraits,
+  computeCardAvgStat, type CardTrait, type TraitActivation, type GameContext,
+} from "@/lib/traitEngine";
 import type { GameCard, FullGameResult } from "@/pages/Play";
 
 interface GameBoardProps {
   userLineup: GameCard[];
   cpuLineup: GameCard[];
   badgeMap: Record<string, CardBadge[]>;
+  traitMap: Record<string, CardTrait[]>;
   onComplete: (result: FullGameResult) => void;
   difficultyStars?: number;
+  gameContext: GameContext;
 }
 
 export function GameBoard({ userLineup, cpuLineup, badgeMap, onComplete, difficultyStars }: GameBoardProps) {
