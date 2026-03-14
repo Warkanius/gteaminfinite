@@ -93,7 +93,7 @@ function hiddenGemPenaltyReduction(tier: BadgeTier): number {
 
 /** Hidden Gem: bonus multiplier added on top (only at diamond+) */
 function hiddenGemBoostPercent(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 0, gold: 0, diamond: 0.05, hof: 0.10, actolytrene: 0.15 };
+  const map: Record<BadgeTier, number> = { base: 0, gold: 0, hof: 0.05, diamond: 0.10, actolytrene: 0.15 };
   return map[tier];
 }
 
