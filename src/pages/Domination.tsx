@@ -69,7 +69,7 @@ export default function Domination() {
   };
 
   const handlePlay = (game: DominationGame) => {
-    navigate("/play", {
+    navigate("/play/match", {
       state: {
         dominationGameId: game.id,
         opponentName: game.opponent_name,
