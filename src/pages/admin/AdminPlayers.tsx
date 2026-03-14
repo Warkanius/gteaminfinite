@@ -524,7 +524,8 @@ export default function AdminPlayers() {
           {/* Badges */}
           <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">Badges</h3>
+              <h3 className="font-semibold text-sm">Badges ({form.badges.length}/{maxBadgeSlots})</h3>
+              {mrVersatileExtra > 0 && <span className="text-xs text-amber-400">Mr. Versatile: +{mrVersatileExtra} slots</span>}
             </div>
             {/* Search to add */}
             <div className="relative">
