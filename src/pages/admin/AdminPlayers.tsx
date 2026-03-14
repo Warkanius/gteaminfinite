@@ -22,7 +22,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
 import { generatePlayer } from "@/lib/archetypeEngine";
 import { cn } from "@/lib/utils";
-import { BASE_BADGE_SLOTS, getMrVersatileSlots, type CardBadge } from "@/lib/badgeEngine";
+import { BASE_BADGE_SLOTS } from "@/lib/badgeEngine";
 
 type PlayerCard = Tables<"player_cards"> & {
   card_color_primary?: string | null;
