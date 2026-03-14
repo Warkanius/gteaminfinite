@@ -99,7 +99,7 @@ function hiddenGemBoostPercent(tier: BadgeTier): number {
 
 /** Mr. Versatile: extra Signature Trait slots per tier */
 function versatileSlots(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 3, hof: 4, actolytrene: 5 };
+  const map: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
   return map[tier];
 }
 
