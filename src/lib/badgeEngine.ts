@@ -59,7 +59,7 @@ function bonusDiceValue(tier: BadgeTier): number {
 
 /** Bonus-type badge: flat dice bonus per tier */
 function bonusTypeDiceValue(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 0.5, gold: 0.5, diamond: 0.5, hof: 1, actolytrene: 1.5 };
+  const map: Record<BadgeTier, number> = { base: 0.5, gold: 0.5, hof: 0.5, diamond: 1, actolytrene: 1.5 };
   return map[tier];
 }
 
