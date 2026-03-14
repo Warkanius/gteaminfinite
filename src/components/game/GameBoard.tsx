@@ -149,10 +149,24 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
     );
     allActivations.push(...cpuBadgeResult.activations);
 
-    // Resolve stat rolls with badge-adjusted values
+    // Apply Hidden Gem to difficulty modifier before resolving stat roll
+    let effectiveDifficulty = difficultyStars;
+    if (difficultyStars != null) {
+      const userBadgesForGem = badgeMap[userCard.id] ?? [];
+      const rawDiffMod = 1 + (userStars - difficultyStars) * 0.1;
+      const { adjustedModifier, activation: gemAct } = applyHiddenGem(rawDiffMod, userBadgesForGem);
+      if (gemAct) {
+        allActivations.push(gemAct);
+        // Convert adjusted modifier back to effective difficulty stars for resolveStatRoll
+        // resolveStatRoll computes: 1 + (stars - diff) * 0.1 = adjustedModifier
+        // => diff = stars - (adjustedModifier - 1) / 0.1
+        effectiveDifficulty = userStars - (adjustedModifier - 1) / 0.1;
+      }
+    }
+
     const uResult = resolveStatRoll(
       currentStat, userBadgeResult.adjustedStat, userStars,
-      userBadgeResult.finalDice, difficultyStars,
+      userBadgeResult.finalDice, effectiveDifficulty,
     );
     // Add badge bonus to points
     if (userBadgeResult.totalBonus > 0) {
