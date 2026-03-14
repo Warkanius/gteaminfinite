@@ -71,8 +71,8 @@ function bonusTypeRerolls(tier: BadgeTier): number {
 
 /** Debuff: how much to subtract from opponent stat (star-based for 5v5, raw for Runs) */
 export function debuffAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
-  const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 4, hof: 3, actolytrene: 5 };
-  const runMap: Record<BadgeTier, number> = { base: 20, gold: 40, diamond: 80, hof: 60, actolytrene: 100 };
+  const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
+  const runMap: Record<BadgeTier, number> = { base: 20, gold: 40, hof: 60, diamond: 80, actolytrene: 100 };
   return mode === "runs" ? runMap[tier] : starMap[tier];
 }
 
