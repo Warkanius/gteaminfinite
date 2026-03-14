@@ -30,8 +30,8 @@ export type BadgeTier = "base" | "gold" | "diamond" | "hof" | "actolytrene";
 const TIER_ORDER: Record<BadgeTier, number> = {
   base: 0,
   gold: 1,
-  diamond: 2,
-  hof: 3,
+  hof: 2,
+  diamond: 3,
   actolytrene: 4,
 };
 
@@ -46,40 +46,40 @@ export interface BadgeActivation {
 
 /** Number of rerolls granted per tier */
 function rerollCount(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 2, hof: 3, actolytrene: 3 };
+  const map: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 2, diamond: 3, actolytrene: 3 };
   return map[tier];
 }
 
 /** Flat bonus dice value added per tier (in addition to rerolls at diamond+) */
 function bonusDiceValue(tier: BadgeTier): number {
   // base=0, gold=0, diamond=+0.5, hof=0, actolytrene=+1
-  const map: Record<BadgeTier, number> = { base: 0, gold: 0, diamond: 0.5, hof: 0, actolytrene: 1 };
+  const map: Record<BadgeTier, number> = { base: 0, gold: 0, hof: 0, diamond: 0.5, actolytrene: 1 };
   return map[tier];
 }
 
 /** Bonus-type badge: flat dice bonus per tier */
 function bonusTypeDiceValue(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 0.5, gold: 0.5, diamond: 0.5, hof: 1, actolytrene: 1.5 };
+  const map: Record<BadgeTier, number> = { base: 0.5, gold: 0.5, hof: 0.5, diamond: 1, actolytrene: 1.5 };
   return map[tier];
 }
 
 /** Bonus-type badge: number of rerolls on the bonus dice (gold+) */
 function bonusTypeRerolls(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 0, gold: 1, diamond: 2, hof: 0, actolytrene: 0 };
+  const map: Record<BadgeTier, number> = { base: 0, gold: 1, hof: 2, diamond: 0, actolytrene: 0 };
   return map[tier];
 }
 
 /** Debuff: how much to subtract from opponent stat (star-based for 5v5, raw for Runs) */
 export function debuffAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
-  const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 4, hof: 3, actolytrene: 5 };
-  const runMap: Record<BadgeTier, number> = { base: 20, gold: 40, diamond: 80, hof: 60, actolytrene: 100 };
+  const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
+  const runMap: Record<BadgeTier, number> = { base: 20, gold: 40, hof: 60, diamond: 80, actolytrene: 100 };
   return mode === "runs" ? runMap[tier] : starMap[tier];
 }
 
 /** Floor General boost per tier (star-based for 5v5) */
 function boostAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
-  const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 3, hof: 4, actolytrene: 5 };
-  const runMap: Record<BadgeTier, number> = { base: 10, gold: 20, diamond: 30, hof: 40, actolytrene: 50 };
+  const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
+  const runMap: Record<BadgeTier, number> = { base: 10, gold: 20, hof: 30, diamond: 40, actolytrene: 50 };
   return mode === "runs" ? runMap[tier] : starMap[tier];
 }
 
@@ -87,19 +87,19 @@ function boostAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
 
 /** Hidden Gem: penalty reduction fraction per tier (1.0 = full negation) */
 function hiddenGemPenaltyReduction(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 0.5, gold: 1.0, diamond: 1.0, hof: 1.0, actolytrene: 1.0 };
+  const map: Record<BadgeTier, number> = { base: 0.5, gold: 1.0, hof: 1.0, diamond: 1.0, actolytrene: 1.0 };
   return map[tier];
 }
 
 /** Hidden Gem: bonus multiplier added on top (only at diamond+) */
 function hiddenGemBoostPercent(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 0, gold: 0, diamond: 0.05, hof: 0.10, actolytrene: 0.15 };
+  const map: Record<BadgeTier, number> = { base: 0, gold: 0, hof: 0.05, diamond: 0.10, actolytrene: 0.15 };
   return map[tier];
 }
 
 /** Mr. Versatile: extra Signature Trait slots per tier */
 function versatileSlots(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 3, hof: 4, actolytrene: 5 };
+  const map: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
   return map[tier];
 }
 
@@ -347,8 +347,8 @@ export function resolveBadgeEffects(
  *
  * - Base: reduces difficulty penalty by 50%
  * - Gold: fully negates difficulty penalty
- * - Diamond: negates penalty + 5% boost
- * - HOF: negates penalty + 10% boost
+ * - HOF: negates penalty + 5% boost
+ * - Diamond: negates penalty + 10% boost
  * - Actolytrene: negates penalty + 15% boost
  *
  * Returns the adjusted difficulty modifier and an optional activation.
@@ -408,7 +408,7 @@ export const BASE_BADGE_SLOTS = 5;
 
 /**
  * Mr. Versatile: Grants extra Signature Trait slots based on tier.
- * Base = +1 slot, Gold = +2, Diamond = +3, HOF = +4, Actolytrene = +5.
+ * Base = +1 slot, Gold = +2, HOF = +3, Diamond = +4, Actolytrene = +5.
  *
  * Returns the number of additional trait slots (0 if no badge).
  */
