@@ -388,7 +388,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
               </div>
             </div>
 
-            {/* Stat bars */}
+            {/* Stat bars (0-6 star scale) */}
             <div className="grid grid-cols-3 gap-3">
               {STAT_KEYS.map(k => {
                 const val = result.stats[k] ?? 0;
@@ -396,12 +396,14 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
                   <div key={k} className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground uppercase">{STAT_LABELS[k]}</span>
-                      <span className="font-mono font-semibold">{val}</span>
+                      <span className="font-mono font-semibold flex items-center gap-0.5">
+                        {val}<span className="text-muted-foreground">/6</span>
+                      </span>
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">
                       <div
                         className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${val}%` }}
+                        style={{ width: `${(val / 6) * 100}%` }}
                       />
                     </div>
                   </div>
@@ -410,7 +412,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
             </div>
 
             <div className="text-center text-2xl font-mono font-bold">
-              OVR {Math.round(STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length)}
+              OVR {"⭐".repeat(Math.round(STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length))}
             </div>
 
             {/* Badges */}

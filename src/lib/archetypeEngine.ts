@@ -334,20 +334,21 @@ export function generateFromProfile(
     weights[s] = Math.max(0, weights[s] - 0.25);
   }
 
-  // 5. Generate stats from weights
+  // 5. Generate stats from weights (0-6 star scale)
   const range = tier.max - tier.min;
   const stats: Record<string, number> = {};
   for (const k of STAT_KEYS) {
     const base = tier.min + weights[k] * range * config.statSpreadMult;
-    const variance = rand(-3, 3) * config.varianceMult;
-    stats[k] = clamp(Math.round(base + variance), Math.max(25, tier.min - 15), 99);
+    const variance = (Math.random() - 0.5) * config.varianceMult;
+    stats[k] = clamp(Math.round(base + variance), 0, 6);
   }
 
-  // 6. Generate badges
+  // 6. Generate badges (max 5 without Mr. Versatile)
+  const MAX_BADGES = 5;
   const badgeCountRange = tier.badgeCount;
   let numBadges = rand(badgeCountRange[0], badgeCountRange[1]);
   numBadges = Math.round(numBadges * config.badgeCountMult);
-  numBadges = clamp(numBadges, 1, 15);
+  numBadges = clamp(numBadges, 1, MAX_BADGES);
 
   const scoredBadges = availableBadges.map((b) => {
     let score = Math.random() * 0.3;
