@@ -73,6 +73,7 @@ export default function RunPlay() {
           playerLineup={playerLineup}
           cpuLineup={cpuLineup}
           badgeMap={badgeMap}
+          traitMap={traitMap}
           onGameComplete={() => navigate("/runs")}
         />
       )}

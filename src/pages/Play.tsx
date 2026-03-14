@@ -98,8 +98,10 @@ export default function Play() {
           userLineup={userLineup}
           cpuLineup={cpuLineup}
           badgeMap={badgeMap}
+          traitMap={traitMap}
           onComplete={handleGameComplete}
           difficultyStars={domState.difficultyStars}
+          gameContext={{ isHome: !isDomination, isAway: isDomination, isKeyGame: false }}
         />
       )}
       {phase === "results" && gameResult && (
