@@ -55,6 +55,7 @@ export default function Play() {
   const [userLineup, setUserLineup] = useState<GameCard[]>([]);
   const [cpuLineup, setCpuLineup] = useState<GameCard[]>([]);
   const [badgeMap, setBadgeMap] = useState<Record<string, CardBadge[]>>({});
+  const [traitMap, setTraitMap] = useState<Record<string, CardTrait[]>>({});
   const [gameResult, setGameResult] = useState<FullGameResult | null>(null);
 
   const isDomination = !!domState.dominationGameId;
