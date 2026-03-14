@@ -347,8 +347,8 @@ export function resolveBadgeEffects(
  *
  * - Base: reduces difficulty penalty by 50%
  * - Gold: fully negates difficulty penalty
- * - Diamond: negates penalty + 5% boost
- * - HOF: negates penalty + 10% boost
+ * - HOF: negates penalty + 5% boost
+ * - Diamond: negates penalty + 10% boost
  * - Actolytrene: negates penalty + 15% boost
  *
  * Returns the adjusted difficulty modifier and an optional activation.
