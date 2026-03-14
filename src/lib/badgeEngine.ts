@@ -78,8 +78,8 @@ export function debuffAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
 
 /** Floor General boost per tier (star-based for 5v5) */
 function boostAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
-  const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 3, hof: 4, actolytrene: 5 };
-  const runMap: Record<BadgeTier, number> = { base: 10, gold: 20, diamond: 30, hof: 40, actolytrene: 50 };
+  const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
+  const runMap: Record<BadgeTier, number> = { base: 10, gold: 20, hof: 30, diamond: 40, actolytrene: 50 };
   return mode === "runs" ? runMap[tier] : starMap[tier];
 }
 
