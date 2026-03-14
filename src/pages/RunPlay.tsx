@@ -18,6 +18,7 @@ export default function RunPlay() {
   const [playerLineup, setPlayerLineup] = useState<any[]>([]);
   const [cpuLineup, setCpuLineup] = useState<any[]>([]);
   const [badgeMap, setBadgeMap] = useState<Record<string, CardBadge[]>>({});
+  const [traitMap, setTraitMap] = useState<Record<string, CardTrait[]>>({});
   const [phase, setPhase] = useState<"lineup" | "game">("lineup");
 
   const { data: run, isLoading } = useQuery({
