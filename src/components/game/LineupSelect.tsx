@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import type { GameCard } from "@/pages/Play";
 import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
+import { fetchTraitsForCards, type CardTrait } from "@/lib/traitEngine";
 
 interface LineupSelectProps {
-  onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[], badgeMap: Record<string, CardBadge[]>) => void;
+  onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[], badgeMap: Record<string, CardBadge[]>, traitMap: Record<string, CardTrait[]>) => void;
   dominationGameId?: string;
 }
 
