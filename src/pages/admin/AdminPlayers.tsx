@@ -298,7 +298,7 @@ export default function AdminPlayers() {
             isLoading={isLoading}
             searchKeys={["name"]}
             searchPlaceholder="Search players…"
-            onAdd={() => { setForm(emptyForm()); setEditId(null); setBulkBadgeText(""); setGeneratorText(""); setDialogOpen(true); }}
+            onAdd={() => { setForm(emptyForm()); setEditId(null); setGeneratorText(""); setDialogOpen(true); }}
             addLabel="Add Player"
             actions={(row) => (
               <div className="flex gap-1">
