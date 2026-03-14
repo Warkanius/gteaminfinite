@@ -37,7 +37,7 @@ interface LogEntry {
   type: "score-player" | "score-cpu" | "miss" | "rebound" | "info" | "badge";
 }
 
-export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameComplete }: Props) {
+export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, onGameComplete }: Props) {
   const { user } = useAuth();
   const targetScore = run.target_score;
 
