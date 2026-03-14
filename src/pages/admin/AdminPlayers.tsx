@@ -64,8 +64,11 @@ export default function AdminPlayers() {
   const [editId, setEditId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [bulkBadgeText, setBulkBadgeText] = useState("");
   const [generatorText, setGeneratorText] = useState("");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardEditPlayer, setWizardEditPlayer] = useState<PlayerCard | null>(null);
+  const [badgeSearch, setBadgeSearch] = useState("");
+  const [pendingBadgeId, setPendingBadgeId] = useState<string | null>(null);
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["admin-players"],
