@@ -490,31 +490,33 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
               </div>
             </div>
 
-            {/* Stat sliders (0-6, scalebreaking allowed) */}
+            {/* Stat sliders (0-12, scalebreaking allowed) */}
             <div className="space-y-1">
               <Label className="text-xs flex items-center justify-between">
                 <span>Stats</span>
-                <span className="text-muted-foreground font-normal">Drag to adjust · Values above tier range = scalebreaker</span>
+                <span className="text-muted-foreground font-normal">Drag to adjust · 7+ = scalebreaker</span>
               </Label>
               <div className="grid gap-3">
                 {STAT_KEYS.map(k => {
                   const val = result.stats[k] ?? 0;
+                  const isScaleBreaker = val >= 7;
                   return (
                     <div key={k} className="flex items-center gap-3">
                       <span className="text-xs font-mono uppercase w-8 text-muted-foreground">{STAT_LABELS[k]}</span>
                       <Slider
                         value={[val]}
                         min={0}
-                        max={6}
+                        max={12}
                         step={1}
                         onValueChange={([v]) => updateStat(k, v)}
                         className="flex-1"
                       />
                       <span className={cn(
                         "text-sm font-mono font-semibold w-8 text-right",
-                        val >= 6 ? "text-amber-400" : ""
+                        isScaleBreaker ? "text-red-400 animate-pulse" : val >= 6 ? "text-amber-400" : ""
                       )}>
                         {val}
+                        {isScaleBreaker && <span className="text-[9px] ml-0.5">🔥</span>}
                       </span>
                     </div>
                   );

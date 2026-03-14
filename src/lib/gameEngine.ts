@@ -14,9 +14,12 @@ export const STAT_LABELS: Record<StatKey, string> = {
 
 export const SCORING_STATS: StatKey[] = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_int"];
 
-/** Maps star rating to roll multiplier */
+/** Maps star rating to roll multiplier (supports scalebreakers up to 12) */
 export function getStarModifier(stars: number): number {
-  const map: Record<number, number> = { 0: 0, 1: 0.5, 2: 1, 3: 1.5, 4: 2, 5: 2.5 };
+  const map: Record<number, number> = {
+    0: 0, 1: 0.5, 2: 1, 3: 1.5, 4: 2, 5: 2.5,
+    6: 3, 7: 3.5, 8: 4, 9: 4.5, 10: 5, 11: 5.5, 12: 6,
+  };
   return map[stars] ?? 0;
 }
 
