@@ -94,26 +94,57 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
   const maxDiceCount = Math.max(userDiceCount, cpuDiceCount) as 1 | 2;
 
   const handleDiceSubmit = useCallback((userDice: number[], cpuDice: number[]) => {
-    const allActivations: BadgeActivation[] = [];
+    const allActivations: (BadgeActivation | TraitActivation)[] = [];
 
-    // Apply badges to user roll
+    // --- User card: apply traits FIRST, then badges ---
+    const userTraits = traitMap[userCard.id] ?? [];
+    const userTeammateTraits = getTeammateTraits(traitMap, userLineup, userCard.id);
+    const userAvgStat = computeCardAvgStat(userCard);
+    
+    // Trait boosts on user
+    const userTraitResult = resolveTraitBoosts(
+      currentStat, userCard[currentStat], userTraits, gameContext, "5v5",
+      cpuCard.rating, userCard.rating, userAvgStat,
+    );
+    allActivations.push(...userTraitResult.activations);
+    // Teammate trait boosts on user
+    const userTeammateTraitResult = resolveTeammateTraitBoosts(
+      currentStat, userTraitResult.adjustedStat, userTeammateTraits, "5v5",
+    );
+    allActivations.push(...userTeammateTraitResult.activations);
+
+    // Apply badges to user roll (with trait-adjusted stat)
     const userBadges = badgeMap[userCard.id] ?? [];
     const cpuDefenderBadges = badgeMap[cpuCard.id] ?? [];
     const userTeammateBadges = getTeammateBadges(badgeMap, userLineup, userCard.id);
 
     const userBadgeResult = resolveBadgeEffects(
-      currentStat, userCard[currentStat], userDice,
+      currentStat, userTeammateTraitResult.adjustedStat, userDice,
       userBadges, cpuDefenderBadges, userTeammateBadges, "5v5",
     );
     allActivations.push(...userBadgeResult.activations);
 
-    // Apply badges to CPU roll
+    // --- CPU card: apply traits FIRST, then badges ---
+    const cpuTraits = traitMap[cpuCard.id] ?? [];
+    const cpuTeammateTraits = getTeammateTraits(traitMap, cpuLineup, cpuCard.id);
+    const cpuAvgStat = computeCardAvgStat(cpuCard);
+
+    const cpuTraitResult = resolveTraitBoosts(
+      currentStat, cpuCard[currentStat], cpuTraits, gameContext, "5v5",
+      userCard.rating, cpuCard.rating, cpuAvgStat,
+    );
+    allActivations.push(...cpuTraitResult.activations);
+    const cpuTeammateTraitResult = resolveTeammateTraitBoosts(
+      currentStat, cpuTraitResult.adjustedStat, cpuTeammateTraits, "5v5",
+    );
+    allActivations.push(...cpuTeammateTraitResult.activations);
+
     const cpuBadges = badgeMap[cpuCard.id] ?? [];
     const userDefenderBadges = badgeMap[userCard.id] ?? [];
     const cpuTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, cpuCard.id);
 
     const cpuBadgeResult = resolveBadgeEffects(
-      currentStat, cpuCard[currentStat], cpuDice,
+      currentStat, cpuTeammateTraitResult.adjustedStat, cpuDice,
       cpuBadges, userDefenderBadges, cpuTeammateBadges, "5v5",
     );
     allActivations.push(...cpuBadgeResult.activations);
