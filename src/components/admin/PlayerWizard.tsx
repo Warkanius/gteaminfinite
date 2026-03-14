@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Wand2, ChevronRight, ChevronLeft, RefreshCw, Check, Sparkles, Search, User } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Wand2, ChevronRight, ChevronLeft, RefreshCw, Check, Sparkles, Search, User, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NBA_LEGENDS, ARCHETYPE_LIST, MODIFIER_LIST, generateFromProfile, type WizardProfile, type LegendProfile } from "@/lib/archetypeEngine";
 import type { Tables } from "@/integrations/supabase/types";
@@ -31,14 +32,17 @@ const MODIFIER_CHIPS = [
 ];
 
 const STEPS = ["Identity", "Playstyle", "Strengths", "Review"];
+const BADGE_TIERS = ["base", "gold", "diamond", "hof", "actolytrene"];
 
 type GemTier = Tables<"gem_tiers">;
 type PlayerCard = Tables<"player_cards">;
 type BadgeRow = Tables<"badges">;
+type TraitRow = Tables<"signature_traits">;
 
 interface WizardResult {
   stats: Record<string, number>;
   badges: { badge_id: string; tier: string }[];
+  traits: { trait_id: string; tier: string; target_stat: string | null }[];
   positions: [string, string | null];
   summary: string;
 }
@@ -50,11 +54,12 @@ interface PlayerWizardProps {
   gemTiers: GemTier[];
   players: PlayerCard[];
   allBadges: BadgeRow[];
+  allTraits?: TraitRow[];
   /** If editing, pre-fill name & gem tier */
   editingPlayer?: PlayerCard | null;
 }
 
-export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, allBadges, editingPlayer }: PlayerWizardProps) {
+export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, allBadges, allTraits = [], editingPlayer }: PlayerWizardProps) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [gemTierId, setGemTierId] = useState<string>("");
@@ -66,6 +71,13 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
   const [weakStats, setWeakStats] = useState<string[]>([]);
   const [result, setResult] = useState<WizardResult | null>(null);
 
+  // Badge/trait add UI
+  const [badgeSearch, setBadgeSearch] = useState("");
+  const [traitSearch, setTraitSearch] = useState("");
+  const [pendingBadgeId, setPendingBadgeId] = useState<string | null>(null);
+  const [pendingTraitId, setPendingTraitId] = useState<string | null>(null);
+  const [pendingTraitTier, setPendingTraitTier] = useState<string>("base");
+
   // Reset state when dialog opens
   function resetWizard() {
     setStep(0);
@@ -76,6 +88,10 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
     setStrengthStats([]);
     setWeakStats([]);
     setResult(null);
+    setBadgeSearch("");
+    setTraitSearch("");
+    setPendingBadgeId(null);
+    setPendingTraitId(null);
     if (editingPlayer) {
       setName(editingPlayer.name);
       setGemTierId(editingPlayer.gem_tier_id ?? "");
@@ -84,6 +100,28 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
       setGemTierId("");
     }
   }
+
+  // ── Mr. Versatile badge cap logic ──
+  const hasMrVersatile = useMemo(() => {
+    if (!result) return false;
+    return result.badges.some(b => {
+      const badge = allBadges.find(ab => ab.id === b.badge_id);
+      return badge && badge.effect_type === "passive" && badge.name.toLowerCase().includes("versatile");
+    });
+  }, [result?.badges, allBadges]);
+
+  const mrVersatileSlots = useMemo(() => {
+    if (!result || !hasMrVersatile) return 0;
+    const mvBadge = result.badges.find(b => {
+      const badge = allBadges.find(ab => ab.id === b.badge_id);
+      return badge && badge.effect_type === "passive" && badge.name.toLowerCase().includes("versatile");
+    });
+    if (!mvBadge) return 0;
+    const tierMap: Record<string, number> = { base: 1, gold: 2, diamond: 3, hof: 4, actolytrene: 5 };
+    return tierMap[mvBadge.tier] ?? 0;
+  }, [result?.badges, allBadges, hasMrVersatile]);
+
+  const maxBadges = 5 + (hasMrVersatile ? mrVersatileSlots : 0);
 
   // Inspiration search results
   const inspireResults = useMemo(() => {
@@ -100,11 +138,29 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
     return [...legendResults, ...playerResults];
   }, [inspireSearch, players]);
 
-  // When inspiration is selected, pre-fill archetype + modifiers
+  // Badge search results for adding
+  const filteredBadges = useMemo(() => {
+    if (!badgeSearch.trim()) return [];
+    const q = badgeSearch.toLowerCase();
+    const existingIds = result?.badges.map(b => b.badge_id) ?? [];
+    return allBadges
+      .filter(b => !existingIds.includes(b.id) && (b.name.toLowerCase().includes(q) || b.abbreviation.toLowerCase().includes(q)))
+      .slice(0, 8);
+  }, [badgeSearch, allBadges, result?.badges]);
+
+  // Trait search results for adding
+  const filteredTraits = useMemo(() => {
+    if (!traitSearch.trim()) return [];
+    const q = traitSearch.toLowerCase();
+    const existingIds = result?.traits.map(t => t.trait_id) ?? [];
+    return allTraits
+      .filter(t => !existingIds.includes(t.id) && (t.name.toLowerCase().includes(q) || t.abbreviation.toLowerCase().includes(q)))
+      .slice(0, 8);
+  }, [traitSearch, allTraits, result?.traits]);
+
   function selectInspiration(item: typeof inspireResults[0]) {
     if (item.type === "legend") {
       setInspireSource({ type: "legend", profile: item.profile });
-      // Pre-seed archetype & modifiers from legend
       setSelectedArchetype(item.profile.archetype);
       setSelectedModifiers(item.profile.modifiers.map(m => {
         const chip = MODIFIER_CHIPS.find(c => c.kw.includes(m.toLowerCase()) || m.toLowerCase().includes(c.kw));
@@ -144,7 +200,6 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
       allBadges.map(b => ({ id: b.id, abbreviation: b.abbreviation, affected_stat: b.affected_stat, effect_type: b.effect_type })),
     );
 
-    // Map badge abbreviations to IDs
     const mappedBadges = gen.badges
       .map(rb => {
         const badge = allBadges.find(b => b.abbreviation.toLowerCase() === rb.abbreviation.toLowerCase());
@@ -152,12 +207,11 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
       })
       .filter(Boolean) as { badge_id: string; tier: string }[];
 
-    return { stats: gen.stats, badges: mappedBadges, positions: gen.positions, summary: gen.summary };
+    return { stats: gen.stats, badges: mappedBadges, traits: [] as { trait_id: string; tier: string; target_stat: string | null }[], positions: gen.positions, summary: gen.summary };
   }
 
   function handleNext() {
     if (step === 2) {
-      // Generate on entering Review
       const r = generateResult();
       setResult(r);
       setStep(3);
@@ -177,11 +231,59 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
     onOpenChange(false);
   }
 
+  // ── Review step editing functions ──
+
+  function updateStat(key: string, value: number) {
+    if (!result) return;
+    setResult({ ...result, stats: { ...result.stats, [key]: value } });
+  }
+
+  function removeBadge(index: number) {
+    if (!result) return;
+    setResult({ ...result, badges: result.badges.filter((_, i) => i !== index) });
+  }
+
+  function addBadge(badgeId: string, tier: string) {
+    if (!result) return;
+    if (result.badges.length >= maxBadges) return;
+    setResult({ ...result, badges: [...result.badges, { badge_id: badgeId, tier }] });
+    setBadgeSearch("");
+    setPendingBadgeId(null);
+  }
+
+  function updateBadgeTier(index: number, tier: string) {
+    if (!result) return;
+    const badges = [...result.badges];
+    badges[index] = { ...badges[index], tier };
+    setResult({ ...result, badges });
+  }
+
+  function removeTrait(index: number) {
+    if (!result) return;
+    setResult({ ...result, traits: result.traits.filter((_, i) => i !== index) });
+  }
+
+  function addTrait(traitId: string, tier: string, targetStat: string | null) {
+    if (!result) return;
+    setResult({ ...result, traits: [...result.traits, { trait_id: traitId, tier, target_stat: targetStat }] });
+    setTraitSearch("");
+    setPendingTraitId(null);
+  }
+
+  function updateTraitTier(index: number, tier: string) {
+    if (!result) return;
+    const traits = [...result.traits];
+    traits[index] = { ...traits[index], tier };
+    setResult({ ...result, traits });
+  }
+
   const canNext = () => {
     if (step === 0) return !!gemTierId;
     if (step === 1) return !!selectedArchetype;
     return true;
   };
+
+  const ovrStars = result ? Math.round(STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length) : 0;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (o) resetWizard(); onOpenChange(o); }}>
@@ -376,7 +478,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
           </div>
         )}
 
-        {/* Step 3: Review */}
+        {/* Step 3: Review — fully interactive */}
         {step === 3 && result && (
           <div className="space-y-5 py-2">
             <div className="text-center">
@@ -388,45 +490,210 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
               </div>
             </div>
 
-            {/* Stat bars (0-6 star scale) */}
-            <div className="grid grid-cols-3 gap-3">
-              {STAT_KEYS.map(k => {
-                const val = result.stats[k] ?? 0;
-                return (
-                  <div key={k} className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground uppercase">{STAT_LABELS[k]}</span>
-                      <span className="font-mono font-semibold flex items-center gap-0.5">
-                        {val}<span className="text-muted-foreground">/6</span>
+            {/* Stat sliders (0-6, scalebreaking allowed) */}
+            <div className="space-y-1">
+              <Label className="text-xs flex items-center justify-between">
+                <span>Stats</span>
+                <span className="text-muted-foreground font-normal">Drag to adjust · Values above tier range = scalebreaker</span>
+              </Label>
+              <div className="grid gap-3">
+                {STAT_KEYS.map(k => {
+                  const val = result.stats[k] ?? 0;
+                  return (
+                    <div key={k} className="flex items-center gap-3">
+                      <span className="text-xs font-mono uppercase w-8 text-muted-foreground">{STAT_LABELS[k]}</span>
+                      <Slider
+                        value={[val]}
+                        min={0}
+                        max={6}
+                        step={1}
+                        onValueChange={([v]) => updateStat(k, v)}
+                        className="flex-1"
+                      />
+                      <span className={cn(
+                        "text-sm font-mono font-semibold w-8 text-right",
+                        val >= 6 ? "text-amber-400" : ""
+                      )}>
+                        {val}
                       </span>
                     </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${(val / 6) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             <div className="text-center text-2xl font-mono font-bold">
-              OVR {"⭐".repeat(Math.round(STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length))}
+              OVR {"⭐".repeat(Math.min(ovrStars, 6))}
             </div>
 
-            {/* Badges */}
+            {/* Badges — editable */}
             <div className="space-y-2">
-              <Label className="text-xs">Badges ({result.badges.length})</Label>
+              <Label className="text-xs flex items-center justify-between">
+                <span>Badges ({result.badges.length}/{maxBadges})</span>
+                {hasMrVersatile && <span className="text-amber-400 font-normal">Mr. Versatile: +{mrVersatileSlots} slots</span>}
+              </Label>
               <div className="flex flex-wrap gap-1.5">
                 {result.badges.map((b, i) => {
                   const badge = allBadges.find(ab => ab.id === b.badge_id);
                   return (
-                    <Badge key={i} variant="outline" className="text-xs capitalize">
-                      {badge?.abbreviation ?? "?"} · {b.tier}
-                    </Badge>
+                    <div key={i} className="flex items-center gap-0.5">
+                      <Badge variant="outline" className="text-xs capitalize gap-1 pr-1">
+                        {badge?.abbreviation ?? "?"} ·
+                        <select
+                          value={b.tier}
+                          onChange={(e) => updateBadgeTier(i, e.target.value)}
+                          className="bg-transparent border-none text-xs cursor-pointer outline-none capitalize"
+                        >
+                          {BADGE_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <button onClick={() => removeBadge(i)} className="ml-0.5 hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    </div>
                   );
                 })}
+              </div>
+              {/* Add badge */}
+              {result.badges.length < maxBadges && (
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <Search className="h-3 w-3 text-muted-foreground" />
+                    <Input
+                      className="h-8 text-xs"
+                      placeholder="Search badges to add…"
+                      value={badgeSearch}
+                      onChange={e => { setBadgeSearch(e.target.value); setPendingBadgeId(null); }}
+                    />
+                  </div>
+                  {filteredBadges.length > 0 && !pendingBadgeId && (
+                    <div className="absolute z-50 top-full mt-1 w-full rounded-md border bg-popover shadow-lg max-h-36 overflow-y-auto">
+                      {filteredBadges.map(b => (
+                        <button
+                          key={b.id}
+                          onClick={() => setPendingBadgeId(b.id)}
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/50"
+                        >
+                          <span className="font-semibold">{b.abbreviation}</span> — {b.name}
+                          <span className="text-muted-foreground ml-1">({b.effect_type})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {pendingBadgeId && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-muted-foreground">Tier:</span>
+                      {BADGE_TIERS.map(t => (
+                        <button
+                          key={t}
+                          onClick={() => addBadge(pendingBadgeId, t)}
+                          className="px-2 py-0.5 rounded border text-xs capitalize hover:bg-accent/50 border-border"
+                        >
+                          {t}
+                        </button>
+                      ))}
+                      <button onClick={() => setPendingBadgeId(null)} className="text-xs text-muted-foreground hover:text-destructive ml-1">Cancel</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Signature Traits — editable */}
+            <div className="space-y-2">
+              <Label className="text-xs">Signature Traits ({result.traits.length})</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {result.traits.map((t, i) => {
+                  const trait = allTraits.find(at => at.id === t.trait_id);
+                  return (
+                    <div key={i} className="flex items-center gap-0.5">
+                      <Badge variant="outline" className="text-xs capitalize gap-1 pr-1 border-amber-500/50">
+                        {trait?.abbreviation ?? "?"} ·
+                        <select
+                          value={t.tier}
+                          onChange={(e) => updateTraitTier(i, e.target.value)}
+                          className="bg-transparent border-none text-xs cursor-pointer outline-none capitalize"
+                        >
+                          {BADGE_TIERS.map(tier => <option key={tier} value={tier}>{tier}</option>)}
+                        </select>
+                        {t.target_stat && <span className="text-muted-foreground">({STAT_LABELS[t.target_stat] ?? t.target_stat})</span>}
+                        <button onClick={() => removeTrait(i)} className="ml-0.5 hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Add trait */}
+              <div className="relative">
+                <div className="flex items-center gap-2">
+                  <Search className="h-3 w-3 text-muted-foreground" />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Search traits to add…"
+                    value={traitSearch}
+                    onChange={e => { setTraitSearch(e.target.value); setPendingTraitId(null); }}
+                  />
+                </div>
+                {filteredTraits.length > 0 && !pendingTraitId && (
+                  <div className="absolute z-50 top-full mt-1 w-full rounded-md border bg-popover shadow-lg max-h-36 overflow-y-auto">
+                    {filteredTraits.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => setPendingTraitId(t.id)}
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent/50"
+                      >
+                        <span className="font-semibold">{t.abbreviation}</span> — {t.name}
+                        {t.condition_type && <span className="text-muted-foreground ml-1">({t.condition_type})</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {pendingTraitId && (() => {
+                  const pendingTrait = allTraits.find(t => t.id === pendingTraitId);
+                  const needsStat = pendingTrait && pendingTrait.condition_type !== "passive";
+                  return (
+                    <div className="flex flex-col gap-1 mt-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Tier:</span>
+                        {BADGE_TIERS.map(t => (
+                          <button
+                            key={t}
+                            onClick={() => {
+                              if (!needsStat) {
+                                addTrait(pendingTraitId, t, null);
+                              } else {
+                                setPendingTraitTier(t);
+                              }
+                            }}
+                            className={cn(
+                              "px-2 py-0.5 rounded border text-xs capitalize hover:bg-accent/50 border-border",
+                              pendingTraitTier === t && needsStat ? "border-primary bg-primary/15" : ""
+                            )}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                        <button onClick={() => { setPendingTraitId(null); setPendingTraitTier("base"); }} className="text-xs text-muted-foreground hover:text-destructive ml-1">Cancel</button>
+                      </div>
+                      {needsStat && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="text-xs text-muted-foreground">Target stat:</span>
+                          {STAT_KEYS.map(s => (
+                            <button
+                              key={s}
+                              onClick={() => addTrait(pendingTraitId, pendingTraitTier, s)}
+                              className="px-1.5 py-0.5 rounded border text-xs font-mono hover:bg-accent/50 border-border"
+                            >
+                              {STAT_LABELS[s]}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
