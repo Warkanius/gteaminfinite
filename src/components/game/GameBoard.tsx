@@ -175,7 +175,7 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
     setCurrentCpuStats((prev) => [...prev, cResult]);
     setLastBadgeActivations(allActivations);
     setPhase("result");
-  }, [currentStat, userCard, cpuCard, userStars, cpuStars, difficultyStars, badgeMap, userLineup, cpuLineup]);
+  }, [currentStat, userCard, cpuCard, userStars, cpuStars, difficultyStars, badgeMap, traitMap, gameContext, userLineup, cpuLineup]);
 
   const handleAutoRoll = useCallback(() => {
     setRolling(true);
