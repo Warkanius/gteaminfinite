@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable, Column } from "@/components/admin/DataTable";
@@ -6,6 +6,7 @@ import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { StatInput } from "@/components/admin/StatInput";
 import { HslColorPicker } from "@/components/admin/HslColorPicker";
+import { PlayerWizard } from "@/components/admin/PlayerWizard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,11 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pencil, Trash2, X, Copy, Zap, Import, RefreshCw } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Pencil, Trash2, X, Copy, Zap, RefreshCw, Wand2, Search } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
 import { generatePlayer } from "@/lib/archetypeEngine";
+import { cn } from "@/lib/utils";
 
 type PlayerCard = Tables<"player_cards"> & {
   card_color_primary?: string | null;
