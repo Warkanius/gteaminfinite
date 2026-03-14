@@ -76,6 +76,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
   const [traitSearch, setTraitSearch] = useState("");
   const [pendingBadgeId, setPendingBadgeId] = useState<string | null>(null);
   const [pendingTraitId, setPendingTraitId] = useState<string | null>(null);
+  const [pendingTraitTier, setPendingTraitTier] = useState<string>("base");
 
   // Reset state when dialog opens
   function resetWizard() {
