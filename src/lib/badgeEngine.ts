@@ -53,7 +53,7 @@ function rerollCount(tier: BadgeTier): number {
 /** Flat bonus dice value added per tier (in addition to rerolls at diamond+) */
 function bonusDiceValue(tier: BadgeTier): number {
   // base=0, gold=0, diamond=+0.5, hof=0, actolytrene=+1
-  const map: Record<BadgeTier, number> = { base: 0, gold: 0, diamond: 0.5, hof: 0, actolytrene: 1 };
+  const map: Record<BadgeTier, number> = { base: 0, gold: 0, hof: 0, diamond: 0.5, actolytrene: 1 };
   return map[tier];
 }
 
