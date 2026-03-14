@@ -496,29 +496,57 @@ export default function AdminPlayers() {
           <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">Badges</h3>
-              <Select onValueChange={(badgeId) => setForm((f) => ({ ...f, badges: [...f.badges, { badge_id: badgeId, tier: "base" }] }))}>
-                <SelectTrigger className="w-48"><SelectValue placeholder="Add badge…" /></SelectTrigger>
-                <SelectContent>{allBadges.filter((b) => !form.badges.some((fb) => fb.badge_id === b.id)).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
-              </Select>
             </div>
-            {/* Bulk import */}
-            <div className="flex gap-2 mb-3">
-              <Textarea
-                placeholder="Bulk import: HG:gold, DS:hof, QFS:base"
-                value={bulkBadgeText}
-                onChange={(e) => setBulkBadgeText(e.target.value)}
-                className="min-h-[40px] h-10 text-xs resize-none"
+            {/* Search to add */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder="Search badges by name or abbreviation…"
+                value={badgeSearch}
+                onChange={(e) => { setBadgeSearch(e.target.value); setPendingBadgeId(null); }}
               />
-              <Button variant="outline" size="sm" onClick={importBulkBadges} className="shrink-0 gap-1">
-                <Import className="h-3 w-3" /> Import
-              </Button>
+              {filteredBadgesForSearch.length > 0 && !pendingBadgeId && (
+                <div className="absolute z-50 top-full mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto">
+                  {filteredBadgesForSearch.map(b => (
+                    <button
+                      key={b.id}
+                      onClick={() => setPendingBadgeId(b.id)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent/50 flex items-center justify-between"
+                    >
+                      <span>{b.name}</span>
+                      <Badge variant="outline" className="text-[10px] font-mono">{b.abbreviation}</Badge>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Tier selector popover inline */}
+              {pendingBadgeId && (
+                <div className="absolute z-50 top-full mt-1 w-full rounded-md border bg-popover shadow-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-2">Choose tier for <span className="font-semibold text-foreground">{allBadges.find(b => b.id === pendingBadgeId)?.name}</span>:</p>
+                  <div className="flex gap-1.5">
+                    {BADGE_TIERS.map(t => (
+                      <button
+                        key={t}
+                        onClick={() => addBadgeWithTier(pendingBadgeId, t)}
+                        className={cn(
+                          "flex-1 px-2 py-1.5 rounded text-xs font-medium border transition-all capitalize hover:border-primary hover:bg-primary/10",
+                          "border-border bg-card"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               {form.badges.map((fb, i) => {
                 const badge = allBadges.find((b) => b.id === fb.badge_id);
                 return (
                   <div key={i} className="flex items-center gap-2 bg-muted/50 rounded p-2">
-                    <span className="flex-1 text-sm">{badge?.name ?? fb.badge_id}</span>
+                    <span className="flex-1 text-sm">{badge?.name ?? fb.badge_id} <span className="text-xs text-muted-foreground font-mono">({badge?.abbreviation})</span></span>
                     <Select value={fb.tier} onValueChange={(t) => setForm((f) => ({ ...f, badges: f.badges.map((b, j) => j === i ? { ...b, tier: t } : b) }))}>
                       <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>{BADGE_TIERS.map((t) => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent>
