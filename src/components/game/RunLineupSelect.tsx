@@ -9,11 +9,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Dices } from "lucide-react";
 import { runRatingToStars, starStatToRunStat } from "@/lib/gameEngine";
 import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
+import { fetchTraitsForCards, type CardTrait } from "@/lib/traitEngine";
 
 interface Props {
   runId: string;
   teamId: string | null;
-  onLineupConfirmed: (playerLineup: any[], cpuLineup: any[], badgeMap: Record<string, CardBadge[]>) => void;
+  onLineupConfirmed: (playerLineup: any[], cpuLineup: any[], badgeMap: Record<string, CardBadge[]>, traitMap: Record<string, CardTrait[]>) => void;
 }
 
 export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
