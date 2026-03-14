@@ -408,7 +408,7 @@ export const BASE_BADGE_SLOTS = 5;
 
 /**
  * Mr. Versatile: Grants extra Signature Trait slots based on tier.
- * Base = +1 slot, Gold = +2, Diamond = +3, HOF = +4, Actolytrene = +5.
+ * Base = +1 slot, Gold = +2, HOF = +3, Diamond = +4, Actolytrene = +5.
  *
  * Returns the number of additional trait slots (0 if no badge).
  */

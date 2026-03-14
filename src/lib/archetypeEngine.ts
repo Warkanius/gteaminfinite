@@ -219,9 +219,9 @@ interface TierRange {
 const TIER_RANGES: Record<number, TierRange> = {
   1: { min: 0, max: 2, badgeCount: [1, 2], badgeTiers: ["base"] },
   2: { min: 1, max: 3, badgeCount: [1, 3], badgeTiers: ["base", "gold"] },
-  3: { min: 1, max: 4, badgeCount: [2, 4], badgeTiers: ["base", "gold", "diamond"] },
-  4: { min: 2, max: 5, badgeCount: [3, 5], badgeTiers: ["gold", "diamond", "hof"] },
-  5: { min: 3, max: 6, badgeCount: [4, 5], badgeTiers: ["diamond", "hof", "actolytrene"] },
+  3: { min: 1, max: 4, badgeCount: [2, 4], badgeTiers: ["base", "gold", "hof"] },
+  4: { min: 2, max: 5, badgeCount: [3, 5], badgeTiers: ["gold", "hof", "diamond"] },
+  5: { min: 3, max: 6, badgeCount: [4, 5], badgeTiers: ["hof", "diamond", "actolytrene"] },
 };
 
 // ── Random helpers ───────────────────────────────────────

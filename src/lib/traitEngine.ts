@@ -232,7 +232,7 @@ export function getTraitBadgeSlots(traits: CardTrait[]): number {
 
 /**
  * Scientist: returns evolution multiplier.
- * base=1.2, gold=1.4, diamond=1.6, hof=1.8, actolytrene=2.0
+ * base=1.2, gold=1.4, hof=1.6, diamond=1.8, actolytrene=2.0
  */
 export function getEvolutionMultiplier(traits: CardTrait[]): number {
   const sci = traits.find(

@@ -41,7 +41,7 @@ const STAT_LABELS: Record<string, string> = {
   stat_3pt: "3PT", stat_mid: "MID", stat_fin: "FIN", stat_dnk: "DNK",
   stat_ast: "AST", stat_stl: "STL", stat_reb: "REB", stat_blk: "BLK", stat_int: "INT",
 };
-const BADGE_TIERS = ["base", "gold", "diamond", "hof", "actolytrene"];
+const BADGE_TIERS = ["base", "gold", "hof", "diamond", "actolytrene"];
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 const ANIMATIONS = ["shimmer", "pulse", "holographic"];
 

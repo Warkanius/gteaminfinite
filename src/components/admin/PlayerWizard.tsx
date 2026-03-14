@@ -117,7 +117,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
       return badge && badge.effect_type === "passive" && badge.name.toLowerCase().includes("versatile");
     });
     if (!mvBadge) return 0;
-    const tierMap: Record<string, number> = { base: 1, gold: 2, diamond: 3, hof: 4, actolytrene: 5 };
+    const tierMap: Record<string, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
     return tierMap[mvBadge.tier] ?? 0;
   }, [result?.badges, allBadges, hasMrVersatile]);
 
