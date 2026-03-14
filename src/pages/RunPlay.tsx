@@ -57,10 +57,11 @@ export default function RunPlay() {
         <RunLineupSelect
           runId={run.id}
           teamId={run.team_id}
-          onLineupConfirmed={(player, cpu, badges) => {
+          onLineupConfirmed={(player, cpu, badges, traits) => {
             setPlayerLineup(player);
             setCpuLineup(cpu);
             setBadgeMap(badges);
+            setTraitMap(traits);
             setPhase("game");
           }}
         />
