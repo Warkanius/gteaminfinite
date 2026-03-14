@@ -308,6 +308,11 @@ export default function AdminPlayers() {
               </div>
             )}
           />
+          <div className="flex justify-end mt-3">
+            <Button variant="outline" size="sm" onClick={openWizardForNew} className="gap-1">
+              <Wand2 className="h-3.5 w-3.5" /> Create with Wizard
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
