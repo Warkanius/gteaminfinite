@@ -22,6 +22,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
 import { generatePlayer } from "@/lib/archetypeEngine";
 import { cn } from "@/lib/utils";
+import { BASE_BADGE_SLOTS, getMrVersatileSlots, type CardBadge } from "@/lib/badgeEngine";
 
 type PlayerCard = Tables<"player_cards"> & {
   card_color_primary?: string | null;
@@ -231,7 +232,13 @@ export default function AdminPlayers() {
   }, [badgeSearch, allBadges, form.badges]);
 
   function addBadgeWithTier(badgeId: string, tier: string) {
-    setForm(f => ({ ...f, badges: [...f.badges, { badge_id: badgeId, tier }] }));
+    setForm(f => {
+      if (f.badges.length >= maxBadgeSlots) {
+        toast.error(`Badge slots full (${maxBadgeSlots} max)`);
+        return f;
+      }
+      return { ...f, badges: [...f.badges, { badge_id: badgeId, tier }] };
+    });
     setPendingBadgeId(null);
     setBadgeSearch("");
   }
@@ -276,6 +283,25 @@ export default function AdminPlayers() {
   }
 
   const overallRating = Math.round(STAT_KEYS.reduce((s, k) => s + (Number((form as any)[k]) || 0), 0) / STAT_KEYS.length);
+
+  // Badge slot limit: 5 base + Mr. Versatile bonus from badges
+  const mrVersatileExtra = useMemo(() => {
+    const formBadgesAsCardBadges: CardBadge[] = form.badges.map(fb => {
+      const badge = allBadges.find(b => b.id === fb.badge_id);
+      return badge ? {
+        badgeId: badge.id,
+        name: badge.name,
+        abbreviation: badge.abbreviation,
+        affected_stat: badge.affected_stat,
+        effect_type: badge.effect_type,
+        tier: fb.tier as any,
+      } : null;
+    }).filter(Boolean) as CardBadge[];
+    return getMrVersatileSlots(formBadgesAsCardBadges).extraSlots;
+  }, [form.badges, allBadges]);
+  const maxBadgeSlots = BASE_BADGE_SLOTS + mrVersatileExtra;
+  const badgeSlotsRemaining = maxBadgeSlots - form.badges.length;
+
   const gemTierMap = Object.fromEntries(gemTiers.map((g) => [g.id, g.name]));
   const teamMap = Object.fromEntries(teams.map((t) => [t.id, t.name]));
 
@@ -504,15 +530,17 @@ export default function AdminPlayers() {
           {/* Badges */}
           <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">Badges</h3>
+              <h3 className="font-semibold text-sm">Badges ({form.badges.length}/{maxBadgeSlots})</h3>
+              {mrVersatileExtra > 0 && <span className="text-xs text-amber-400">Mr. Versatile: +{mrVersatileExtra} slots</span>}
             </div>
             {/* Search to add */}
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-8"
-                placeholder="Search badges by name or abbreviation…"
+                placeholder={badgeSlotsRemaining <= 0 ? "All badge slots filled" : "Search badges by name or abbreviation…"}
                 value={badgeSearch}
+                disabled={badgeSlotsRemaining <= 0}
                 onChange={(e) => { setBadgeSearch(e.target.value); setPendingBadgeId(null); }}
               />
               {filteredBadgesForSearch.length > 0 && !pendingBadgeId && (
