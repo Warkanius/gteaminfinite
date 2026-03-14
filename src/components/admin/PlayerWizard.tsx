@@ -32,7 +32,7 @@ const MODIFIER_CHIPS = [
 ];
 
 const STEPS = ["Identity", "Playstyle", "Strengths", "Review"];
-const BADGE_TIERS = ["base", "gold", "diamond", "hof", "actolytrene"];
+const BADGE_TIERS = ["base", "gold", "hof", "diamond", "actolytrene"];
 
 type GemTier = Tables<"gem_tiers">;
 type PlayerCard = Tables<"player_cards">;
