@@ -596,6 +596,16 @@ export default function AdminPlayers() {
         onConfirm={() => deleteId && deleteMut.mutate(deleteId)}
         loading={deleteMut.isPending}
       />
+
+      <PlayerWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onAccept={handleWizardAccept}
+        gemTiers={gemTiers}
+        players={players as PlayerCard[]}
+        allBadges={allBadges}
+        editingPlayer={wizardEditPlayer}
+      />
     </div>
   );
 }
