@@ -525,7 +525,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
             </div>
 
             <div className="text-center text-2xl font-mono font-bold">
-              OVR {"⭐".repeat(Math.min(ovrStars, 6))}
+              OVR {"⭐".repeat(Math.min(ovrStars, 6))}{ovrStars > 6 ? ` +${ovrStars - 6}🔥` : ""}
             </div>
 
             {/* Badges — editable */}
