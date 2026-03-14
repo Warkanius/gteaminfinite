@@ -204,21 +204,24 @@ const MODIFIERS: Modifier[] = [
   },
 ];
 
-// ── Tier Scaling ─────────────────────────────────────────
+// ── Tier Scaling (0-6 star scale) ────────────────────────
 
 interface TierRange {
+  /** Minimum stat value (0-6 scale) */
   min: number;
+  /** Maximum stat value (0-6 scale) */
   max: number;
+  /** Badge count range — hard-capped at 5 unless Mr. Versatile adds slots */
   badgeCount: [number, number];
   badgeTiers: string[];
 }
 
 const TIER_RANGES: Record<number, TierRange> = {
-  1: { min: 45, max: 65, badgeCount: [1, 3], badgeTiers: ["base"] },
-  2: { min: 55, max: 75, badgeCount: [2, 4], badgeTiers: ["base", "gold"] },
-  3: { min: 65, max: 82, badgeCount: [3, 6], badgeTiers: ["base", "gold", "diamond"] },
-  4: { min: 75, max: 90, badgeCount: [5, 8], badgeTiers: ["gold", "diamond", "hof"] },
-  5: { min: 85, max: 99, badgeCount: [6, 10], badgeTiers: ["diamond", "hof", "actolytrene"] },
+  1: { min: 0, max: 2, badgeCount: [1, 2], badgeTiers: ["base"] },
+  2: { min: 1, max: 3, badgeCount: [1, 3], badgeTiers: ["base", "gold"] },
+  3: { min: 1, max: 4, badgeCount: [2, 4], badgeTiers: ["base", "gold", "diamond"] },
+  4: { min: 2, max: 5, badgeCount: [3, 5], badgeTiers: ["gold", "diamond", "hof"] },
+  5: { min: 3, max: 6, badgeCount: [4, 5], badgeTiers: ["diamond", "hof", "actolytrene"] },
 };
 
 // ── Random helpers ───────────────────────────────────────
