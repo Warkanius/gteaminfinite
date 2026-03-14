@@ -85,9 +85,15 @@ function boostAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
 
 // ─── Passive badge helpers ───
 
-/** Hidden Gem tier level (0 = no badge) */
-function hiddenGemLevel(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 1, gold: 1, diamond: 1, hof: 1, actolytrene: 1 };
+/** Hidden Gem: penalty reduction fraction per tier (1.0 = full negation) */
+function hiddenGemPenaltyReduction(tier: BadgeTier): number {
+  const map: Record<BadgeTier, number> = { base: 0.5, gold: 1.0, diamond: 1.0, hof: 1.0, actolytrene: 1.0 };
+  return map[tier];
+}
+
+/** Hidden Gem: bonus multiplier added on top (only at diamond+) */
+function hiddenGemBoostPercent(tier: BadgeTier): number {
+  const map: Record<BadgeTier, number> = { base: 0, gold: 0, diamond: 0.05, hof: 0.10, actolytrene: 0.15 };
   return map[tier];
 }
 
