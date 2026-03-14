@@ -277,6 +277,25 @@ export default function AdminPlayers() {
   }
 
   const overallRating = Math.round(STAT_KEYS.reduce((s, k) => s + (Number((form as any)[k]) || 0), 0) / STAT_KEYS.length);
+
+  // Badge slot limit: 5 base + Mr. Versatile bonus from badges
+  const mrVersatileExtra = useMemo(() => {
+    const formBadgesAsCardBadges: CardBadge[] = form.badges.map(fb => {
+      const badge = allBadges.find(b => b.id === fb.badge_id);
+      return badge ? {
+        badgeId: badge.id,
+        name: badge.name,
+        abbreviation: badge.abbreviation,
+        affected_stat: badge.affected_stat,
+        effect_type: badge.effect_type,
+        tier: fb.tier as any,
+      } : null;
+    }).filter(Boolean) as CardBadge[];
+    return getMrVersatileSlots(formBadgesAsCardBadges).extraSlots;
+  }, [form.badges, allBadges]);
+  const maxBadgeSlots = BASE_BADGE_SLOTS + mrVersatileExtra;
+  const badgeSlotsRemaining = maxBadgeSlots - form.badges.length;
+
   const gemTierMap = Object.fromEntries(gemTiers.map((g) => [g.id, g.name]));
   const teamMap = Object.fromEntries(teams.map((t) => [t.id, t.name]));
 
