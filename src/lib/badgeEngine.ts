@@ -87,7 +87,7 @@ function boostAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
 
 /** Hidden Gem: penalty reduction fraction per tier (1.0 = full negation) */
 function hiddenGemPenaltyReduction(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 0.5, gold: 1.0, diamond: 1.0, hof: 1.0, actolytrene: 1.0 };
+  const map: Record<BadgeTier, number> = { base: 0.5, gold: 1.0, hof: 1.0, diamond: 1.0, actolytrene: 1.0 };
   return map[tier];
 }
 
