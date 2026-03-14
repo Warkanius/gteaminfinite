@@ -65,7 +65,7 @@ function bonusTypeDiceValue(tier: BadgeTier): number {
 
 /** Bonus-type badge: number of rerolls on the bonus dice (gold+) */
 function bonusTypeRerolls(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 0, gold: 1, diamond: 2, hof: 0, actolytrene: 0 };
+  const map: Record<BadgeTier, number> = { base: 0, gold: 1, hof: 2, diamond: 0, actolytrene: 0 };
   return map[tier];
 }
 
