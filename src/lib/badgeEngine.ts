@@ -343,18 +343,68 @@ export function resolveBadgeEffects(
 // ─── Passive badge API ───
 
 /**
- * Hidden Gem: Protects a card from difficulty-based performance penalties.
- * When a card has this badge and the difficulty is higher than the card's rating,
- * the negative scaling modifier is nullified (clamped to 1.0 instead of < 1.0).
- * It does NOT grant a bonus when difficulty is lower — it only prevents the penalty.
+ * Hidden Gem: Adjusts the difficulty modifier based on tier.
  *
- * Returns true if the card has the Hidden Gem badge (any tier — effect is binary).
+ * - Base: reduces difficulty penalty by 50%
+ * - Gold: fully negates difficulty penalty
+ * - Diamond: negates penalty + 5% boost
+ * - HOF: negates penalty + 10% boost
+ * - Actolytrene: negates penalty + 15% boost
+ *
+ * Returns the adjusted difficulty modifier and an optional activation.
+ * If the card has no Hidden Gem badge, returns the original modifier unchanged.
  */
+export function applyHiddenGem(
+  difficultyModifier: number,
+  badges: CardBadge[],
+): { adjustedModifier: number; activation: BadgeActivation | null } {
+  const badge = badges.find(
+    (b) => b.effect_type === "passive" && b.name.toLowerCase().includes("hidden gem"),
+  );
+  if (!badge) return { adjustedModifier: difficultyModifier, activation: null };
+
+  let adjusted = difficultyModifier;
+  const parts: string[] = [];
+
+  // If there's a penalty (modifier < 1.0), reduce or negate it
+  if (difficultyModifier < 1.0) {
+    const penalty = 1.0 - difficultyModifier; // e.g. 0.2 for a 2-star gap
+    const reduction = hiddenGemPenaltyReduction(badge.tier);
+    adjusted = 1.0 - penalty * (1.0 - reduction);
+    if (reduction >= 1.0) {
+      parts.push("penalty negated");
+    } else {
+      parts.push(`${Math.round(reduction * 100)}% penalty reduced`);
+    }
+  }
+
+  // Diamond+ adds a boost on top
+  const boost = hiddenGemBoostPercent(badge.tier);
+  if (boost > 0) {
+    adjusted += boost;
+    parts.push(`+${Math.round(boost * 100)}% boost`);
+  }
+
+  return {
+    adjustedModifier: adjusted,
+    activation: {
+      badgeName: badge.name,
+      abbreviation: badge.abbreviation,
+      tier: badge.tier,
+      effect: parts.join(", "),
+    },
+  };
+}
+
+/** @deprecated Use applyHiddenGem instead */
 export function hasHiddenGem(badges: CardBadge[]): boolean {
   return badges.some(
     (b) => b.effect_type === "passive" && b.name.toLowerCase().includes("hidden gem"),
   );
 }
+
+/** Default badge slot count per player card */
+export const BASE_BADGE_SLOTS = 5;
 
 /**
  * Mr. Versatile: Grants extra Signature Trait slots based on tier.
