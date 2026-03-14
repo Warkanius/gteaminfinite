@@ -12,6 +12,10 @@ import {
   resolveBadgeEffects, getTeammateBadges,
   type CardBadge, type BadgeActivation,
 } from "@/lib/badgeEngine";
+import {
+  resolveTraitBoosts, resolveTeammateTraitBoosts, getTeammateTraits,
+  computeCardAvgStat, type CardTrait, type TraitActivation,
+} from "@/lib/traitEngine";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,6 +25,7 @@ interface Props {
   playerLineup: any[];
   cpuLineup: any[];
   badgeMap: Record<string, CardBadge[]>;
+  traitMap: Record<string, CardTrait[]>;
   onGameComplete: () => void;
 }
 
