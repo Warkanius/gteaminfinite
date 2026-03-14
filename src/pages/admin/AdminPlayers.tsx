@@ -232,7 +232,13 @@ export default function AdminPlayers() {
   }, [badgeSearch, allBadges, form.badges]);
 
   function addBadgeWithTier(badgeId: string, tier: string) {
-    setForm(f => ({ ...f, badges: [...f.badges, { badge_id: badgeId, tier }] }));
+    setForm(f => {
+      if (f.badges.length >= maxBadgeSlots) {
+        toast.error(`Badge slots full (${maxBadgeSlots} max)`);
+        return f;
+      }
+      return { ...f, badges: [...f.badges, { badge_id: badgeId, tier }] };
+    });
     setPendingBadgeId(null);
     setBadgeSearch("");
   }
