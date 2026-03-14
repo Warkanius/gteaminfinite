@@ -56,8 +56,8 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
   const [autoUserDice, setAutoUserDice] = useState<(number | null)[]>([null]);
   const [autoCpuDice, setAutoCpuDice] = useState<(number | null)[]>([null]);
 
-  // Badge activations for display
-  const [lastBadgeActivations, setLastBadgeActivations] = useState<BadgeActivation[]>([]);
+  // Badge + trait activations for display
+  const [lastBadgeActivations, setLastBadgeActivations] = useState<(BadgeActivation | TraitActivation)[]>([]);
 
   // Running score
   const userRunningScore = useMemo(
