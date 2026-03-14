@@ -78,6 +78,7 @@ export default function Play() {
     setUserLineup([]);
     setCpuLineup([]);
     setBadgeMap({});
+    setTraitMap({});
     setGameResult(null);
   }, []);
 
