@@ -30,8 +30,8 @@ export type BadgeTier = "base" | "gold" | "diamond" | "hof" | "actolytrene";
 const TIER_ORDER: Record<BadgeTier, number> = {
   base: 0,
   gold: 1,
-  diamond: 2,
-  hof: 3,
+  hof: 2,
+  diamond: 3,
   actolytrene: 4,
 };
 
