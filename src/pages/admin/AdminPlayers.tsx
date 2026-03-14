@@ -220,35 +220,56 @@ export default function AdminPlayers() {
     toast.success(result.summary);
   }
 
-  function importBulkBadges() {
-    if (!bulkBadgeText.trim()) return;
-    const entries = bulkBadgeText.split(",").map((s) => s.trim()).filter(Boolean);
-    const added: { badge_id: string; tier: string }[] = [];
-    const notFound: string[] = [];
+  // Badge search filtering
+  const filteredBadgesForSearch = useMemo(() => {
+    if (!badgeSearch.trim()) return [];
+    const q = badgeSearch.toLowerCase();
+    return allBadges
+      .filter(b => !form.badges.some(fb => fb.badge_id === b.id))
+      .filter(b => b.name.toLowerCase().includes(q) || b.abbreviation.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [badgeSearch, allBadges, form.badges]);
 
-    for (const entry of entries) {
-      const [abbr, tierRaw] = entry.split(":").map((s) => s.trim());
-      const tier = tierRaw && BADGE_TIERS.includes(tierRaw.toLowerCase()) ? tierRaw.toLowerCase() : "base";
-      const badge = allBadges.find((b) => b.abbreviation.toLowerCase() === abbr.toLowerCase());
-      if (badge) {
-        if (!form.badges.some((fb) => fb.badge_id === badge.id)) {
-          added.push({ badge_id: badge.id, tier });
-        }
-      } else {
-        notFound.push(abbr);
-      }
-    }
+  function addBadgeWithTier(badgeId: string, tier: string) {
+    setForm(f => ({ ...f, badges: [...f.badges, { badge_id: badgeId, tier }] }));
+    setPendingBadgeId(null);
+    setBadgeSearch("");
+  }
 
-    if (added.length > 0) {
-      setForm((f) => ({ ...f, badges: [...f.badges, ...added] }));
+  function openWizardForNew() {
+    setWizardEditPlayer(null);
+    setWizardOpen(true);
+  }
+
+  function openWizardForEdit(player: PlayerCard) {
+    setWizardEditPlayer(player);
+    setWizardOpen(true);
+  }
+
+  function handleWizardAccept(result: { stats: Record<string, number>; badges: { badge_id: string; tier: string }[]; positions: [string, string | null]; summary: string }) {
+    if (wizardEditPlayer) {
+      // Editing existing — update form state
+      setForm(f => ({
+        ...f,
+        ...result.stats,
+        position1: result.positions[0],
+        position2: result.positions[1],
+        badges: result.badges,
+      }));
+      toast.success(`Wizard applied: ${result.summary}`);
+    } else {
+      // Creating new — open form dialog pre-filled
+      setForm({
+        ...emptyForm(),
+        ...result.stats,
+        position1: result.positions[0],
+        position2: result.positions[1],
+        badges: result.badges,
+      });
+      setEditId(null);
+      setDialogOpen(true);
+      toast.success(`Wizard generated: ${result.summary}`);
     }
-    if (notFound.length > 0) {
-      toast.error(`Unknown abbreviations: ${notFound.join(", ")}`);
-    }
-    if (added.length > 0) {
-      toast.success(`Imported ${added.length} badge(s)`);
-    }
-    setBulkBadgeText("");
   }
 
   const overallRating = Math.round(STAT_KEYS.reduce((s, k) => s + (Number((form as any)[k]) || 0), 0) / STAT_KEYS.length);
