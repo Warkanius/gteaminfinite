@@ -159,14 +159,26 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     const defender = cpuLineup[defenderIdx];
     const defRating = defender._runRating ?? 60;
 
-    // Apply badge effects to offense
+    // Apply trait boosts to offense FIRST
+    const shooterTraits = traitMap[shooter.id] ?? [];
+    const shooterTeammateTraits = getTeammateTraits(traitMap, playerLineup, shooter.id);
+    const shooterAvg = computeCardAvgStat(shooter);
+    const offTraitResult = resolveTraitBoosts(
+      selectedStat, shooter[selectedStat], shooterTraits, runsContext, "runs",
+      defender.rating, shooter.rating, shooterAvg,
+    );
+    const offTeammateTraitResult = resolveTeammateTraitBoosts(
+      selectedStat, offTraitResult.adjustedStat, shooterTeammateTraits, "runs",
+    );
+
+    // Apply badge effects to offense (with trait-adjusted stat)
     const shooterBadges = badgeMap[shooter.id] ?? [];
     const defenderBadges = badgeMap[defender.id] ?? [];
     const shooterTeammateBadges = getTeammateBadges(badgeMap, playerLineup, shooter.id);
 
     const offDiceRaw = rollDice(getRunDiceCount(offRating)).dice;
     const offBadge = resolveBadgeEffects(
-      selectedStat, shooter[selectedStat], offDiceRaw,
+      selectedStat, offTeammateTraitResult.adjustedStat, offDiceRaw,
       shooterBadges, defenderBadges, shooterTeammateBadges, "runs",
     );
 
