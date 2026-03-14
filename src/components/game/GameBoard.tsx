@@ -33,7 +33,7 @@ interface GameBoardProps {
   gameContext: GameContext;
 }
 
-export function GameBoard({ userLineup, cpuLineup, badgeMap, onComplete, difficultyStars }: GameBoardProps) {
+export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplete, difficultyStars, gameContext }: GameBoardProps) {
   const [playerIdx, setPlayerIdx] = useState(0);
   const [statIdx, setStatIdx] = useState(0);
   const [useOwnDice, setUseOwnDice] = useState(false);
