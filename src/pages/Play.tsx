@@ -60,10 +60,11 @@ export default function Play() {
 
   const isDomination = !!domState.dominationGameId;
 
-  const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[], badges: Record<string, CardBadge[]>) => {
+  const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[], badges: Record<string, CardBadge[]>, traits: Record<string, CardTrait[]>) => {
     setUserLineup(user);
     setCpuLineup(cpu);
     setBadgeMap(badges);
+    setTraitMap(traits);
     setPhase("game");
   }, []);
 
