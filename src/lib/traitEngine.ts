@@ -44,8 +44,8 @@ export interface GameContext {
 const TIER_LEVEL: Record<TraitTier, number> = {
   base: 1,
   gold: 2,
-  diamond: 3,
-  hof: 4,
+  hof: 3,
+  diamond: 4,
   actolytrene: 5,
 };
 
