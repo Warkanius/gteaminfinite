@@ -46,7 +46,7 @@ export interface BadgeActivation {
 
 /** Number of rerolls granted per tier */
 function rerollCount(tier: BadgeTier): number {
-  const map: Record<BadgeTier, number> = { base: 1, gold: 2, diamond: 2, hof: 3, actolytrene: 3 };
+  const map: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 2, diamond: 3, actolytrene: 3 };
   return map[tier];
 }
 
