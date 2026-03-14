@@ -14,7 +14,7 @@ import {
   rollDice, type StatRollResult, type CardGameResult, type StatKey,
 } from "@/lib/gameEngine";
 import {
-  resolveBadgeEffects, getTeammateBadges,
+  resolveBadgeEffects, getTeammateBadges, applyHiddenGem,
   type CardBadge, type BadgeActivation,
 } from "@/lib/badgeEngine";
 import {
