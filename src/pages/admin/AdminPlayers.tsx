@@ -609,6 +609,7 @@ export default function AdminPlayers() {
         gemTiers={gemTiers}
         players={players as PlayerCard[]}
         allBadges={allBadges}
+        allTraits={allTraits}
         editingPlayer={wizardEditPlayer}
       />
     </div>
