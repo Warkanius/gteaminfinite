@@ -235,7 +235,160 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
-// ── Main Generator ───────────────────────────────────────
+// ── NBA Legend Profiles ──────────────────────────────────
+
+export interface LegendProfile {
+  name: string;
+  archetype: string;
+  modifiers: string[];
+  strengthStats: (keyof StatProfile)[];
+  weakStats: (keyof StatProfile)[];
+}
+
+export const NBA_LEGENDS: Record<string, LegendProfile> = {
+  "lebron james": { name: "LeBron James", archetype: "inside-out", modifiers: ["athletic", "high iq"], strengthStats: ["stat_fin", "stat_ast", "stat_int"], weakStats: ["stat_3pt"] },
+  "kobe bryant": { name: "Kobe Bryant", archetype: "inside-out", modifiers: ["elite shooting"], strengthStats: ["stat_mid", "stat_fin"], weakStats: ["stat_reb"] },
+  "steph curry": { name: "Steph Curry", archetype: "sharpshooter", modifiers: ["elite shooter", "high iq"], strengthStats: ["stat_3pt", "stat_int"], weakStats: ["stat_blk", "stat_reb"] },
+  "michael jordan": { name: "Michael Jordan", archetype: "slasher", modifiers: ["athletic", "elite defense"], strengthStats: ["stat_fin", "stat_mid", "stat_stl"], weakStats: ["stat_3pt"] },
+  "magic johnson": { name: "Magic Johnson", archetype: "playmaker", modifiers: ["high iq"], strengthStats: ["stat_ast", "stat_int", "stat_reb"], weakStats: ["stat_3pt"] },
+  "shaquille o'neal": { name: "Shaquille O'Neal", archetype: "paint beast", modifiers: ["athletic"], strengthStats: ["stat_fin", "stat_dnk", "stat_reb", "stat_blk"], weakStats: ["stat_3pt", "stat_mid"] },
+  "kevin durant": { name: "Kevin Durant", archetype: "inside-out", modifiers: ["elite shooting"], strengthStats: ["stat_3pt", "stat_mid", "stat_fin"], weakStats: ["stat_stl"] },
+  "tim duncan": { name: "Tim Duncan", archetype: "post scorer", modifiers: ["high iq", "elite defense"], strengthStats: ["stat_fin", "stat_reb", "stat_blk"], weakStats: ["stat_3pt"] },
+  "hakeem olajuwon": { name: "Hakeem Olajuwon", archetype: "rim protector", modifiers: ["athletic"], strengthStats: ["stat_blk", "stat_fin", "stat_reb"], weakStats: ["stat_3pt"] },
+  "larry bird": { name: "Larry Bird", archetype: "sharpshooter", modifiers: ["high iq"], strengthStats: ["stat_3pt", "stat_mid", "stat_reb"], weakStats: ["stat_dnk"] },
+  "allen iverson": { name: "Allen Iverson", archetype: "combo guard", modifiers: ["athletic"], strengthStats: ["stat_fin", "stat_mid", "stat_stl"], weakStats: ["stat_reb", "stat_blk"] },
+  "giannis antetokounmpo": { name: "Giannis Antetokounmpo", archetype: "slasher", modifiers: ["athletic"], strengthStats: ["stat_fin", "stat_dnk", "stat_reb", "stat_blk"], weakStats: ["stat_3pt", "stat_mid"] },
+  "kawhi leonard": { name: "Kawhi Leonard", archetype: "two-way", modifiers: ["elite defense"], strengthStats: ["stat_3pt", "stat_stl", "stat_fin"], weakStats: ["stat_ast"] },
+  "dirk nowitzki": { name: "Dirk Nowitzki", archetype: "stretch big", modifiers: ["elite shooting"], strengthStats: ["stat_3pt", "stat_mid", "stat_reb"], weakStats: ["stat_stl"] },
+  "charles barkley": { name: "Charles Barkley", archetype: "paint beast", modifiers: ["athletic"], strengthStats: ["stat_reb", "stat_fin", "stat_dnk"], weakStats: ["stat_3pt", "stat_blk"] },
+  "scottie pippen": { name: "Scottie Pippen", archetype: "lockdown defender", modifiers: ["high iq"], strengthStats: ["stat_stl", "stat_ast", "stat_fin"], weakStats: ["stat_3pt"] },
+  "jason kidd": { name: "Jason Kidd", archetype: "playmaker", modifiers: ["elite defense"], strengthStats: ["stat_ast", "stat_int", "stat_stl"], weakStats: ["stat_fin"] },
+  "kevin garnett": { name: "Kevin Garnett", archetype: "lockdown defender", modifiers: ["athletic", "high iq"], strengthStats: ["stat_blk", "stat_reb", "stat_mid"], weakStats: ["stat_3pt"] },
+  "isaiah thomas": { name: "Isiah Thomas", archetype: "combo guard", modifiers: ["high iq"], strengthStats: ["stat_ast", "stat_fin", "stat_int"], weakStats: ["stat_reb", "stat_blk"] },
+  "wilt chamberlain": { name: "Wilt Chamberlain", archetype: "paint beast", modifiers: ["athletic"], strengthStats: ["stat_fin", "stat_dnk", "stat_reb", "stat_blk"], weakStats: ["stat_3pt", "stat_mid"] },
+};
+
+// ── Structured Profile Input ─────────────────────────────
+
+export interface WizardProfile {
+  archetype: string;
+  modifiers: string[];
+  strengthStats: (keyof StatProfile)[];
+  weakStats: (keyof StatProfile)[];
+  /** If provided, uses this player's stats as the base weight profile */
+  inspiredByStats?: Record<string, number> | null;
+}
+
+export function generateFromProfile(
+  profile: WizardProfile,
+  starRating: number,
+  availableBadges: { id: string; abbreviation: string; affected_stat: string | null; effect_type: string }[],
+): GeneratedPlayer {
+  const stars = clamp(starRating, 1, 5);
+  const tier = TIER_RANGES[stars];
+
+  // 1. Find archetype by name
+  const input = profile.archetype.toLowerCase().trim();
+  let bestArchetype = ARCHETYPES[0];
+  for (const arch of ARCHETYPES) {
+    for (const kw of arch.keywords) {
+      if (input.includes(kw)) { bestArchetype = arch; break; }
+    }
+  }
+
+  // 2. Start with archetype weights (or normalize from an existing player's stats)
+  const weights: StatProfile = profile.inspiredByStats
+    ? normalizeStatsToWeights(profile.inspiredByStats)
+    : { ...bestArchetype.weights };
+
+  const config: ModifierConfig = {
+    badgeCountMult: 1,
+    badgeTierBoost: 0,
+    varianceMult: 1,
+    statSpreadMult: 1,
+  };
+
+  // 3. Apply modifiers
+  const appliedMods: string[] = [];
+  for (const modKw of profile.modifiers) {
+    const lower = modKw.toLowerCase().trim();
+    for (const mod of MODIFIERS) {
+      for (const kw of mod.keywords) {
+        if (lower.includes(kw) || kw.includes(lower)) {
+          mod.apply(weights, config);
+          appliedMods.push(kw);
+          break;
+        }
+      }
+    }
+  }
+
+  // 4. Apply strength/weakness boosts
+  for (const s of profile.strengthStats) {
+    weights[s] = Math.min(1, weights[s] + 0.2);
+  }
+  for (const s of profile.weakStats) {
+    weights[s] = Math.max(0, weights[s] - 0.25);
+  }
+
+  // 5. Generate stats from weights
+  const range = tier.max - tier.min;
+  const stats: Record<string, number> = {};
+  for (const k of STAT_KEYS) {
+    const base = tier.min + weights[k] * range * config.statSpreadMult;
+    const variance = rand(-3, 3) * config.varianceMult;
+    stats[k] = clamp(Math.round(base + variance), Math.max(25, tier.min - 15), 99);
+  }
+
+  // 6. Generate badges
+  const badgeCountRange = tier.badgeCount;
+  let numBadges = rand(badgeCountRange[0], badgeCountRange[1]);
+  numBadges = Math.round(numBadges * config.badgeCountMult);
+  numBadges = clamp(numBadges, 1, 15);
+
+  const scoredBadges = availableBadges.map((b) => {
+    let score = Math.random() * 0.3;
+    if (b.affected_stat && bestArchetype.focusStats.includes(b.affected_stat)) {
+      score += 1;
+    }
+    // Boost badges matching strength stats
+    if (b.affected_stat && profile.strengthStats.includes(b.affected_stat as keyof StatProfile)) {
+      score += 0.5;
+    }
+    return { ...b, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const selectedBadges = scoredBadges.slice(0, numBadges);
+  const availableTiers = [...tier.badgeTiers];
+
+  const badges = selectedBadges.map((b, i) => {
+    let tierIdx = Math.floor((1 - i / numBadges) * availableTiers.length);
+    tierIdx = clamp(tierIdx + Math.floor(config.badgeTierBoost * 0.5), 0, availableTiers.length - 1);
+    tierIdx = clamp(tierIdx + rand(-1, 0), 0, availableTiers.length - 1);
+    return { abbreviation: b.abbreviation, tier: availableTiers[tierIdx] };
+  });
+
+  // 7. Positions
+  const positions: [string, string | null] = [bestArchetype.positions[0], bestArchetype.positions[1]];
+
+  // 8. Summary
+  const modDesc = appliedMods.length > 0 ? `, ${appliedMods.join(", ")}` : "";
+  const summary = `${bestArchetype.name}${modDesc} (${stars}★)`;
+
+  return { stats, badges, positions, summary };
+}
+
+function normalizeStatsToWeights(stats: Record<string, number>): StatProfile {
+  const vals = STAT_KEYS.map(k => Number(stats[k]) || 0);
+  const max = Math.max(...vals, 1);
+  const result: any = {};
+  for (const k of STAT_KEYS) {
+    result[k] = (Number(stats[k]) || 0) / max;
+  }
+  return result as StatProfile;
+}
+
+// ── Legacy Text-Based Generator ─────────────────────────
 
 export function generatePlayer(
   description: string,
@@ -293,9 +446,8 @@ export function generatePlayer(
   numBadges = Math.round(numBadges * config.badgeCountMult);
   numBadges = clamp(numBadges, 1, 15);
 
-  // Score badges by relevance to archetype focus
   const scoredBadges = availableBadges.map((b) => {
-    let score = Math.random() * 0.3; // base randomness
+    let score = Math.random() * 0.3;
     if (b.affected_stat && bestArchetype.focusStats.includes(b.affected_stat)) {
       score += 1;
     }
@@ -306,10 +458,8 @@ export function generatePlayer(
   const availableTiers = [...tier.badgeTiers];
 
   const badges = selectedBadges.map((b, i) => {
-    // Higher-ranked badges get better tiers
     let tierIdx = Math.floor((1 - i / numBadges) * availableTiers.length);
     tierIdx = clamp(tierIdx + Math.floor(config.badgeTierBoost * 0.5), 0, availableTiers.length - 1);
-    // Add some randomness to tier
     tierIdx = clamp(tierIdx + rand(-1, 0), 0, availableTiers.length - 1);
     return { abbreviation: b.abbreviation, tier: availableTiers[tierIdx] };
   });
@@ -323,3 +473,9 @@ export function generatePlayer(
 
   return { stats, badges, positions, summary };
 }
+
+/** Export archetype names for the wizard UI */
+export const ARCHETYPE_LIST = ARCHETYPES.map(a => ({ name: a.name, keywords: a.keywords, positions: a.positions, focusStats: a.focusStats }));
+
+/** Export modifier keywords for the wizard UI */
+export const MODIFIER_LIST = MODIFIERS.map(m => ({ keywords: m.keywords }));
