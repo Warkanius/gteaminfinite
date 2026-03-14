@@ -302,7 +302,8 @@ export default function AdminPlayers() {
             addLabel="Add Player"
             actions={(row) => (
               <div className="flex gap-1">
-                <Button size="icon" variant="ghost" onClick={() => openEdit(row)}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => openEdit(row)} title="Edit"><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => openWizardForEdit(row as PlayerCard)} title="Wizard"><Wand2 className="h-4 w-4 text-primary" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             )}
