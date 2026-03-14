@@ -246,25 +246,25 @@ export default function AdminPlayers() {
     setWizardOpen(true);
   }
 
-  function handleWizardAccept(result: { stats: Record<string, number>; badges: { badge_id: string; tier: string }[]; positions: [string, string | null]; summary: string }) {
+  function handleWizardAccept(result: { stats: Record<string, number>; badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[]; positions: [string, string | null]; summary: string }) {
     if (wizardEditPlayer) {
-      // Editing existing — update form state
       setForm(f => ({
         ...f,
         ...result.stats,
         position1: result.positions[0],
         position2: result.positions[1],
         badges: result.badges,
+        traits: result.traits,
       }));
       toast.success(`Wizard applied: ${result.summary}`);
     } else {
-      // Creating new — open form dialog pre-filled
       setForm({
         ...emptyForm(),
         ...result.stats,
         position1: result.positions[0],
         position2: result.positions[1],
         badges: result.badges,
+        traits: result.traits,
       });
       setEditId(null);
       setDialogOpen(true);
