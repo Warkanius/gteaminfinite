@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable, Column } from "@/components/admin/DataTable";
@@ -6,6 +6,7 @@ import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { StatInput } from "@/components/admin/StatInput";
 import { HslColorPicker } from "@/components/admin/HslColorPicker";
+import { PlayerWizard } from "@/components/admin/PlayerWizard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,11 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pencil, Trash2, X, Copy, Zap, Import, RefreshCw } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Pencil, Trash2, X, Copy, Zap, RefreshCw, Wand2, Search } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
 import { generatePlayer } from "@/lib/archetypeEngine";
+import { cn } from "@/lib/utils";
 
 type PlayerCard = Tables<"player_cards"> & {
   card_color_primary?: string | null;
@@ -61,8 +64,11 @@ export default function AdminPlayers() {
   const [editId, setEditId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [bulkBadgeText, setBulkBadgeText] = useState("");
   const [generatorText, setGeneratorText] = useState("");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardEditPlayer, setWizardEditPlayer] = useState<PlayerCard | null>(null);
+  const [badgeSearch, setBadgeSearch] = useState("");
+  const [pendingBadgeId, setPendingBadgeId] = useState<string | null>(null);
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["admin-players"],
@@ -214,35 +220,56 @@ export default function AdminPlayers() {
     toast.success(result.summary);
   }
 
-  function importBulkBadges() {
-    if (!bulkBadgeText.trim()) return;
-    const entries = bulkBadgeText.split(",").map((s) => s.trim()).filter(Boolean);
-    const added: { badge_id: string; tier: string }[] = [];
-    const notFound: string[] = [];
+  // Badge search filtering
+  const filteredBadgesForSearch = useMemo(() => {
+    if (!badgeSearch.trim()) return [];
+    const q = badgeSearch.toLowerCase();
+    return allBadges
+      .filter(b => !form.badges.some(fb => fb.badge_id === b.id))
+      .filter(b => b.name.toLowerCase().includes(q) || b.abbreviation.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [badgeSearch, allBadges, form.badges]);
 
-    for (const entry of entries) {
-      const [abbr, tierRaw] = entry.split(":").map((s) => s.trim());
-      const tier = tierRaw && BADGE_TIERS.includes(tierRaw.toLowerCase()) ? tierRaw.toLowerCase() : "base";
-      const badge = allBadges.find((b) => b.abbreviation.toLowerCase() === abbr.toLowerCase());
-      if (badge) {
-        if (!form.badges.some((fb) => fb.badge_id === badge.id)) {
-          added.push({ badge_id: badge.id, tier });
-        }
-      } else {
-        notFound.push(abbr);
-      }
-    }
+  function addBadgeWithTier(badgeId: string, tier: string) {
+    setForm(f => ({ ...f, badges: [...f.badges, { badge_id: badgeId, tier }] }));
+    setPendingBadgeId(null);
+    setBadgeSearch("");
+  }
 
-    if (added.length > 0) {
-      setForm((f) => ({ ...f, badges: [...f.badges, ...added] }));
+  function openWizardForNew() {
+    setWizardEditPlayer(null);
+    setWizardOpen(true);
+  }
+
+  function openWizardForEdit(player: PlayerCard) {
+    setWizardEditPlayer(player);
+    setWizardOpen(true);
+  }
+
+  function handleWizardAccept(result: { stats: Record<string, number>; badges: { badge_id: string; tier: string }[]; positions: [string, string | null]; summary: string }) {
+    if (wizardEditPlayer) {
+      // Editing existing — update form state
+      setForm(f => ({
+        ...f,
+        ...result.stats,
+        position1: result.positions[0],
+        position2: result.positions[1],
+        badges: result.badges,
+      }));
+      toast.success(`Wizard applied: ${result.summary}`);
+    } else {
+      // Creating new — open form dialog pre-filled
+      setForm({
+        ...emptyForm(),
+        ...result.stats,
+        position1: result.positions[0],
+        position2: result.positions[1],
+        badges: result.badges,
+      });
+      setEditId(null);
+      setDialogOpen(true);
+      toast.success(`Wizard generated: ${result.summary}`);
     }
-    if (notFound.length > 0) {
-      toast.error(`Unknown abbreviations: ${notFound.join(", ")}`);
-    }
-    if (added.length > 0) {
-      toast.success(`Imported ${added.length} badge(s)`);
-    }
-    setBulkBadgeText("");
   }
 
   const overallRating = Math.round(STAT_KEYS.reduce((s, k) => s + (Number((form as any)[k]) || 0), 0) / STAT_KEYS.length);
@@ -271,15 +298,21 @@ export default function AdminPlayers() {
             isLoading={isLoading}
             searchKeys={["name"]}
             searchPlaceholder="Search players…"
-            onAdd={() => { setForm(emptyForm()); setEditId(null); setBulkBadgeText(""); setGeneratorText(""); setDialogOpen(true); }}
+            onAdd={() => { setForm(emptyForm()); setEditId(null); setGeneratorText(""); setDialogOpen(true); }}
             addLabel="Add Player"
             actions={(row) => (
               <div className="flex gap-1">
-                <Button size="icon" variant="ghost" onClick={() => openEdit(row)}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => openEdit(row)} title="Edit"><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => openWizardForEdit(row as PlayerCard)} title="Wizard"><Wand2 className="h-4 w-4 text-primary" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             )}
           />
+          <div className="flex justify-end mt-3">
+            <Button variant="outline" size="sm" onClick={openWizardForNew} className="gap-1">
+              <Wand2 className="h-3.5 w-3.5" /> Create with Wizard
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -469,29 +502,57 @@ export default function AdminPlayers() {
           <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">Badges</h3>
-              <Select onValueChange={(badgeId) => setForm((f) => ({ ...f, badges: [...f.badges, { badge_id: badgeId, tier: "base" }] }))}>
-                <SelectTrigger className="w-48"><SelectValue placeholder="Add badge…" /></SelectTrigger>
-                <SelectContent>{allBadges.filter((b) => !form.badges.some((fb) => fb.badge_id === b.id)).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
-              </Select>
             </div>
-            {/* Bulk import */}
-            <div className="flex gap-2 mb-3">
-              <Textarea
-                placeholder="Bulk import: HG:gold, DS:hof, QFS:base"
-                value={bulkBadgeText}
-                onChange={(e) => setBulkBadgeText(e.target.value)}
-                className="min-h-[40px] h-10 text-xs resize-none"
+            {/* Search to add */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder="Search badges by name or abbreviation…"
+                value={badgeSearch}
+                onChange={(e) => { setBadgeSearch(e.target.value); setPendingBadgeId(null); }}
               />
-              <Button variant="outline" size="sm" onClick={importBulkBadges} className="shrink-0 gap-1">
-                <Import className="h-3 w-3" /> Import
-              </Button>
+              {filteredBadgesForSearch.length > 0 && !pendingBadgeId && (
+                <div className="absolute z-50 top-full mt-1 w-full rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto">
+                  {filteredBadgesForSearch.map(b => (
+                    <button
+                      key={b.id}
+                      onClick={() => setPendingBadgeId(b.id)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent/50 flex items-center justify-between"
+                    >
+                      <span>{b.name}</span>
+                      <Badge variant="outline" className="text-[10px] font-mono">{b.abbreviation}</Badge>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Tier selector popover inline */}
+              {pendingBadgeId && (
+                <div className="absolute z-50 top-full mt-1 w-full rounded-md border bg-popover shadow-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-2">Choose tier for <span className="font-semibold text-foreground">{allBadges.find(b => b.id === pendingBadgeId)?.name}</span>:</p>
+                  <div className="flex gap-1.5">
+                    {BADGE_TIERS.map(t => (
+                      <button
+                        key={t}
+                        onClick={() => addBadgeWithTier(pendingBadgeId, t)}
+                        className={cn(
+                          "flex-1 px-2 py-1.5 rounded text-xs font-medium border transition-all capitalize hover:border-primary hover:bg-primary/10",
+                          "border-border bg-card"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               {form.badges.map((fb, i) => {
                 const badge = allBadges.find((b) => b.id === fb.badge_id);
                 return (
                   <div key={i} className="flex items-center gap-2 bg-muted/50 rounded p-2">
-                    <span className="flex-1 text-sm">{badge?.name ?? fb.badge_id}</span>
+                    <span className="flex-1 text-sm">{badge?.name ?? fb.badge_id} <span className="text-xs text-muted-foreground font-mono">({badge?.abbreviation})</span></span>
                     <Select value={fb.tier} onValueChange={(t) => setForm((f) => ({ ...f, badges: f.badges.map((b, j) => j === i ? { ...b, tier: t } : b) }))}>
                       <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>{BADGE_TIERS.map((t) => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent>
@@ -539,6 +600,16 @@ export default function AdminPlayers() {
         description="This will permanently delete this player card and all associated badges/traits."
         onConfirm={() => deleteId && deleteMut.mutate(deleteId)}
         loading={deleteMut.isPending}
+      />
+
+      <PlayerWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onAccept={handleWizardAccept}
+        gemTiers={gemTiers}
+        players={players as PlayerCard[]}
+        allBadges={allBadges}
+        editingPlayer={wizardEditPlayer}
       />
     </div>
   );
