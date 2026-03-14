@@ -8,6 +8,7 @@ import { ArrowLeft } from "lucide-react";
 import { RunLineupSelect } from "@/components/game/RunLineupSelect";
 import { RunGameBoard } from "@/components/game/RunGameBoard";
 import type { CardBadge } from "@/lib/badgeEngine";
+import type { CardTrait } from "@/lib/traitEngine";
 
 export default function RunPlay() {
   const { runId } = useParams<{ runId: string }>();
@@ -17,6 +18,7 @@ export default function RunPlay() {
   const [playerLineup, setPlayerLineup] = useState<any[]>([]);
   const [cpuLineup, setCpuLineup] = useState<any[]>([]);
   const [badgeMap, setBadgeMap] = useState<Record<string, CardBadge[]>>({});
+  const [traitMap, setTraitMap] = useState<Record<string, CardTrait[]>>({});
   const [phase, setPhase] = useState<"lineup" | "game">("lineup");
 
   const { data: run, isLoading } = useQuery({
@@ -55,10 +57,11 @@ export default function RunPlay() {
         <RunLineupSelect
           runId={run.id}
           teamId={run.team_id}
-          onLineupConfirmed={(player, cpu, badges) => {
+          onLineupConfirmed={(player, cpu, badges, traits) => {
             setPlayerLineup(player);
             setCpuLineup(cpu);
             setBadgeMap(badges);
+            setTraitMap(traits);
             setPhase("game");
           }}
         />
@@ -70,6 +73,7 @@ export default function RunPlay() {
           playerLineup={playerLineup}
           cpuLineup={cpuLineup}
           badgeMap={badgeMap}
+          traitMap={traitMap}
           onGameComplete={() => navigate("/runs")}
         />
       )}

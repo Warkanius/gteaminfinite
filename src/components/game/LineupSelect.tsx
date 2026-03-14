@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import type { GameCard } from "@/pages/Play";
 import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
+import { fetchTraitsForCards, type CardTrait } from "@/lib/traitEngine";
 
 interface LineupSelectProps {
-  onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[], badgeMap: Record<string, CardBadge[]>) => void;
+  onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[], badgeMap: Record<string, CardBadge[]>, traitMap: Record<string, CardTrait[]>) => void;
   dominationGameId?: string;
 }
 
@@ -90,10 +91,13 @@ export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps)
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
       cpuCards = shuffled.slice(0, 5);
     }
-    // Fetch badges for all 10 cards
+    // Fetch badges and traits for all 10 cards
     const allCardIds = [...selectedCards.map(c => c.id), ...cpuCards.map(c => c.id)];
-    const badgeMap = await fetchBadgesForCards(supabase, allCardIds);
-    onConfirm(selectedCards, cpuCards, badgeMap);
+    const [badgeMap, traitMap] = await Promise.all([
+      fetchBadgesForCards(supabase, allCardIds),
+      fetchTraitsForCards(supabase, allCardIds),
+    ]);
+    onConfirm(selectedCards, cpuCards, badgeMap, traitMap);
   };
 
   if (isLoading) {

@@ -12,6 +12,10 @@ import {
   resolveBadgeEffects, getTeammateBadges,
   type CardBadge, type BadgeActivation,
 } from "@/lib/badgeEngine";
+import {
+  resolveTraitBoosts, resolveTeammateTraitBoosts, getTeammateTraits,
+  computeCardAvgStat, type CardTrait, type TraitActivation,
+} from "@/lib/traitEngine";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,6 +25,7 @@ interface Props {
   playerLineup: any[];
   cpuLineup: any[];
   badgeMap: Record<string, CardBadge[]>;
+  traitMap: Record<string, CardTrait[]>;
   onGameComplete: () => void;
 }
 
@@ -32,9 +37,10 @@ interface LogEntry {
   type: "score-player" | "score-cpu" | "miss" | "rebound" | "info" | "badge";
 }
 
-export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameComplete }: Props) {
+export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, onGameComplete }: Props) {
   const { user } = useAuth();
   const targetScore = run.target_score;
+  const runsContext = { isHome: false, isAway: true, isKeyGame: false };
 
   const [playerScore, setPlayerScore] = useState(0);
   const [cpuScore, setCpuScore] = useState(0);
@@ -136,9 +142,10 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameCom
     if (winner) handleGameEnd(winner, newPScore, newCScore);
   };
 
-  const logBadgeActivations = (activations: BadgeActivation[]) => {
+  const logBadgeActivations = (activations: (BadgeActivation | TraitActivation)[]) => {
     for (const ba of activations) {
-      addLog({ msg: `🏅 ${ba.abbreviation} (${ba.tier}) — ${ba.effect}`, type: "badge" });
+      const name = 'badgeName' in ba ? ba.abbreviation : ba.abbreviation;
+      addLog({ msg: `🏅 ${name} (${ba.tier}) — ${ba.effect}`, type: "badge" });
     }
   };
 
@@ -153,27 +160,56 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameCom
     const defender = cpuLineup[defenderIdx];
     const defRating = defender._runRating ?? 60;
 
-    // Apply badge effects to offense
+    // Apply trait boosts to offense FIRST
+    const shooterTraits = traitMap[shooter.id] ?? [];
+    const shooterTeammateTraits = getTeammateTraits(traitMap, playerLineup, shooter.id);
+    const shooterAvg = computeCardAvgStat(shooter);
+    const offTraitResult = resolveTraitBoosts(
+      selectedStat, shooter[selectedStat], shooterTraits, runsContext, "runs",
+      defender.rating, shooter.rating, shooterAvg,
+    );
+    const offTeammateTraitResult = resolveTeammateTraitBoosts(
+      selectedStat, offTraitResult.adjustedStat, shooterTeammateTraits, "runs",
+    );
+
+    // Apply badge effects to offense (with trait-adjusted stat)
     const shooterBadges = badgeMap[shooter.id] ?? [];
     const defenderBadges = badgeMap[defender.id] ?? [];
     const shooterTeammateBadges = getTeammateBadges(badgeMap, playerLineup, shooter.id);
 
     const offDiceRaw = rollDice(getRunDiceCount(offRating)).dice;
     const offBadge = resolveBadgeEffects(
-      selectedStat, shooter[selectedStat], offDiceRaw,
+      selectedStat, offTeammateTraitResult.adjustedStat, offDiceRaw,
       shooterBadges, defenderBadges, shooterTeammateBadges, "runs",
     );
 
-    // Apply badge effects to defense
+    // Apply trait boosts to defense
+    const defTraits = traitMap[defender.id] ?? [];
+    const defTeammateTraitsT = getTeammateTraits(traitMap, cpuLineup, defender.id);
+    const defAvg = computeCardAvgStat(defender);
+    const defTraitResult = resolveTraitBoosts(
+      defStat, defender[defStat], defTraits, runsContext, "runs",
+      shooter.rating, defender.rating, defAvg,
+    );
+    const defTeammateTraitResult = resolveTeammateTraitBoosts(
+      defStat, defTraitResult.adjustedStat, defTeammateTraitsT, "runs",
+    );
+
+    // Apply badge effects to defense (with trait-adjusted stat)
     const defBadgesOwn = badgeMap[defender.id] ?? [];
     const defTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, defender.id);
     const defDiceRaw = rollDice(getRunDiceCount(defRating)).dice;
     const defBadge = resolveBadgeEffects(
-      defStat, defender[defStat], defDiceRaw,
+      defStat, defTeammateTraitResult.adjustedStat, defDiceRaw,
       defBadgesOwn, shooterBadges, defTeammateBadges, "runs",
     );
 
-    logBadgeActivations([...offBadge.activations, ...defBadge.activations]);
+    logBadgeActivations([
+      ...offTraitResult.activations, ...offTeammateTraitResult.activations,
+      ...offBadge.activations,
+      ...defTraitResult.activations, ...defTeammateTraitResult.activations,
+      ...defBadge.activations,
+    ]);
 
     const result = resolveRunShotContest(
       selectedStat, offBadge.adjustedStat, offRating, offBadge.finalDice,
@@ -216,27 +252,56 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, onGameCom
     const defender = playerLineup[defenderIdx];
     const defRating = defender._runRating ?? 60;
 
-    // Badge effects for CPU offense
+    // Apply trait boosts to CPU offense
+    const cpuShooterTraits = traitMap[shooter.id] ?? [];
+    const cpuShooterTeammateTraits = getTeammateTraits(traitMap, cpuLineup, shooter.id);
+    const cpuShooterAvg = computeCardAvgStat(shooter);
+    const cpuOffTraitResult = resolveTraitBoosts(
+      cpuStat, shooter[cpuStat], cpuShooterTraits, runsContext, "runs",
+      defender.rating, shooter.rating, cpuShooterAvg,
+    );
+    const cpuOffTeammateTraitResult = resolveTeammateTraitBoosts(
+      cpuStat, cpuOffTraitResult.adjustedStat, cpuShooterTeammateTraits, "runs",
+    );
+
+    // Badge effects for CPU offense (with trait-adjusted stat)
     const shooterBadges = badgeMap[shooter.id] ?? [];
     const defenderBadges = badgeMap[defender.id] ?? [];
     const shooterTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, shooter.id);
 
     const offDiceRaw = rollDice(getRunDiceCount(offRating)).dice;
     const offBadge = resolveBadgeEffects(
-      cpuStat, shooter[cpuStat], offDiceRaw,
+      cpuStat, cpuOffTeammateTraitResult.adjustedStat, offDiceRaw,
       shooterBadges, defenderBadges, shooterTeammateBadges, "runs",
     );
 
-    // Badge effects for player defense
+    // Apply trait boosts to player defense
+    const defTraitsC = traitMap[defender.id] ?? [];
+    const defTeammateTraitsC = getTeammateTraits(traitMap, playerLineup, defender.id);
+    const defAvgC = computeCardAvgStat(defender);
+    const defTraitResultC = resolveTraitBoosts(
+      defStat, defender[defStat], defTraitsC, runsContext, "runs",
+      shooter.rating, defender.rating, defAvgC,
+    );
+    const defTeammateTraitResultC = resolveTeammateTraitBoosts(
+      defStat, defTraitResultC.adjustedStat, defTeammateTraitsC, "runs",
+    );
+
+    // Badge effects for player defense (with trait-adjusted stat)
     const defBadgesOwn = badgeMap[defender.id] ?? [];
     const defTeammateBadges = getTeammateBadges(badgeMap, playerLineup, defender.id);
     const defDiceRaw = rollDice(getRunDiceCount(defRating)).dice;
     const defBadge = resolveBadgeEffects(
-      defStat, defender[defStat], defDiceRaw,
+      defStat, defTeammateTraitResultC.adjustedStat, defDiceRaw,
       defBadgesOwn, shooterBadges, defTeammateBadges, "runs",
     );
 
-    logBadgeActivations([...offBadge.activations, ...defBadge.activations]);
+    logBadgeActivations([
+      ...cpuOffTraitResult.activations, ...cpuOffTeammateTraitResult.activations,
+      ...offBadge.activations,
+      ...defTraitResultC.activations, ...defTeammateTraitResultC.activations,
+      ...defBadge.activations,
+    ]);
 
     const result = resolveRunShotContest(
       cpuStat, offBadge.adjustedStat, offRating, offBadge.finalDice,

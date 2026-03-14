@@ -5,6 +5,7 @@ import { GameBoard } from "@/components/game/GameBoard";
 import { GameResults } from "@/components/game/GameResults";
 import type { CardGameResult } from "@/lib/gameEngine";
 import type { CardBadge } from "@/lib/badgeEngine";
+import type { CardTrait } from "@/lib/traitEngine";
 
 export interface GameCard {
   id: string;
@@ -54,14 +55,16 @@ export default function Play() {
   const [userLineup, setUserLineup] = useState<GameCard[]>([]);
   const [cpuLineup, setCpuLineup] = useState<GameCard[]>([]);
   const [badgeMap, setBadgeMap] = useState<Record<string, CardBadge[]>>({});
+  const [traitMap, setTraitMap] = useState<Record<string, CardTrait[]>>({});
   const [gameResult, setGameResult] = useState<FullGameResult | null>(null);
 
   const isDomination = !!domState.dominationGameId;
 
-  const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[], badges: Record<string, CardBadge[]>) => {
+  const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[], badges: Record<string, CardBadge[]>, traits: Record<string, CardTrait[]>) => {
     setUserLineup(user);
     setCpuLineup(cpu);
     setBadgeMap(badges);
+    setTraitMap(traits);
     setPhase("game");
   }, []);
 
@@ -75,6 +78,7 @@ export default function Play() {
     setUserLineup([]);
     setCpuLineup([]);
     setBadgeMap({});
+    setTraitMap({});
     setGameResult(null);
   }, []);
 
@@ -94,8 +98,10 @@ export default function Play() {
           userLineup={userLineup}
           cpuLineup={cpuLineup}
           badgeMap={badgeMap}
+          traitMap={traitMap}
           onComplete={handleGameComplete}
           difficultyStars={domState.difficultyStars}
+          gameContext={{ isHome: !isDomination, isAway: isDomination, isKeyGame: false }}
         />
       )}
       {phase === "results" && gameResult && (
