@@ -14,9 +14,12 @@ export const STAT_LABELS: Record<StatKey, string> = {
 
 export const SCORING_STATS: StatKey[] = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_int"];
 
-/** Maps star rating to roll multiplier */
+/** Maps star rating to roll multiplier (supports scalebreakers up to 12) */
 export function getStarModifier(stars: number): number {
-  const map: Record<number, number> = { 0: 0, 1: 0.5, 2: 1, 3: 1.5, 4: 2, 5: 2.5 };
+  const map: Record<number, number> = {
+    0: 0, 1: 0.5, 2: 1, 3: 1.5, 4: 2, 5: 2.5,
+    6: 3, 7: 3.5, 8: 4, 9: 4.5, 10: 5, 11: 5.5, 12: 6,
+  };
   return map[stars] ?? 0;
 }
 
@@ -212,8 +215,8 @@ export function resolveStatRoll(
   const diceTotal = dice.reduce((a, b) => a + b, 0);
   const isDoubles = diceCount === 2 && dice[0] === dice[1];
   const baseModifier = getStarModifier(stars);
-  // 5-star doubles = 3x modifier instead of 2.5x
-  const modifier = (stars === 5 && isDoubles) ? 3 : baseModifier;
+  // 5+ star doubles = base modifier + 0.5 bonus
+  const modifier = (stars >= 5 && isDoubles) ? baseModifier + 0.5 : baseModifier;
   let rollResult = Math.round(diceTotal * modifier);
 
   // Apply difficulty scaling (user cards only — caller decides when to pass difficultyStars)
