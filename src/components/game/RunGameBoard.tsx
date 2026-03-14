@@ -142,9 +142,10 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     if (winner) handleGameEnd(winner, newPScore, newCScore);
   };
 
-  const logBadgeActivations = (activations: BadgeActivation[]) => {
+  const logBadgeActivations = (activations: (BadgeActivation | TraitActivation)[]) => {
     for (const ba of activations) {
-      addLog({ msg: `🏅 ${ba.abbreviation} (${ba.tier}) — ${ba.effect}`, type: "badge" });
+      const name = 'badgeName' in ba ? ba.abbreviation : ba.abbreviation;
+      addLog({ msg: `🏅 ${name} (${ba.tier}) — ${ba.effect}`, type: "badge" });
     }
   };
 
