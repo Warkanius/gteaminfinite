@@ -538,8 +538,9 @@ export default function AdminPlayers() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-8"
-                placeholder="Search badges by name or abbreviation…"
+                placeholder={badgeSlotsRemaining <= 0 ? "All badge slots filled" : "Search badges by name or abbreviation…"}
                 value={badgeSearch}
+                disabled={badgeSlotsRemaining <= 0}
                 onChange={(e) => { setBadgeSearch(e.target.value); setPendingBadgeId(null); }}
               />
               {filteredBadgesForSearch.length > 0 && !pendingBadgeId && (
