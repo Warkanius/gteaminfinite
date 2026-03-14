@@ -246,16 +246,19 @@ export default function AdminPlayers() {
     setWizardOpen(true);
   }
 
-  function handleWizardAccept(result: { stats: Record<string, number>; badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[]; positions: [string, string | null]; summary: string }) {
+  async function handleWizardAccept(result: { stats: Record<string, number>; badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[]; positions: [string, string | null]; summary: string }) {
     if (wizardEditPlayer) {
-      setForm(f => ({
-        ...f,
+      const playerData = await loadPlayerData(wizardEditPlayer);
+      setForm({
+        ...playerData,
         ...result.stats,
         position1: result.positions[0],
         position2: result.positions[1],
         badges: result.badges,
         traits: result.traits,
-      }));
+      });
+      setEditId(wizardEditPlayer.id);
+      setDialogOpen(true);
       toast.success(`Wizard applied: ${result.summary}`);
     } else {
       setForm({
