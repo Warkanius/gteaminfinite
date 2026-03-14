@@ -40,6 +40,7 @@ interface LogEntry {
 export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, onGameComplete }: Props) {
   const { user } = useAuth();
   const targetScore = run.target_score;
+  const runsContext = { isHome: false, isAway: true, isKeyGame: false };
 
   const [playerScore, setPlayerScore] = useState(0);
   const [cpuScore, setCpuScore] = useState(0);
