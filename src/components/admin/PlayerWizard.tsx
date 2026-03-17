@@ -271,6 +271,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
 
   function addTrait(traitId: string, tier: string, targetStat: string | null) {
     if (!result) return;
+    if (result.traits.length >= maxTraits) return;
     setResult({ ...result, traits: [...result.traits, { trait_id: traitId, tier, target_stat: targetStat }] });
     setTraitSearch("");
     setPendingTraitId(null);
