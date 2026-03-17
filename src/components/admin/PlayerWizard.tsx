@@ -706,7 +706,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
                     </div>
                   );
                 })()}
-              </div>
+              </div>}
             </div>
           </div>
         )}
