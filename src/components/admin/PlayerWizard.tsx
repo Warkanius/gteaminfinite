@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,6 +101,11 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
     }
   }
 
+  // Reset wizard on every open or editingPlayer change
+  useEffect(() => {
+    if (open) resetWizard();
+  }, [open, editingPlayer?.id]);
+
   // ── Mr. Versatile badge cap logic ──
   const hasMrVersatile = useMemo(() => {
     if (!result) return false;
@@ -122,6 +127,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
   }, [result?.traits, allTraits, hasMrVersatile]);
 
   const maxBadges = 5 + (hasMrVersatile ? mrVersatileSlots : 0);
+  const maxTraits = 1 + (hasMrVersatile ? mrVersatileSlots : 0);
 
   // Inspiration search results
   const inspireResults = useMemo(() => {
@@ -265,6 +271,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
 
   function addTrait(traitId: string, tier: string, targetStat: string | null) {
     if (!result) return;
+    if (result.traits.length >= maxTraits) return;
     setResult({ ...result, traits: [...result.traits, { trait_id: traitId, tier, target_stat: targetStat }] });
     setTraitSearch("");
     setPendingTraitId(null);
@@ -286,7 +293,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
   const ovrStars = result ? Math.round(STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length) : 0;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (o) resetWizard(); onOpenChange(o); }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -603,7 +610,10 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
 
             {/* Signature Traits — editable */}
             <div className="space-y-2">
-              <Label className="text-xs">Signature Traits ({result.traits.length})</Label>
+              <Label className="text-xs flex items-center justify-between">
+                <span>Signature Traits ({result.traits.length}/{maxTraits})</span>
+                {hasMrVersatile && <span className="text-amber-400 font-normal">Mr. Versatile: +{mrVersatileSlots} slots</span>}
+              </Label>
               <div className="flex flex-wrap gap-1.5">
                 {result.traits.map((t, i) => {
                   const trait = allTraits.find(at => at.id === t.trait_id);
@@ -628,7 +638,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
                 })}
               </div>
               {/* Add trait */}
-              <div className="relative">
+              {result.traits.length < maxTraits && <div className="relative">
                 <div className="flex items-center gap-2">
                   <Search className="h-3 w-3 text-muted-foreground" />
                   <Input
@@ -696,7 +706,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
                     </div>
                   );
                 })()}
-              </div>
+              </div>}
             </div>
           </div>
         )}
