@@ -127,6 +127,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
   }, [result?.traits, allTraits, hasMrVersatile]);
 
   const maxBadges = 5 + (hasMrVersatile ? mrVersatileSlots : 0);
+  const maxTraits = 1 + (hasMrVersatile ? mrVersatileSlots : 0);
 
   // Inspiration search results
   const inspireResults = useMemo(() => {
