@@ -293,7 +293,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
   const ovrStars = result ? Math.round(STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length) : 0;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (o) resetWizard(); onOpenChange(o); }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
