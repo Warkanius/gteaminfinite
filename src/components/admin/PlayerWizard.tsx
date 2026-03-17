@@ -610,7 +610,10 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
 
             {/* Signature Traits — editable */}
             <div className="space-y-2">
-              <Label className="text-xs">Signature Traits ({result.traits.length})</Label>
+              <Label className="text-xs flex items-center justify-between">
+                <span>Signature Traits ({result.traits.length}/{maxTraits})</span>
+                {hasMrVersatile && <span className="text-amber-400 font-normal">Mr. Versatile: +{mrVersatileSlots} slots</span>}
+              </Label>
               <div className="flex flex-wrap gap-1.5">
                 {result.traits.map((t, i) => {
                   const trait = allTraits.find(at => at.id === t.trait_id);
