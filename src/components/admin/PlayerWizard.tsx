@@ -101,6 +101,11 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
     }
   }
 
+  // Reset wizard on every open or editingPlayer change
+  useEffect(() => {
+    if (open) resetWizard();
+  }, [open, editingPlayer?.id]);
+
   // ── Mr. Versatile badge cap logic ──
   const hasMrVersatile = useMemo(() => {
     if (!result) return false;
