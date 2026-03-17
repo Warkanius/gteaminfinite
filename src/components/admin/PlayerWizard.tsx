@@ -638,7 +638,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
                 })}
               </div>
               {/* Add trait */}
-              <div className="relative">
+              {result.traits.length < maxTraits && <div className="relative">
                 <div className="flex items-center gap-2">
                   <Search className="h-3 w-3 text-muted-foreground" />
                   <Input
