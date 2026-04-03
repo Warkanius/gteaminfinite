@@ -55,6 +55,7 @@ const adminItems = [
   { title: "Locker Codes", url: "/admin/locker-codes", icon: KeyRound },
   { title: "Gem Tasks", url: "/admin/gem-tasks", icon: Gem },
   { title: "Auction House", url: "/admin/auction", icon: ShoppingCart },
+  { title: "Starter Packs", url: "/admin/starter-packs", icon: Gift },
 ];
 
 export function AppSidebar() {
