@@ -83,6 +83,8 @@ const App = () => (
             <Route path="/admin/locker-codes" element={<ProtectedRoute><LazyLoad><AdminLockerCodes /></LazyLoad></ProtectedRoute>} />
             <Route path="/locker-codes" element={<ProtectedRoute><LazyLoad><LockerCodes /></LazyLoad></ProtectedRoute>} />
             <Route path="/auction" element={<ProtectedRoute><LazyLoad><AuctionHouse /></LazyLoad></ProtectedRoute>} />
+            <Route path="/gem-tasks" element={<ProtectedRoute><LazyLoad><GemTasks /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/gem-tasks" element={<ProtectedRoute><LazyLoad><AdminGemTasks /></LazyLoad></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

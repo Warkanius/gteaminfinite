@@ -53,6 +53,7 @@ const adminItems = [
   { title: "Currencies", url: "/admin/currencies", icon: Coins },
   { title: "Rules Config", url: "/admin/rules", icon: Settings },
   { title: "Locker Codes", url: "/admin/locker-codes", icon: KeyRound },
+  { title: "Gem Tasks", url: "/admin/gem-tasks", icon: Gem },
 ];
 
 export function AppSidebar() {
