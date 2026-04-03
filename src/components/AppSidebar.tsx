@@ -12,6 +12,8 @@ import {
   Award,
   Coins,
   LogOut,
+  KeyRound,
+  ShoppingCart,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
