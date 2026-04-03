@@ -31,6 +31,7 @@ const AuctionHouse = lazy(() => import("@/pages/AuctionHouse"));
 const GemTasks = lazy(() => import("@/pages/GemTasks"));
 const AdminGemTasks = lazy(() => import("@/pages/admin/AdminGemTasks"));
 const AdminAuction = lazy(() => import("@/pages/admin/AdminAuction"));
+const AdminStarterPacks = lazy(() => import("@/pages/admin/AdminStarterPacks"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
