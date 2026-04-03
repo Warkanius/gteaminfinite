@@ -15,6 +15,7 @@ import {
   KeyRound,
   ShoppingCart,
   Gem,
+  Gift,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
