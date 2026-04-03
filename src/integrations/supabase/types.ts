@@ -739,6 +739,7 @@ export type Database = {
           gem_tier_id: string | null
           id: string
           is_collection_reward: boolean
+          market_value: number
           name: string
           position1: string | null
           position2: string | null
@@ -775,6 +776,7 @@ export type Database = {
           gem_tier_id?: string | null
           id?: string
           is_collection_reward?: boolean
+          market_value?: number
           name: string
           position1?: string | null
           position2?: string | null
@@ -811,6 +813,7 @@ export type Database = {
           gem_tier_id?: string | null
           id?: string
           is_collection_reward?: boolean
+          market_value?: number
           name?: string
           position1?: string | null
           position2?: string | null

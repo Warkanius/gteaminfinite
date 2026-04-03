@@ -428,7 +428,18 @@ export default function AdminPlayers() {
                 </Select>
               </div>
             </div>
-            {/* Collection reward */}
+            {/* Market Value & Collection reward */}
+            <div className="space-y-1">
+              <Label>Market Value (coins)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={(form as any).market_value ?? 500}
+                onChange={(e) => setForm((f) => ({ ...f, market_value: Number(e.target.value) || 0 }))}
+                placeholder="500"
+              />
+              <p className="text-xs text-muted-foreground">Base price when this card appears in the Auction House.</p>
+            </div>
             <div className="flex items-center gap-3 pt-2">
               <Switch checked={form.is_collection_reward ?? false} onCheckedChange={(v) => setForm((f) => ({ ...f, is_collection_reward: v }))} />
               <Label>Collection Reward</Label>

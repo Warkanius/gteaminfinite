@@ -30,6 +30,7 @@ const LockerCodes = lazy(() => import("@/pages/LockerCodes"));
 const AuctionHouse = lazy(() => import("@/pages/AuctionHouse"));
 const GemTasks = lazy(() => import("@/pages/GemTasks"));
 const AdminGemTasks = lazy(() => import("@/pages/admin/AdminGemTasks"));
+const AdminAuction = lazy(() => import("@/pages/admin/AdminAuction"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
@@ -85,6 +86,7 @@ const App = () => (
             <Route path="/auction" element={<ProtectedRoute><LazyLoad><AuctionHouse /></LazyLoad></ProtectedRoute>} />
             <Route path="/gem-tasks" element={<ProtectedRoute><LazyLoad><GemTasks /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/gem-tasks" element={<ProtectedRoute><LazyLoad><AdminGemTasks /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/auction" element={<ProtectedRoute><LazyLoad><AdminAuction /></LazyLoad></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
