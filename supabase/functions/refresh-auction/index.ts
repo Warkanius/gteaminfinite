@@ -9,6 +9,8 @@ const DEFAULT_CONFIG = {
   min_price: 200,
   max_price: 5000,
   snipe_chance: 10,
+  snipe_discount_min: 15,
+  snipe_discount_max: 40,
   listings_per_refresh: 5,
   listing_duration_minutes: 60,
   tier_weights: {} as Record<string, number>,
@@ -45,11 +47,34 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch all player cards with gem tier info
+    // Get card IDs that belong to paid packs (cost > 0)
+    const { data: packs } = await supabase.from("packs").select("id").gt("cost", 0);
+    const packIds = (packs ?? []).map((p: any) => p.id);
+
+    if (packIds.length === 0) {
+      return new Response(JSON.stringify({ message: "No paid packs found" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: packPlayerRows } = await supabase
+      .from("pack_players")
+      .select("player_card_id")
+      .in("pack_id", packIds);
+
+    const eligibleCardIds = [...new Set((packPlayerRows ?? []).map((r: any) => r.player_card_id))];
+
+    if (eligibleCardIds.length === 0) {
+      return new Response(JSON.stringify({ message: "No eligible cards in paid packs" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Fetch eligible player cards with gem tier info and market_value
     const { data: cards } = await supabase
       .from("player_cards")
-      .select("id, name, rating, gem_tier_id, gem_tiers(name, sort_order)")
-      .eq("is_collection_reward", false);
+      .select("id, name, rating, market_value, gem_tier_id, gem_tiers(name, sort_order)")
+      .in("id", eligibleCardIds);
 
     if (!cards || cards.length === 0) {
       return new Response(JSON.stringify({ message: "No cards available" }), {
@@ -57,7 +82,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Weight cards by tier if weights are configured
+    // Weight cards by tier
     const tierWeights = config.tier_weights;
     const weightedCards = cards.map((c: any) => {
       const tierName = c.gem_tiers?.name?.toLowerCase() ?? "base";
@@ -84,13 +109,15 @@ Deno.serve(async (req) => {
       const card = pickRandomCard();
       const isSnipe = Math.random() * 100 < config.snipe_chance;
 
-      // Price based on rating, with snipe discount
-      const ratingFactor = (card.rating ?? 50) / 50;
-      let price = Math.round(config.min_price + (config.max_price - config.min_price) * ratingFactor * (0.7 + Math.random() * 0.6));
+      // Use market_value as base price with ±30% variance
+      const baseValue = card.market_value ?? 500;
+      let price = Math.round(baseValue * (0.8 + Math.random() * 0.5)); // 0.8x to 1.3x
       price = Math.max(config.min_price, Math.min(config.max_price, price));
 
       if (isSnipe) {
-        price = Math.round(price * (0.15 + Math.random() * 0.25)); // 15-40% of normal price
+        const discMin = (config.snipe_discount_min ?? 15) / 100;
+        const discMax = (config.snipe_discount_max ?? 40) / 100;
+        price = Math.round(baseValue * (discMin + Math.random() * (discMax - discMin)));
         price = Math.max(50, price);
       }
 

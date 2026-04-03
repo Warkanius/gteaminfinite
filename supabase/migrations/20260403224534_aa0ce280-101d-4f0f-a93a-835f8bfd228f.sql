@@ -1,0 +1,1 @@
+ALTER TABLE public.player_cards ADD COLUMN market_value integer NOT NULL DEFAULT 500;
