@@ -121,8 +121,8 @@ export default function Dashboard() {
     return (
       <PackReveal
         cards={revealCards}
-        packName="Starter Pack"
-        onComplete={() => setRevealCards(null)}
+        onOpenAnother={() => setRevealCards(null)}
+        onClose={() => setRevealCards(null)}
       />
     );
   }
