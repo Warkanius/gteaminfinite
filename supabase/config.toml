@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.buy-auction-card]
 verify_jwt = false
+
+[functions.complete-gem-task]
+verify_jwt = false
