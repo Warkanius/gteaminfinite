@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      auction_listings: {
+        Row: {
+          bought_at: string | null
+          bought_by: string | null
+          expires_at: string
+          id: string
+          is_active: boolean
+          listed_at: string
+          player_card_id: string
+          price: number
+          seller_type: string
+        }
+        Insert: {
+          bought_at?: string | null
+          bought_by?: string | null
+          expires_at?: string
+          id?: string
+          is_active?: boolean
+          listed_at?: string
+          player_card_id: string
+          price?: number
+          seller_type?: string
+        }
+        Update: {
+          bought_at?: string | null
+          bought_by?: string | null
+          expires_at?: string
+          id?: string
+          is_active?: boolean
+          listed_at?: string
+          player_card_id?: string
+          price?: number
+          seller_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auction_listings_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       badges: {
         Row: {
           abbreviation: string
@@ -230,6 +274,70 @@ export type Database = {
         }
         Relationships: []
       }
+      evo_paths: {
+        Row: {
+          challenge_description: string
+          challenge_target: number
+          challenge_type: string
+          created_at: string
+          from_tier_id: string | null
+          id: string
+          new_badges: Json
+          player_card_id: string
+          stat_boosts: Json
+          step_order: number
+          to_tier_id: string | null
+        }
+        Insert: {
+          challenge_description?: string
+          challenge_target?: number
+          challenge_type?: string
+          created_at?: string
+          from_tier_id?: string | null
+          id?: string
+          new_badges?: Json
+          player_card_id: string
+          stat_boosts?: Json
+          step_order?: number
+          to_tier_id?: string | null
+        }
+        Update: {
+          challenge_description?: string
+          challenge_target?: number
+          challenge_type?: string
+          created_at?: string
+          from_tier_id?: string | null
+          id?: string
+          new_badges?: Json
+          player_card_id?: string
+          stat_boosts?: Json
+          step_order?: number
+          to_tier_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evo_paths_from_tier_id_fkey"
+            columns: ["from_tier_id"]
+            isOneToOne: false
+            referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evo_paths_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evo_paths_to_tier_id_fkey"
+            columns: ["to_tier_id"]
+            isOneToOne: false
+            referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_logs: {
         Row: {
           cpu_score: number
@@ -296,6 +404,65 @@ export type Database = {
           roll_modifier?: number
           sort_order?: number
           stars?: number
+        }
+        Relationships: []
+      }
+      locker_code_redemptions: {
+        Row: {
+          id: string
+          locker_code_id: string
+          redeemed_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          locker_code_id: string
+          redeemed_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          locker_code_id?: string
+          redeemed_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locker_code_redemptions_locker_code_id_fkey"
+            columns: ["locker_code_id"]
+            isOneToOne: false
+            referencedRelation: "locker_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      locker_codes: {
+        Row: {
+          code: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          max_redemptions: number | null
+          reward_type: string
+          reward_value: Json
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          max_redemptions?: number | null
+          reward_type?: string
+          reward_value?: Json
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          max_redemptions?: number | null
+          reward_type?: string
+          reward_value?: Json
         }
         Relationships: []
       }
@@ -874,6 +1041,54 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_collections_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_evo_progress: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          created_at: string
+          current_value: number
+          evo_path_id: string
+          id: string
+          player_card_id: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          current_value?: number
+          evo_path_id: string
+          id?: string
+          player_card_id: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          current_value?: number
+          evo_path_id?: string
+          id?: string
+          player_card_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_evo_progress_evo_path_id_fkey"
+            columns: ["evo_path_id"]
+            isOneToOne: false
+            referencedRelation: "evo_paths"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_evo_progress_player_card_id_fkey"
             columns: ["player_card_id"]
             isOneToOne: false
             referencedRelation: "player_cards"

@@ -1,9 +1,13 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { StarRating } from "@/components/cards/StarRating";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
-import { Lock, Unlock, Coins } from "lucide-react";
+import { Lock, Unlock, Coins, CheckCircle, Circle, ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface CardDetailProps {
   open: boolean;
@@ -51,6 +55,8 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [], duplicateCount = 1, isLocked, onToggleLock, onQuicksell, quicksellLoading }: CardDetailProps) {
+  const { user } = useAuth();
+
   if (!card) return null;
 
   const visuals = resolveCardVisuals(card, gemTier);
@@ -126,6 +132,9 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
           </div>
         )}
 
+        {/* Evo Path Timeline */}
+        <EvoTimeline playerCardId={card.id} userId={user?.id} glowColor={bg(visuals.glow)} />
+
         {/* Lock & Quicksell actions */}
         <div className="flex items-center gap-2 pt-2 border-t border-border/50">
           {onToggleLock && (
@@ -149,5 +158,79 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Evo Timeline sub-component
+function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string; userId?: string; glowColor: string }) {
+  const { data: evoSteps = [] } = useQuery({
+    queryKey: ["evo-paths", playerCardId],
+    queryFn: async () => {
+      const { data } = await supabase.from("evo_paths").select("*, from_tier:gem_tiers!evo_paths_from_tier_id_fkey(name), to_tier:gem_tiers!evo_paths_to_tier_id_fkey(name)").eq("player_card_id", playerCardId).order("step_order");
+      return data ?? [];
+    },
+  });
+
+  const { data: progress = [] } = useQuery({
+    queryKey: ["evo-progress", playerCardId, userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const { data } = await supabase.from("user_evo_progress").select("*").eq("player_card_id", playerCardId).eq("user_id", userId);
+      return data ?? [];
+    },
+    enabled: !!userId,
+  });
+
+  if (evoSteps.length === 0) return null;
+
+  const progressMap = Object.fromEntries(progress.map((p: any) => [p.evo_path_id, p]));
+
+  return (
+    <div className="space-y-2 pt-2 border-t border-border/50">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Evolution Path</h4>
+      <div className="space-y-2">
+        {evoSteps.map((step: any, idx: number) => {
+          const prog = progressMap[step.id];
+          const completed = prog?.completed ?? false;
+          const currentValue = prog?.current_value ?? 0;
+          const pct = Math.min(100, Math.round((currentValue / step.challenge_target) * 100));
+
+          return (
+            <div key={step.id} className={`flex items-start gap-2 p-2 rounded-lg transition-colors ${completed ? "bg-primary/10" : idx === 0 || progressMap[evoSteps[idx - 1]?.id]?.completed ? "bg-muted/50" : "bg-muted/20 opacity-60"}`}>
+              <div className="mt-0.5">
+                {completed ? (
+                  <CheckCircle className="h-4 w-4 text-primary" />
+                ) : (
+                  <Circle className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="font-medium">{(step as any).from_tier?.name ?? "Base"}</span>
+                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                  <span className="font-medium" style={{ color: glowColor }}>{(step as any).to_tier?.name ?? "?"}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{step.challenge_description}</p>
+                {!completed && (
+                  <div className="flex items-center gap-2">
+                    <Progress value={pct} className="h-1.5 flex-1" />
+                    <span className="text-[10px] font-mono text-muted-foreground">{currentValue}/{step.challenge_target}</span>
+                  </div>
+                )}
+                {Object.keys(step.stat_boosts ?? {}).length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {Object.entries(step.stat_boosts as Record<string, number>).map(([k, v]) => (
+                      <Badge key={k} variant="outline" className="text-[10px] py-0 px-1">
+                        {k.replace("stat_", "").toUpperCase()} +{v}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

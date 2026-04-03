@@ -22,6 +22,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
 import { generatePlayer } from "@/lib/archetypeEngine";
 import { cn } from "@/lib/utils";
+import { EvoPathEditor } from "@/components/admin/EvoPathEditor";
 import { BASE_BADGE_SLOTS } from "@/lib/badgeEngine";
 
 type PlayerCard = Tables<"player_cards"> & {
@@ -616,6 +617,16 @@ export default function AdminPlayers() {
               })}
             </div>
           </div>
+
+          {/* Evo Path Editor — only when editing an existing player */}
+          {editId && (
+            <EvoPathEditor
+              playerId={editId}
+              playerGemTierId={form.gem_tier_id ?? null}
+              playerStats={Object.fromEntries(STAT_KEYS.map(k => [k, Number((form as any)[k]) || 0]))}
+              playerBadges={form.badges}
+            />
+          )}
         </div>
       </FormDialog>
 

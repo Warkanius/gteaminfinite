@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.quicksell-card]
 verify_jwt = false
+
+[functions.redeem-locker-code]
+verify_jwt = false
+
+[functions.refresh-auction]
+verify_jwt = false
+
+[functions.buy-auction-card]
+verify_jwt = false
