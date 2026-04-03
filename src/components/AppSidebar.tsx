@@ -50,6 +50,7 @@ const adminItems = [
   { title: "Challenges", url: "/admin/challenges", icon: Trophy },
   { title: "Currencies", url: "/admin/currencies", icon: Coins },
   { title: "Rules Config", url: "/admin/rules", icon: Settings },
+  { title: "Locker Codes", url: "/admin/locker-codes", icon: KeyRound },
 ];
 
 export function AppSidebar() {
