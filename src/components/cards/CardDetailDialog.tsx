@@ -55,6 +55,8 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [], duplicateCount = 1, isLocked, onToggleLock, onQuicksell, quicksellLoading }: CardDetailProps) {
+  const { user } = useAuth();
+
   if (!card) return null;
 
   const visuals = resolveCardVisuals(card, gemTier);
