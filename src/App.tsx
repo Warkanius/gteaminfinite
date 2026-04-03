@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
-import Placeholder from "@/pages/Placeholder";
+const GemMarket = lazy(() => import("@/pages/GemMarket"));
 const Play = lazy(() => import("@/pages/Play"));
 const GameHub = lazy(() => import("@/pages/GameHub"));
 const Domination = lazy(() => import("@/pages/Domination"));
@@ -67,7 +67,7 @@ const App = () => (
             <Route path="/runs" element={<ProtectedRoute><LazyLoad><RunsHub /></LazyLoad></ProtectedRoute>} />
             <Route path="/runs/:runId" element={<ProtectedRoute><LazyLoad><RunPlay /></LazyLoad></ProtectedRoute>} />
             <Route path="/packs" element={<ProtectedRoute><LazyLoad><PackMarket /></LazyLoad></ProtectedRoute>} />
-            <Route path="/gems" element={<ProtectedRoute><Placeholder /></ProtectedRoute>} />
+            <Route path="/gems" element={<ProtectedRoute><LazyLoad><GemMarket /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/players" element={<ProtectedRoute><LazyLoad><AdminPlayers /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/packs" element={<ProtectedRoute><LazyLoad><AdminPacks /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/teams" element={<ProtectedRoute><LazyLoad><AdminTeams /></LazyLoad></ProtectedRoute>} />
