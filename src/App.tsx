@@ -25,6 +25,9 @@ const AdminBadgesTraits = lazy(() => import("@/pages/admin/AdminBadgesTraits"));
 const AdminChallenges = lazy(() => import("@/pages/admin/AdminChallenges"));
 const AdminCurrencies = lazy(() => import("@/pages/admin/AdminCurrencies"));
 const AdminRules = lazy(() => import("@/pages/admin/AdminRules"));
+const AdminLockerCodes = lazy(() => import("@/pages/admin/AdminLockerCodes"));
+const LockerCodes = lazy(() => import("@/pages/LockerCodes"));
+const AuctionHouse = lazy(() => import("@/pages/AuctionHouse"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
