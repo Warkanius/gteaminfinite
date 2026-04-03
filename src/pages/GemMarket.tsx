@@ -239,7 +239,7 @@ export default function GemMarket() {
           <DialogHeader>
             <DialogTitle className="font-display">Confirm Purchase</DialogTitle>
             <DialogDescription>
-              Buy <strong>{confirmCard?.gem_name || confirmCard?.name}</strong> for{" "}
+              Buy <strong>{confirmCard?.name}</strong>{confirmCard?.gem_name ? ` (${confirmCard.gem_name})` : ""} for{" "}
               <strong>{confirmTier?.gem_value} gems</strong>?
             </DialogDescription>
           </DialogHeader>
