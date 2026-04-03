@@ -617,6 +617,16 @@ export default function AdminPlayers() {
               })}
             </div>
           </div>
+
+          {/* Evo Path Editor — only when editing an existing player */}
+          {editId && (
+            <EvoPathEditor
+              playerId={editId}
+              playerGemTierId={form.gem_tier_id ?? null}
+              playerStats={Object.fromEntries(STAT_KEYS.map(k => [k, Number((form as any)[k]) || 0]))}
+              playerBadges={form.badges}
+            />
+          )}
         </div>
       </FormDialog>
 
