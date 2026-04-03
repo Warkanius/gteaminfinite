@@ -374,6 +374,68 @@ export type Database = {
         }
         Relationships: []
       }
+      gem_task_completions: {
+        Row: {
+          completed_at: string
+          gem_task_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          gem_task_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          gem_task_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gem_task_completions_gem_task_id_fkey"
+            columns: ["gem_task_id"]
+            isOneToOne: false
+            referencedRelation: "gem_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gem_tasks: {
+        Row: {
+          category: string
+          cooldown_hours: number
+          created_at: string
+          description: string | null
+          gem_reward: number
+          id: string
+          is_active: boolean
+          title: string
+        }
+        Insert: {
+          category?: string
+          cooldown_hours?: number
+          created_at?: string
+          description?: string | null
+          gem_reward?: number
+          id?: string
+          is_active?: boolean
+          title: string
+        }
+        Update: {
+          category?: string
+          cooldown_hours?: number
+          created_at?: string
+          description?: string | null
+          gem_reward?: number
+          id?: string
+          is_active?: boolean
+          title?: string
+        }
+        Relationships: []
+      }
       gem_tiers: {
         Row: {
           color: string

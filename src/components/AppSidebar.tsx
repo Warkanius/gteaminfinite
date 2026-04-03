@@ -14,6 +14,7 @@ import {
   LogOut,
   KeyRound,
   ShoppingCart,
+  Gem,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,6 +41,7 @@ const playerItems = [
   { title: "Gem Market", url: "/gems", icon: Award },
   { title: "Auction House", url: "/auction", icon: ShoppingCart },
   { title: "Locker Codes", url: "/locker-codes", icon: KeyRound },
+  { title: "Earn Gems", url: "/gem-tasks", icon: Gem },
 ];
 
 const adminItems = [
@@ -51,6 +53,7 @@ const adminItems = [
   { title: "Currencies", url: "/admin/currencies", icon: Coins },
   { title: "Rules Config", url: "/admin/rules", icon: Settings },
   { title: "Locker Codes", url: "/admin/locker-codes", icon: KeyRound },
+  { title: "Gem Tasks", url: "/admin/gem-tasks", icon: Gem },
 ];
 
 export function AppSidebar() {
