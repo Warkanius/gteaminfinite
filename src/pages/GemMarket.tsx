@@ -200,11 +200,14 @@ export default function GemMarket() {
                     >
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
-                          <CardTitle className="font-display text-base">{card.gem_name || card.name}</CardTitle>
+                          <CardTitle className="font-display text-base">{card.name}</CardTitle>
                           {isOwned && <Check className="h-4 w-4 text-gem-emerald" />}
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-2">
+                        {card.gem_name && (
+                          <p className="text-xs text-muted-foreground italic">{card.gem_name}</p>
+                        )}
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span>{card.rating} OVR</span>
                           {card.position1 && <span>• {card.position1}</span>}
