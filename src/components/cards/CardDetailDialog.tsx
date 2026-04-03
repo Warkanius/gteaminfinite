@@ -1,9 +1,13 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { StarRating } from "@/components/cards/StarRating";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
-import { Lock, Unlock, Coins } from "lucide-react";
+import { Lock, Unlock, Coins, CheckCircle, Circle, ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface CardDetailProps {
   open: boolean;
