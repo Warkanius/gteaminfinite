@@ -38,6 +38,8 @@ const playerItems = [
   { title: "Domination", url: "/domination", icon: Swords },
   { title: "Pack Market", url: "/packs", icon: ShoppingBag },
   { title: "Gem Market", url: "/gems", icon: Award },
+  { title: "Auction House", url: "/auction", icon: ShoppingCart },
+  { title: "Locker Codes", url: "/locker-codes", icon: KeyRound },
 ];
 
 const adminItems = [
