@@ -1,27 +1,50 @@
 
 
-# Gem Market Data Cleanup
+# Collection Tab Revamp
 
-## Current State
-All 7 gem tiers exist with correct prices. All ~70 players from your spreadsheet are already in the database with correct `gem_tier_id` and `gem_name` values. However, there are many extra cards in each tier (e.g., 37 in Gold instead of 10, 32 in Emerald instead of 10).
+Two parts: (1) clear your current collection data, (2) rebuild the Collection page with better visuals, stats/progress tracking, and duplicate management.
 
-## What Needs to Happen
-Set `gem_tier_id = NULL` for every player card **not** on your spreadsheet, so only the intended 70 cards appear in the Gem Market. No code changes needed — the GemMarket page and buy-gem-card edge function are already built and will work correctly once the data is cleaned up.
+## 1. Clear Collection
 
-## Execution
-A single batch UPDATE using the database insert tool to null out `gem_tier_id` for cards not in the approved list. The approved list (by name) across all tiers:
+Delete all 6 rows from `user_collections` for your user via the database insert tool.
 
-- **Gold (10)**: Willard Clayton, Luigi Micheaux, Gabe Monroe, Kyle Whitehead, Vince Knight, Bill Jefferson, Jeremy Terry, Dwight Buycks II, Wade McCoy, Leslie Matthews
-- **Emerald (10)**: Randall Galloway, Harry Little, Dan Hanson, NF, Francis Chukwudubelu, Kevin Pangos, Mitchell Montgomery, Xavier Ware, Dee Strickland, Dexter Wingate
-- **Amethyst (10)**: Damien Doyle, Dlo Nam, Richard Henderson, Lincoln Kom Trikru, Kelly Jackson, Millard Evans, Du Venevoo, Du Vueledoo, Reed Augmon, Harold Tam
-- **Diamond (10)**: Watende Umaka, Donald Carrington, Jed Ledon, Jerry Hailey, Bailey Gerald, Dan Bacon, Neal Bridges, Chris Smoove, Merlin Simon, Oscar Green
-- **Pink Diamond (10)**: Ictherius Tyteritrix, Bar Stanon, Shrive M'Live, Arthur Strawberry, Jermaine Washington, Mr. Money, Harrison Doyle, Rogerald Russell, TooToo McHoodie, Mumboahaohoh Jumbo
-- **Actolytrene (10)**: DeWayne Watkins (Iridescent Onyx), Ultra Magnus, Mr. Gasy, Emeka Udoka, Warkanian Tranian, Bootie Mchoodie, Icandi Ghysniff, Marc Odonagadoo, Uba Wright, Semaj Pride
-- **Game Over (2+)**: Anthony Watkins, Melvin Tobar Jr. (plus the "?????" entries stay as-is since they're unrevealed)
+## 2. Revamped Collection Page
 
-## Technical Detail
-One SQL statement: `UPDATE player_cards SET gem_tier_id = NULL WHERE name NOT IN (...)` covering all 70+ approved names. The DeWayne Watkins in Game Over tier (Fire Onyx gem_name) will be preserved separately by matching on both name and gem_name.
+### Stats & Progress Header
+A summary bar at the top showing:
+- **Total cards owned** / total cards in game (e.g., "6 / 134")
+- **Tier breakdown**: mini progress bars for each gem tier showing owned vs available (e.g., "Gold: 2/10"), color-coded to match tier colors from `gem_tiers.color`
+- **Collection completion percentage** as a prominent number
 
-## Files Changed
-None — this is purely a data operation.
+### Better Card Visuals
+- Larger card thumbnails (fewer columns: 2 on mobile, 3-4 on desktop instead of up to 6)
+- Add a subtle "owned count" overlay for duplicates (e.g., "×2" badge in corner)
+- Cards get a slight border glow using their gem tier color for better visual hierarchy
+- Locked/favorite indicator icons on the card thumbnail
+
+### Duplicate & Quicksell Management
+- Duplicate cards show a "×N" count badge on the thumbnail
+- Query groups `user_collections` by `player_card_id` and counts entries per card
+- Card detail dialog gets a new "Quicksell" button when duplicates > 1
+  - Sells one copy for coins (configurable via `rule_config` key `quicksell_coin_value`, default 50 coins per card)
+  - Deletes one `user_collections` row (needs a DELETE RLS policy added)
+  - Updates `profiles.coins`
+- **Card locking**: Add `is_locked` boolean column to `user_collections`
+  - Lock icon on card thumbnail; locked cards cannot be quicksold
+  - Toggle via the detail dialog
+
+### Database Changes
+1. **Migration**: Add `is_locked boolean default false` to `user_collections`
+2. **Migration**: Add DELETE RLS policy on `user_collections` for own records
+3. **Edge function** `quicksell-card`: accepts `{ collection_id }`, validates ownership, checks not locked, checks duplicates > 1, deletes the row, adds coins to profile, returns updated coin balance
+
+### Files Changed
+| File | Action |
+|------|--------|
+| `user_collections` | Clear data (insert tool) |
+| `user_collections` | Migration: add `is_locked`, add DELETE policy |
+| `supabase/functions/quicksell-card/index.ts` | Create |
+| `src/pages/Collection.tsx` | Rewrite with stats header, larger cards, duplicate counts, lock toggles |
+| `src/components/cards/PlayerCard.tsx` | Add duplicate count + lock icon props |
+| `src/components/cards/CardDetailDialog.tsx` | Add quicksell button + lock toggle |
 
