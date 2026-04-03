@@ -1,7 +1,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StarRating } from "@/components/cards/StarRating";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
+import { Lock, Unlock, Coins } from "lucide-react";
 
 interface CardDetailProps {
   open: boolean;
@@ -28,6 +30,11 @@ interface CardDetailProps {
   teamName?: string;
   badges?: { name: string; tier: string }[];
   traits?: { name: string; tier: string; target_stat?: string | null }[];
+  duplicateCount?: number;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
+  onQuicksell?: () => void;
+  quicksellLoading?: boolean;
 }
 
 const STAT_LABELS: Record<string, string> = {
@@ -43,7 +50,7 @@ const TIER_COLORS: Record<string, string> = {
   actolytrene: "hsl(var(--gem-actolytrene))",
 };
 
-export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [] }: CardDetailProps) {
+export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [], duplicateCount = 1, isLocked, onToggleLock, onQuicksell, quicksellLoading }: CardDetailProps) {
   if (!card) return null;
 
   const visuals = resolveCardVisuals(card, gemTier);
@@ -52,6 +59,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
   const positions = [card.position1, card.position2].filter(Boolean).join(" / ");
 
   const statKeys = Object.keys(STAT_LABELS) as (keyof typeof STAT_LABELS)[];
+  const canQuicksell = duplicateCount > 1 && !isLocked;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -74,6 +82,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
             {card.gem_name && <Badge variant="outline" className="border-foreground/30">{card.gem_name}</Badge>}
             {teamName && <Badge variant="secondary">{teamName}</Badge>}
             {card.is_collection_reward && <Badge className="bg-gem-gold/20 text-foreground">Collection Reward</Badge>}
+            {duplicateCount > 1 && <Badge variant="secondary">×{duplicateCount} owned</Badge>}
           </div>
         </div>
 
@@ -116,6 +125,28 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
             </div>
           </div>
         )}
+
+        {/* Lock & Quicksell actions */}
+        <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+          {onToggleLock && (
+            <Button variant="outline" size="sm" onClick={onToggleLock} className="gap-1.5">
+              {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+              {isLocked ? "Locked" : "Unlocked"}
+            </Button>
+          )}
+          {onQuicksell && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onQuicksell}
+              disabled={!canQuicksell || quicksellLoading}
+              className="gap-1.5 ml-auto"
+            >
+              <Coins className="w-3.5 h-3.5" />
+              {quicksellLoading ? "Selling…" : canQuicksell ? "Quicksell" : isLocked ? "Locked" : "Last copy"}
+            </Button>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
