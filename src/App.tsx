@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
-import Placeholder from "@/pages/Placeholder";
+const GemMarket = lazy(() => import("@/pages/GemMarket"));
 const Play = lazy(() => import("@/pages/Play"));
 const GameHub = lazy(() => import("@/pages/GameHub"));
 const Domination = lazy(() => import("@/pages/Domination"));

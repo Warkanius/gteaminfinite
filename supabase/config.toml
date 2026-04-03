@@ -2,3 +2,9 @@ project_id = "tgcmhmcgxzabimgnzsiu"
 
 [functions.open-pack]
 verify_jwt = false
+
+[functions.buy-gem-card]
+verify_jwt = false
+
+[functions.claim-starter-pack]
+verify_jwt = false
