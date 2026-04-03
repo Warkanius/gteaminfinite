@@ -2,6 +2,8 @@ import { ReactNode } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -28,15 +30,31 @@ export function AppLayout({ children }: { children: ReactNode }) {
 }
 
 function CurrencyDisplay() {
+  const { user } = useAuth();
+
+  const { data: profile } = useQuery({
+    queryKey: ["profile-currency", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("coins, gems")
+        .eq("user_id", user!.id)
+        .single();
+      return data;
+    },
+    enabled: !!user,
+    refetchInterval: 15000,
+  });
+
   return (
     <div className="flex items-center gap-4 text-sm">
       <div className="flex items-center gap-1.5">
         <span className="text-primary font-display font-bold">🪙</span>
-        <span className="text-muted-foreground">0</span>
+        <span className="font-mono font-medium">{(profile?.coins ?? 0).toLocaleString()}</span>
       </div>
       <div className="flex items-center gap-1.5">
         <span className="text-gem-diamond font-display font-bold">💎</span>
-        <span className="text-muted-foreground">0</span>
+        <span className="font-mono font-medium">{(profile?.gems ?? 0).toLocaleString()}</span>
       </div>
     </div>
   );
