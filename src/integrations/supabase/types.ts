@@ -851,6 +851,7 @@ export type Database = {
           acquired_at: string
           evolution_progress: Json | null
           id: string
+          is_locked: boolean
           player_card_id: string
           user_id: string
         }
@@ -858,6 +859,7 @@ export type Database = {
           acquired_at?: string
           evolution_progress?: Json | null
           id?: string
+          is_locked?: boolean
           player_card_id: string
           user_id: string
         }
@@ -865,6 +867,7 @@ export type Database = {
           acquired_at?: string
           evolution_progress?: Json | null
           id?: string
+          is_locked?: boolean
           player_card_id?: string
           user_id?: string
         }

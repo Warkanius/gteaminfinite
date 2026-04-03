@@ -1,7 +1,7 @@
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/cards/StarRating";
-import { Shield } from "lucide-react";
+import { Shield, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PlayerCardProps {
@@ -15,11 +15,13 @@ interface PlayerCardProps {
   };
   gemTier?: GemTierData | null;
   badgeCount?: number;
+  duplicateCount?: number;
+  isLocked?: boolean;
   onClick?: () => void;
   className?: string;
 }
 
-export function PlayerCard({ card, gemTier, badgeCount, onClick, className }: PlayerCardProps) {
+export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked, onClick, className }: PlayerCardProps) {
   const visuals = resolveCardVisuals(card, gemTier);
   const positions = [card.position1, card.position2].filter(Boolean).join("/");
 
@@ -30,7 +32,7 @@ export function PlayerCard({ card, gemTier, badgeCount, onClick, className }: Pl
     <button
       onClick={onClick}
       className={cn(
-        "relative group flex flex-col items-center justify-end rounded-lg border border-border/50 p-3 pt-8 transition-transform hover:scale-105 cursor-pointer overflow-hidden",
+        "relative group flex flex-col items-center justify-end rounded-xl border border-border/50 p-3 pt-10 transition-transform hover:scale-105 cursor-pointer overflow-hidden",
         visuals.animation === "shimmer" && "animate-shimmer",
         visuals.animation === "pulse" && "animate-card-pulse",
         visuals.animation === "holographic" && "animate-holographic",
@@ -51,6 +53,20 @@ export function PlayerCard({ card, gemTier, badgeCount, onClick, className }: Pl
         <div className="absolute top-2 left-2 flex items-center gap-0.5 rounded-full bg-background/60 backdrop-blur-sm px-1.5 py-0.5">
           <Shield className="w-3 h-3 text-foreground/80" />
           <span className="text-[10px] font-bold text-foreground/80">{badgeCount}</span>
+        </div>
+      )}
+
+      {/* Duplicate count */}
+      {!!duplicateCount && duplicateCount > 1 && (
+        <div className="absolute bottom-2 right-2 flex items-center rounded-full bg-background/70 backdrop-blur-sm px-1.5 py-0.5">
+          <span className="text-[10px] font-bold text-foreground/90">×{duplicateCount}</span>
+        </div>
+      )}
+
+      {/* Lock indicator */}
+      {isLocked && (
+        <div className="absolute top-8 left-2">
+          <Lock className="w-3 h-3 text-foreground/60" />
         </div>
       )}
 

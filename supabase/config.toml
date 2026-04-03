@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.claim-starter-pack]
 verify_jwt = false
+
+[functions.quicksell-card]
+verify_jwt = false
