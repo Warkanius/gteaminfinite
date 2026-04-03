@@ -1,81 +1,27 @@
 
 
-# Phase 1: Gem Market + Starter Packs
+# Gem Market Data Cleanup
 
-## 1. Gem Market — Tiered Gem Shop
+## Current State
+All 7 gem tiers exist with correct prices. All ~70 players from your spreadsheet are already in the database with correct `gem_tier_id` and `gem_name` values. However, there are many extra cards in each tier (e.g., 37 in Gold instead of 10, 32 in Emerald instead of 10).
 
-### Concept
-Players browse player cards organized by gem tier. Tier 1 is always unlocked. Each subsequent tier unlocks when the user owns at least half the cards from the previous tier (from any source — packs, rewards, or gem purchases). Cards are purchased with gems.
+## What Needs to Happen
+Set `gem_tier_id = NULL` for every player card **not** on your spreadsheet, so only the intended 70 cards appear in the Gem Market. No code changes needed — the GemMarket page and buy-gem-card edge function are already built and will work correctly once the data is cleaned up.
 
-### Database
-- No new tables needed. `gem_tiers` already has `gem_value` (price), `name`, `sort_order`. `player_cards` has `gem_tier_id`. `user_collections` tracks ownership. `profiles` has `gems`.
+## Execution
+A single batch UPDATE using the database insert tool to null out `gem_tier_id` for cards not in the approved list. The approved list (by name) across all tiers:
 
-### New Edge Function: `supabase/functions/buy-gem-card/index.ts`
-- Accepts `{ player_card_id }` from authenticated user
-- Validates: card exists, has a `gem_tier_id` with `gem_value > 0`
-- Checks tier unlock: counts how many cards in the previous tier the user owns vs total cards in that tier; if < 50%, rejects
-- Checks user has enough gems
-- Deducts gems from `profiles`, inserts into `user_collections`
-- Returns the purchased card data + remaining gems
+- **Gold (10)**: Willard Clayton, Luigi Micheaux, Gabe Monroe, Kyle Whitehead, Vince Knight, Bill Jefferson, Jeremy Terry, Dwight Buycks II, Wade McCoy, Leslie Matthews
+- **Emerald (10)**: Randall Galloway, Harry Little, Dan Hanson, NF, Francis Chukwudubelu, Kevin Pangos, Mitchell Montgomery, Xavier Ware, Dee Strickland, Dexter Wingate
+- **Amethyst (10)**: Damien Doyle, Dlo Nam, Richard Henderson, Lincoln Kom Trikru, Kelly Jackson, Millard Evans, Du Venevoo, Du Vueledoo, Reed Augmon, Harold Tam
+- **Diamond (10)**: Watende Umaka, Donald Carrington, Jed Ledon, Jerry Hailey, Bailey Gerald, Dan Bacon, Neal Bridges, Chris Smoove, Merlin Simon, Oscar Green
+- **Pink Diamond (10)**: Ictherius Tyteritrix, Bar Stanon, Shrive M'Live, Arthur Strawberry, Jermaine Washington, Mr. Money, Harrison Doyle, Rogerald Russell, TooToo McHoodie, Mumboahaohoh Jumbo
+- **Actolytrene (10)**: DeWayne Watkins (Iridescent Onyx), Ultra Magnus, Mr. Gasy, Emeka Udoka, Warkanian Tranian, Bootie Mchoodie, Icandi Ghysniff, Marc Odonagadoo, Uba Wright, Semaj Pride
+- **Game Over (2+)**: Anthony Watkins, Melvin Tobar Jr. (plus the "?????" entries stay as-is since they're unrevealed)
 
-### New Page: `src/pages/GemMarket.tsx`
-- Replace `/gems` Placeholder route
-- Shows user's gem balance at top
-- Groups cards by gem tier (accordion or tab sections), sorted by `sort_order`
-- Each tier section shows: tier name, color, unlock progress bar ("Own 3/6 — Next tier unlocks at 3")
-- Locked tiers are visually dimmed with a lock icon and progress indicator
-- Each card shows: name, rating, position, gem cost, and "Owned ✓" badge if already in collection
-- Purchase button opens a confirm dialog; on success, shows a card reveal animation and refreshes balance
-- Cards already owned are non-purchasable (button disabled)
+## Technical Detail
+One SQL statement: `UPDATE player_cards SET gem_tier_id = NULL WHERE name NOT IN (...)` covering all 70+ approved names. The DeWayne Watkins in Game Over tier (Fire Onyx gem_name) will be preserved separately by matching on both name and gem_name.
 
-### Route Update: `src/App.tsx`
-- Swap `Placeholder` for lazy-loaded `GemMarket` at `/gems`
-
----
-
-## 2. Starter Packs — Admin-Defined, Player-Chosen
-
-### Concept
-Admins create multiple starter packs (e.g., "Guard Starter", "Big Man Starter") with fixed pre-assigned players. New users with an empty collection see a selection screen and pick one pack to claim. One-time only.
-
-### Database
-- Use existing `packs` table with `pack_type = 'starter'` and `cost = 0`
-- Use existing `pack_players` table to assign specific cards to each starter pack
-- Admins create/manage these through the existing AdminPacks interface (already supports adding packs with players)
-
-### New Edge Function: `supabase/functions/claim-starter-pack/index.ts`
-- Accepts `{ pack_id }` from authenticated user
-- Validates pack exists and has `pack_type = 'starter'`
-- Checks user has never claimed a starter pack (query `pack_purchases` for any starter-type purchase by this user)
-- Fetches all `pack_players` for that pack, inserts all into `user_collections`
-- Logs in `pack_purchases` with `coins_spent = 0`
-- Returns the full card data for reveal animation
-
-### Dashboard Integration: `src/pages/Dashboard.tsx`
-- On load, check if user has any `pack_purchases` with a starter pack
-- If not, show a prominent "Choose Your Starter Pack" banner/modal
-- Fetch all packs where `pack_type = 'starter'` and `cost = 0`
-- Display each starter pack as a card showing: pack name, list of included players (fetched from `pack_players` joined with `player_cards`)
-- User clicks one to claim; triggers the edge function
-- On success, show `PackReveal` component with the received cards
-- After reveal, banner disappears permanently (state driven by the pack_purchases check)
-
-### Admin Side
-- No admin UI changes needed — admins already use AdminPacks to create packs with `pack_type` and assign players via the "Manage > Pack Players" tab
-- Starter packs just need `pack_type = 'starter'` and `cost = 0`
-- The Pack Market already filters these out (`cost > 0`)
-
----
-
-## Files Summary
-
-| File | Action |
-|------|--------|
-| `supabase/functions/buy-gem-card/index.ts` | Create |
-| `supabase/functions/claim-starter-pack/index.ts` | Create |
-| `src/pages/GemMarket.tsx` | Create |
-| `src/pages/Dashboard.tsx` | Modify — add starter pack selection |
-| `src/App.tsx` | Modify — swap `/gems` route |
-
-No database migrations required — all needed tables and columns already exist.
+## Files Changed
+None — this is purely a data operation.
 
