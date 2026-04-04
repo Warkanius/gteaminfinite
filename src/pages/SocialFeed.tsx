@@ -159,7 +159,8 @@ function YouTubePost({ post }: { post: SocialPost }) {
 
 function TweetPost({ post }: { post: SocialPost }) {
   const player = post.player_cards;
-  const handle = player?.social_handle ?? `@${player?.name ?? "GTeamLeague"}`;
+  const hasAttribution = !!post.player_card_id && !!player;
+  const handle = hasAttribution ? (player.social_handle ?? `@${player.name}`) : null;
   const displayName = player?.name ?? "GTeam League";
   const accent = player?.card_color_primary ?? "hsl(var(--primary))";
   const retweetCount = Math.floor(post.likes_count * 0.4);
@@ -175,7 +176,7 @@ function TweetPost({ post }: { post: SocialPost }) {
                 <HandleLink handle={handle} name={displayName} className="font-semibold text-sm truncate" />
                 <BadgeCheck className="h-3.5 w-3.5 text-primary shrink-0" />
               </div>
-              <span className="text-xs text-muted-foreground">{handle} · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}</span>
+              <span className="text-xs text-muted-foreground">{handle ?? "@GTeamLeague"} · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}</span>
             </div>
           </div>
           <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
@@ -199,14 +200,16 @@ function TweetPost({ post }: { post: SocialPost }) {
 
 function InstagramPost({ post }: { post: SocialPost }) {
   const player = post.player_cards;
+  const hasAttribution = !!post.player_card_id && !!player;
   const handle = player?.social_handle?.replace("@", "") ?? player?.name ?? "gteamleague";
+  const linkHandle = hasAttribution ? `@${handle}` : null;
   const accent = player?.card_color_primary ?? "hsl(var(--primary))";
 
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-2.5">
         <ProfileAvatar name={handle} accent={accent} avatarUrl={player?.avatar_url} size="sm" className="ring-2 ring-pink-500 ring-offset-2 ring-offset-background" />
-        <HandleLink handle={`@${handle}`} name={handle} className="font-semibold text-sm flex-1 truncate" />
+        <HandleLink handle={linkHandle} name={handle} className="font-semibold text-sm flex-1 truncate" />
         <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
       </div>
       {post.image_url ? (
@@ -225,7 +228,7 @@ function InstagramPost({ post }: { post: SocialPost }) {
         </div>
         <p className="text-sm font-semibold">{post.likes_count.toLocaleString()} likes</p>
         <p className="text-sm pb-2.5">
-          <HandleLink handle={`@${handle}`} name={handle} className="font-semibold mr-1" />
+          <HandleLink handle={linkHandle} name={handle} className="font-semibold mr-1" />
           {post.content}
         </p>
         {post.comments_count > 0 && <p className="text-xs text-muted-foreground pb-2">View all {post.comments_count.toLocaleString()} comments</p>}
