@@ -57,6 +57,7 @@ const emptyCreator = (): Partial<Creator> => ({
   name: "",
   handle: "",
   accent_color: "hsl(0, 70%, 50%)",
+  avatar_url: null,
 });
 
 /* ── Main ──────────────────────────────────── */
