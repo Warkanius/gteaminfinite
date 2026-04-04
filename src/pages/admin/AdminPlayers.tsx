@@ -428,6 +428,16 @@ export default function AdminPlayers() {
                 </Select>
               </div>
             </div>
+            {/* Social Handle */}
+            <div className="space-y-1">
+              <Label>Social Handle</Label>
+              <Input
+                value={(form as any).social_handle ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, social_handle: e.target.value || null }))}
+                placeholder="@KingJames"
+              />
+              <p className="text-xs text-muted-foreground">Fictional social media handle shown on the feed.</p>
+            </div>
             {/* Market Value & Collection reward */}
             <div className="space-y-1">
               <Label>Market Value (coins)</Label>
