@@ -32,6 +32,9 @@ const GemTasks = lazy(() => import("@/pages/GemTasks"));
 const AdminGemTasks = lazy(() => import("@/pages/admin/AdminGemTasks"));
 const AdminAuction = lazy(() => import("@/pages/admin/AdminAuction"));
 const AdminStarterPacks = lazy(() => import("@/pages/admin/AdminStarterPacks"));
+const AdminSocialFeed = lazy(() => import("@/pages/admin/AdminSocialFeed"));
+const SocialFeed = lazy(() => import("@/pages/SocialFeed"));
+const Install = lazy(() => import("@/pages/Install"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
@@ -89,6 +92,9 @@ const App = () => (
             <Route path="/admin/gem-tasks" element={<ProtectedRoute><LazyLoad><AdminGemTasks /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/auction" element={<ProtectedRoute><LazyLoad><AdminAuction /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/starter-packs" element={<ProtectedRoute><LazyLoad><AdminStarterPacks /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/social-feed" element={<ProtectedRoute><LazyLoad><AdminSocialFeed /></LazyLoad></ProtectedRoute>} />
+            <Route path="/feed" element={<ProtectedRoute><LazyLoad><SocialFeed /></LazyLoad></ProtectedRoute>} />
+            <Route path="/install" element={<ProtectedRoute><LazyLoad><Install /></LazyLoad></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

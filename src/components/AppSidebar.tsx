@@ -16,6 +16,8 @@ import {
   ShoppingCart,
   Gem,
   Gift,
+  Newspaper,
+  Download,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
@@ -43,6 +45,8 @@ const playerItems = [
   { title: "Auction House", url: "/auction", icon: ShoppingCart },
   { title: "Locker Codes", url: "/locker-codes", icon: KeyRound },
   { title: "Earn Gems", url: "/gem-tasks", icon: Gem },
+  { title: "Feed", url: "/feed", icon: Newspaper },
+  { title: "Install App", url: "/install", icon: Download },
 ];
 
 const adminItems = [
@@ -57,6 +61,7 @@ const adminItems = [
   { title: "Gem Tasks", url: "/admin/gem-tasks", icon: Gem },
   { title: "Auction House", url: "/admin/auction", icon: ShoppingCart },
   { title: "Starter Packs", url: "/admin/starter-packs", icon: Gift },
+  { title: "Social Feed", url: "/admin/social-feed", icon: Newspaper },
 ];
 
 export function AppSidebar() {

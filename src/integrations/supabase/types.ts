@@ -754,6 +754,7 @@ export type Database = {
           run_stat_mid: number | null
           run_stat_reb: number | null
           run_stat_stl: number | null
+          social_handle: string | null
           stat_3pt: number
           stat_ast: number
           stat_blk: number
@@ -791,6 +792,7 @@ export type Database = {
           run_stat_mid?: number | null
           run_stat_reb?: number | null
           run_stat_stl?: number | null
+          social_handle?: string | null
           stat_3pt?: number
           stat_ast?: number
           stat_blk?: number
@@ -828,6 +830,7 @@ export type Database = {
           run_stat_mid?: number | null
           run_stat_reb?: number | null
           run_stat_stl?: number | null
+          social_handle?: string | null
           stat_3pt?: number
           stat_ast?: number
           stat_blk?: number
@@ -1053,6 +1056,50 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      social_posts: {
+        Row: {
+          comments_count: number
+          content: string
+          created_at: string
+          id: string
+          image_url: string | null
+          likes_count: number
+          player_card_id: string | null
+          post_type: string
+          posted_at: string
+        }
+        Insert: {
+          comments_count?: number
+          content: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          likes_count?: number
+          player_card_id?: string | null
+          post_type?: string
+          posted_at?: string
+        }
+        Update: {
+          comments_count?: number
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          likes_count?: number
+          player_card_id?: string | null
+          post_type?: string
+          posted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_posts_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       teams: {
         Row: {
