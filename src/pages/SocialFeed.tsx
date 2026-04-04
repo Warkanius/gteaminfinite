@@ -200,7 +200,9 @@ function TweetPost({ post }: { post: SocialPost }) {
 
 function InstagramPost({ post }: { post: SocialPost }) {
   const player = post.player_cards;
+  const hasAttribution = !!post.player_card_id && !!player;
   const handle = player?.social_handle?.replace("@", "") ?? player?.name ?? "gteamleague";
+  const linkHandle = hasAttribution ? `@${handle}` : null;
   const accent = player?.card_color_primary ?? "hsl(var(--primary))";
 
   return (
