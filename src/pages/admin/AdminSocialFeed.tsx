@@ -32,7 +32,7 @@ interface PlayerOption {
   social_handle: string | null;
 }
 
-const POST_TYPES = ["tweet", "story", "announcement"];
+const POST_TYPES = ["tweet", "instagram", "announcement"];
 
 const emptyForm = (): Partial<SocialPost> => ({
   player_card_id: null,
