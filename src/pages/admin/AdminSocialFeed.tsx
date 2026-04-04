@@ -37,6 +37,7 @@ interface Creator {
   name: string;
   handle: string;
   accent_color: string | null;
+  avatar_url: string | null;
   created_at: string;
 }
 
