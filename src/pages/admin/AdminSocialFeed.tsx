@@ -204,6 +204,7 @@ export default function AdminSocialFeed() {
         name: creatorForm.name ?? "",
         handle: creatorForm.handle ?? "",
         accent_color: creatorForm.accent_color ?? "hsl(0, 70%, 50%)",
+        avatar_url: creatorForm.avatar_url ?? null,
       };
       if (creatorEditId) {
         const { error } = await supabase.from("social_creators").update(payload).eq("id", creatorEditId);
