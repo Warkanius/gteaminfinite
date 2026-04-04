@@ -296,9 +296,13 @@ function TweetPost({ post }: { post: SocialPost }) {
 /* ── Instagram ───────────────────────────────────────── */
 
 function InstagramPost({ post }: { post: SocialPost }) {
+  const creator = post.social_creators;
   const player = post.player_cards;
-  const handle = player?.social_handle?.replace("@", "") ?? player?.name ?? "gteamleague";
-  const accent = player?.card_color_primary ?? "hsl(var(--primary))";
+  const displayName = creator?.name ?? player?.name ?? "gteamleague";
+  const handle = creator?.handle ?? player?.social_handle ?? (player ? `@${player.name}` : null);
+  const handleClean = (handle ?? "@gteamleague").replace("@", "");
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
 
   return (
     <Card className="overflow-hidden">
