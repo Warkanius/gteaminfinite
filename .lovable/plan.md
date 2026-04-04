@@ -1,66 +1,75 @@
 
 
-# Social Media Feed + PWA Setup
+# Distinct Social Post Types — Instagram + Tweet Style
 
-## Feature 1: Fictional Social Media Feed
+## Problem
+Right now every post renders with the same generic card layout regardless of `post_type`. The feed feels flat and repetitive.
 
-A scrollable feed of fictional posts that make the game world feel alive. Admins create posts attributed to player cards (using their social handle). Players see a timeline-style feed.
+## Solution
+Redesign the feed so each post type has a visually distinct layout mimicking real social platforms:
 
-### Database
+### Tweet Style (`post_type: "tweet"`)
+- Compact text-first layout with Twitter/X-like styling
+- Handle displayed as `@handle` with a subtle verified-style check icon
+- Content text is prominent, no image border treatment
+- Retweet count added alongside likes/comments
+- Light top-border accent using player's card color
 
-**`social_posts`** table:
-- `id` (uuid), `player_card_id` (uuid, nullable — for "league" posts not tied to a player), `content` (text), `image_url` (text, nullable), `likes_count` (int, default random seed), `comments_count` (int), `post_type` (text: "tweet", "story", "announcement"), `posted_at` (timestamptz, default now), `created_at` (timestamptz)
-- RLS: readable by all authenticated, admin manages
+### Instagram Style (`post_type: "story"` or new type `"instagram"`)
+- Image-forward layout: large image taking full card width with no rounded corners inside
+- Username + avatar row at top (Instagram header style)
+- Action row below image: heart, comment, share icons in a row
+- Likes shown as "Liked by X and Y others" text style
+- Caption shown below with handle bolded inline
 
-**`player_cards`** — add column:
-- `social_handle` (text, nullable) — e.g. "@KingJames"
+### Announcement Style (`post_type: "announcement"`)
+- Full-width banner with gradient background using primary/accent colors
+- Megaphone icon prominent, "LEAGUE ANNOUNCEMENT" label
+- Bolder typography, centered text
+- No engagement metrics (likes/comments hidden) — feels official
 
-### Admin UI
-- New page `/admin/social-feed` — CRUD for posts: pick a player card (auto-fills their handle), write content, optionally add image URL, set post type, set fake likes/comments counts
-- Add `social_handle` field to the player edit form in `AdminPlayers.tsx`
+### Admin Changes
+- Add `"instagram"` to the post type options in admin form
+- Add optional fields: `retweet_count` (for tweets), `caption` (separate from content for Instagram posts) — but we can reuse existing columns to avoid a migration:
+  - `content` = caption/text for all types
+  - `image_url` = required for instagram, optional for others
+  - `likes_count` / `comments_count` already exist
 
-### Player UI
-- New page `/feed` — timeline-style feed sorted by `posted_at` desc
-- Each post shows: player avatar/card color as accent, social handle, content, image if present, like/comment counts (display only), relative timestamp
-- Infinite scroll or paginated load
+No database migration needed — just UI changes.
 
-### Files
-| File | Action |
+## Files Changed
+
+| File | Change |
 |------|--------|
-| Migration | Add `social_handle` to `player_cards`, create `social_posts` table |
-| `src/pages/SocialFeed.tsx` | Create — player feed UI |
-| `src/pages/admin/AdminSocialFeed.tsx` | Create — admin CRUD |
-| `src/pages/admin/AdminPlayers.tsx` | Add social_handle input |
-| `src/App.tsx` | Add routes |
-| `src/components/AppSidebar.tsx` | Add nav links |
+| `src/pages/SocialFeed.tsx` | Rewrite to render 3 distinct post layouts based on `post_type` |
+| `src/pages/admin/AdminSocialFeed.tsx` | Add `"instagram"` to POST_TYPES array |
 
----
+## Feed Page Structure
 
-## Feature 2: PWA (Installable Web App)
+```text
+┌─────────────────────────┐
+│ 🐦 Tweet Post           │
+│ @handle  ·  2h ago      │
+│ "Just dropped 40 on..." │
+│ ♥ 1.2k  💬 89  🔁 340   │
+└─────────────────────────┘
 
-Make the app installable from the browser to the home screen. Since you want to discuss the icon, we'll set up the PWA infrastructure with a placeholder icon that you can swap later.
+┌─────────────────────────┐
+│ 📸 Instagram Post       │
+│ handle  ·  avatar       │
+│ ┌─────────────────────┐ │
+│ │                     │ │
+│ │    FULL IMAGE       │ │
+│ │                     │ │
+│ └─────────────────────┘ │
+│ ♥ 💬 ➤  icons row       │
+│ 2,340 likes             │
+│ handle Game day 🔥      │
+└─────────────────────────┘
 
-### Approach
-- **No service worker / no offline caching** — just a `manifest.json` with `display: "standalone"` for installability. This avoids the complexity and caching issues of full PWA service workers.
-- Add mobile-optimized meta tags to `index.html`
-- Create `/install` page with instructions for adding to home screen
-
-### Files
-| File | Action |
-|------|--------|
-| `public/manifest.json` | Create — app name, colors, display standalone, placeholder icons |
-| `public/icon-192.png` | Placeholder (solid color square) |
-| `public/icon-512.png` | Placeholder (solid color square) |
-| `index.html` | Add manifest link + mobile meta tags (theme-color, apple-mobile-web-app-capable) |
-| `src/pages/Install.tsx` | Create — install instructions page |
-| `src/App.tsx` | Add `/install` route |
-
-### Icon Discussion
-The placeholder icons will be simple branded squares. You can replace `public/icon-192.png` and `public/icon-512.png` with your actual icon at any time — just tell me what you'd like and I can generate or update them.
-
----
-
-## Implementation Order
-1. Social feed (database + admin + player UI)
-2. PWA manifest setup
+╔═════════════════════════╗
+║ 📢 LEAGUE ANNOUNCEMENT ║
+║ Season 3 tips off...    ║
+╚═════════════════════════╝
+```
 
