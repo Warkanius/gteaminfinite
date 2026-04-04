@@ -159,7 +159,8 @@ function YouTubePost({ post }: { post: SocialPost }) {
 
 function TweetPost({ post }: { post: SocialPost }) {
   const player = post.player_cards;
-  const handle = player?.social_handle ?? `@${player?.name ?? "GTeamLeague"}`;
+  const hasAttribution = !!post.player_card_id && !!player;
+  const handle = hasAttribution ? (player.social_handle ?? `@${player.name}`) : null;
   const displayName = player?.name ?? "GTeam League";
   const accent = player?.card_color_primary ?? "hsl(var(--primary))";
   const retweetCount = Math.floor(post.likes_count * 0.4);
