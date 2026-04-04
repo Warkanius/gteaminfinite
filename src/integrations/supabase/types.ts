@@ -1057,11 +1057,36 @@ export type Database = {
         }
         Relationships: []
       }
+      social_creators: {
+        Row: {
+          accent_color: string | null
+          created_at: string
+          handle: string
+          id: string
+          name: string
+        }
+        Insert: {
+          accent_color?: string | null
+          created_at?: string
+          handle: string
+          id?: string
+          name: string
+        }
+        Update: {
+          accent_color?: string | null
+          created_at?: string
+          handle?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       social_posts: {
         Row: {
           comments_count: number
           content: string
           created_at: string
+          creator_id: string | null
           id: string
           image_url: string | null
           likes_count: number
@@ -1073,6 +1098,7 @@ export type Database = {
           comments_count?: number
           content: string
           created_at?: string
+          creator_id?: string | null
           id?: string
           image_url?: string | null
           likes_count?: number
@@ -1084,6 +1110,7 @@ export type Database = {
           comments_count?: number
           content?: string
           created_at?: string
+          creator_id?: string | null
           id?: string
           image_url?: string | null
           likes_count?: number
@@ -1092,6 +1119,13 @@ export type Database = {
           posted_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "social_posts_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "social_creators"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "social_posts_player_card_id_fkey"
             columns: ["player_card_id"]

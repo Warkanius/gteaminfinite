@@ -11,12 +11,21 @@ import {
   Bookmark,
   BadgeCheck,
   MoreHorizontal,
+  Play,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+
+interface SocialCreator {
+  id: string;
+  name: string;
+  handle: string;
+  accent_color: string | null;
+}
 
 interface SocialPost {
   id: string;
   player_card_id: string | null;
+  creator_id: string | null;
   content: string;
   image_url: string | null;
   likes_count: number;
@@ -30,6 +39,7 @@ interface SocialPost {
     rating: number;
     position1: string | null;
   } | null;
+  social_creators: SocialCreator | null;
 }
 
 export default function SocialFeed() {
@@ -38,11 +48,11 @@ export default function SocialFeed() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("social_posts")
-        .select("*, player_cards(name, social_handle, card_color_primary, rating, position1)")
+        .select("*, player_cards(name, social_handle, card_color_primary, rating, position1), social_creators(id, name, handle, accent_color)")
         .order("posted_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      return data as SocialPost[];
+      return data as unknown as SocialPost[];
     },
   });
 
@@ -58,6 +68,7 @@ export default function SocialFeed() {
       )}
 
       {posts.map((post) => {
+        if (post.post_type === "youtube") return <YouTubePost key={post.id} post={post} />;
         if (post.post_type === "tweet") return <TweetPost key={post.id} post={post} />;
         if (post.post_type === "instagram") return <InstagramPost key={post.id} post={post} />;
         if (post.post_type === "announcement") return <AnnouncementPost key={post.id} post={post} />;
@@ -73,6 +84,62 @@ export default function SocialFeed() {
   );
 }
 
+/* ── YouTube ─────────────────────────────────────────── */
+
+function formatViews(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+function YouTubePost({ post }: { post: SocialPost }) {
+  const creator = post.social_creators;
+  const player = post.player_cards;
+  const channelName = creator?.name ?? player?.name ?? "GTeam League";
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+
+  return (
+    <Card className="overflow-hidden">
+      {/* Thumbnail */}
+      <div className="relative w-full aspect-video bg-muted">
+        {post.image_url ? (
+          <img src={post.image_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
+            No thumbnail
+          </div>
+        )}
+        {/* Play overlay */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="h-14 w-14 rounded-full bg-black/70 flex items-center justify-center backdrop-blur-sm">
+            <Play className="h-7 w-7 text-white fill-white ml-1" />
+          </div>
+        </div>
+        {/* Duration badge */}
+        <div className="absolute bottom-2 right-2 bg-black/80 text-white text-[11px] font-medium px-1.5 py-0.5 rounded">
+          {post.comments_count > 0 ? `${Math.floor(post.comments_count / 60)}:${String(post.comments_count % 60).padStart(2, "0")}` : "12:34"}
+        </div>
+      </div>
+
+      {/* Info */}
+      <div className="flex gap-3 p-3">
+        <div
+          className="h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 mt-0.5"
+          style={{ background: accent }}
+        >
+          {channelName[0]?.toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold leading-snug line-clamp-2">{post.content}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {channelName} · {formatViews(post.likes_count)} views · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 /* ── Tweet ───────────────────────────────────────────── */
 
 function TweetPost({ post }: { post: SocialPost }) {
@@ -85,7 +152,6 @@ function TweetPost({ post }: { post: SocialPost }) {
   return (
     <Card className="overflow-hidden" style={{ borderTopColor: accent, borderTopWidth: 3 }}>
       <div className="p-4 space-y-2.5">
-        {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2.5">
             <div
@@ -105,15 +171,12 @@ function TweetPost({ post }: { post: SocialPost }) {
           <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
         </div>
 
-        {/* Content */}
         <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>
 
-        {/* Optional image */}
         {post.image_url && (
           <img src={post.image_url} alt="" className="rounded-xl w-full max-h-64 object-cover border border-border" loading="lazy" />
         )}
 
-        {/* Engagement */}
         <div className="flex items-center justify-between text-muted-foreground text-xs pt-1 px-2">
           <span className="flex items-center gap-1 hover:text-primary cursor-pointer">
             <MessageCircle className="h-4 w-4" /> {post.comments_count.toLocaleString()}
@@ -140,7 +203,6 @@ function InstagramPost({ post }: { post: SocialPost }) {
 
   return (
     <Card className="overflow-hidden">
-      {/* Header */}
       <div className="flex items-center gap-3 px-3 py-2.5">
         <div
           className="h-9 w-9 rounded-full ring-2 ring-pink-500 ring-offset-2 ring-offset-background flex items-center justify-center text-xs font-bold text-white shrink-0"
@@ -152,7 +214,6 @@ function InstagramPost({ post }: { post: SocialPost }) {
         <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
       </div>
 
-      {/* Image */}
       {post.image_url ? (
         <img src={post.image_url} alt="" className="w-full aspect-square object-cover" loading="lazy" />
       ) : (
@@ -161,7 +222,6 @@ function InstagramPost({ post }: { post: SocialPost }) {
         </div>
       )}
 
-      {/* Actions */}
       <div className="px-3 pt-2.5 space-y-1.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -174,7 +234,6 @@ function InstagramPost({ post }: { post: SocialPost }) {
 
         <p className="text-sm font-semibold">{post.likes_count.toLocaleString()} likes</p>
 
-        {/* Caption */}
         <p className="text-sm pb-2.5">
           <span className="font-semibold mr-1">{handle}</span>
           {post.content}
