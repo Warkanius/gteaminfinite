@@ -176,7 +176,7 @@ function TweetPost({ post }: { post: SocialPost }) {
                 <HandleLink handle={handle} name={displayName} className="font-semibold text-sm truncate" />
                 <BadgeCheck className="h-3.5 w-3.5 text-primary shrink-0" />
               </div>
-              <span className="text-xs text-muted-foreground">{handle} · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}</span>
+              <span className="text-xs text-muted-foreground">{handle ?? "@GTeamLeague"} · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}</span>
             </div>
           </div>
           <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
