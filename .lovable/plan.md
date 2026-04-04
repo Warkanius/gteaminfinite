@@ -1,63 +1,18 @@
 
 
-# YouTube Post Type + Creator Handles
+# Make All Posts Link to Their Profile
 
-## Overview
-Add a YouTube-style post type to the social feed and introduce "creators" — non-player personalities who make content about the league (commentators, analysts, fan channels, etc.).
+## Problem
+Tweet and Instagram posts only check `player_card_id` for attribution. Posts attributed to creators (via `creator_id`) show as unlinked "GTeam League" text instead of linking to the creator's profile.
 
-## Database Changes
+## Fix (`src/pages/SocialFeed.tsx`)
 
-### New table: `social_creators`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| name | text | Display name (e.g. "HoopsTakeTV") |
-| handle | text | YouTube-style handle (e.g. "@HoopsTakeTV") |
-| accent_color | text | HSL color for avatar circle |
-| created_at | timestamp | |
+Update `TweetPost` and `InstagramPost` to resolve attribution from **either** `player_cards` or `social_creators`:
 
-RLS: admins full CRUD, authenticated can read.
+- Check `post.social_creators` in addition to `post.player_cards`
+- If a creator exists, use `creator.handle`, `creator.name`, `creator.accent_color`, and `creator.avatar_url`
+- If a player exists, use player fields as before
+- Only fall back to static "GTeam League" text when **neither** is set
 
-## Feed Changes (`SocialFeed.tsx`)
-
-### New `YouTubePost` component
-- Large thumbnail image (16:9 aspect ratio) with a play button overlay and duration badge
-- Below: title text (bold, 2-line clamp) + creator avatar circle + creator name + view count + time ago
-- Clean, minimal YouTube card style
-- Post `content` = video title, `image_url` = thumbnail, `likes_count` repurposed as view count
-
-### Data: query joins `social_creators` alongside `player_cards`
-
-## Admin Changes (`AdminSocialFeed.tsx`)
-
-### Creator management
-- Add a small "Manage Creators" section or button that opens a sub-dialog to add/edit/delete creators
-- Each creator has: name, handle, accent color
-
-### Post form updates
-- Add "youtube" to POST_TYPES
-- When post type is "youtube": show a "Creator" dropdown (from `social_creators`) instead of "Player"
-- Relabel "Content" → "Video Title" and "Image" → "Thumbnail" contextually
-
-## Files Changed
-
-| File | Change |
-|------|--------|
-| Migration SQL | Create `social_creators` table + RLS |
-| `src/pages/SocialFeed.tsx` | Add YouTubePost component, fetch creators, route "youtube" post_type |
-| `src/pages/admin/AdminSocialFeed.tsx` | Add creator CRUD, "youtube" post type, contextual form fields |
-
-## YouTube Card Layout
-```text
-┌─────────────────────────────┐
-│ ┌─────────────────────────┐ │
-│ │                         │ │
-│ │    THUMBNAIL (16:9)     │ │
-│ │         ▶  12:34        │ │
-│ └─────────────────────────┘ │
-│ 🔴 Why Team X Will Win...   │
-│    HoopsTakeTV · 24K views  │
-│    · 3 hours ago            │
-└─────────────────────────────┘
-```
+This is a single-file change — just updating the attribution logic in both post components to be creator-aware (the YouTube post already does this correctly).
 
