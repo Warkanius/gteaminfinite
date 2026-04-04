@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -5,8 +6,16 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Heart, MessageCircle, Megaphone, Repeat2, Send, Bookmark,
-  BadgeCheck, MoreHorizontal, Play, ArrowLeft,
+  Heart,
+  MessageCircle,
+  Megaphone,
+  Repeat2,
+  Send,
+  Bookmark,
+  BadgeCheck,
+  MoreHorizontal,
+  Play,
+  ArrowLeft,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -39,6 +48,10 @@ interface SocialPost {
   social_creators: SocialCreator | null;
 }
 
+const LEAGUE_NAME = "GTeam League";
+const LEAGUE_HANDLE = "@GTeamLeague";
+const LEAGUE_ACCENT = "hsl(var(--primary))";
+
 function formatViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -48,16 +61,32 @@ function formatViews(n: number): string {
 export default function FeedProfile() {
   const { handle } = useParams<{ handle: string }>();
   const decodedHandle = decodeURIComponent(handle ?? "");
+  const normalizedHandle = decodedHandle ? (decodedHandle.startsWith("@") ? decodedHandle : `@${decodedHandle}`) : "";
+  const isLeagueHandle = normalizedHandle.toLowerCase() === LEAGUE_HANDLE.toLowerCase();
 
-  // Find the profile — could be a player or creator
   const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ["feed-profile", decodedHandle],
+    queryKey: ["feed-profile", normalizedHandle],
     queryFn: async () => {
-      // Try player first
+      if (!normalizedHandle) return null;
+
+      if (isLeagueHandle) {
+        return {
+          type: "league" as const,
+          id: "league",
+          name: LEAGUE_NAME,
+          handle: LEAGUE_HANDLE,
+          accent: LEAGUE_ACCENT,
+          avatar_url: null,
+          subtitle: "Official League Account",
+        };
+      }
+
+      const rawHandle = decodedHandle.replace(/^@/, "");
+
       const { data: player } = await supabase
         .from("player_cards")
         .select("id, name, social_handle, card_color_primary, position1, rating, avatar_url")
-        .or(`social_handle.eq.${decodedHandle},social_handle.eq.@${decodedHandle.replace("@", "")}`)
+        .or(`social_handle.eq.${decodedHandle},social_handle.eq.@${rawHandle}`)
         .limit(1)
         .maybeSingle();
 
@@ -67,17 +96,16 @@ export default function FeedProfile() {
           id: player.id,
           name: player.name,
           handle: player.social_handle ?? `@${player.name}`,
-          accent: player.card_color_primary ?? "hsl(var(--primary))",
+          accent: player.card_color_primary ?? LEAGUE_ACCENT,
           avatar_url: player.avatar_url,
           subtitle: `${player.position1 ?? ""} · ${player.rating} OVR`,
         };
       }
 
-      // Try creator
       const { data: creator } = await supabase
         .from("social_creators")
         .select("id, name, handle, accent_color, avatar_url")
-        .or(`handle.eq.${decodedHandle},handle.eq.@${decodedHandle.replace("@", "")}`)
+        .or(`handle.eq.${decodedHandle},handle.eq.@${rawHandle}`)
         .limit(1)
         .maybeSingle();
 
@@ -87,7 +115,7 @@ export default function FeedProfile() {
           id: creator.id,
           name: creator.name,
           handle: creator.handle,
-          accent: creator.accent_color ?? "hsl(var(--primary))",
+          accent: creator.accent_color ?? LEAGUE_ACCENT,
           avatar_url: creator.avatar_url,
           subtitle: "Content Creator",
         };
@@ -97,7 +125,6 @@ export default function FeedProfile() {
     },
   });
 
-  // Fetch posts for this profile
   const { data: posts = [], isLoading: postsLoading } = useQuery({
     queryKey: ["feed-profile-posts", profile?.type, profile?.id],
     enabled: !!profile,
@@ -110,8 +137,10 @@ export default function FeedProfile() {
 
       if (profile!.type === "player") {
         query = query.eq("player_card_id", profile!.id);
-      } else {
+      } else if (profile!.type === "creator") {
         query = query.eq("creator_id", profile!.id);
+      } else {
+        query = query.is("player_card_id", null).is("creator_id", null);
       }
 
       const { data, error } = await query;
@@ -124,23 +153,17 @@ export default function FeedProfile() {
 
   return (
     <div className="max-w-lg mx-auto space-y-4">
-      {/* Back */}
       <Link to="/feed">
         <Button variant="ghost" size="sm" className="gap-1.5 -ml-2">
           <ArrowLeft className="h-4 w-4" /> Feed
         </Button>
       </Link>
 
-      {/* Profile Header */}
       {profile && (
         <Card className="overflow-hidden" style={{ borderTopColor: profile.accent, borderTopWidth: 4 }}>
           <div className="p-5 flex items-center gap-4">
             {profile.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={profile.name}
-                className="h-16 w-16 rounded-full object-cover border-2 border-border"
-              />
+              <img src={profile.avatar_url} alt={profile.name} className="h-16 w-16 rounded-full object-cover border-2 border-border" />
             ) : (
               <div
                 className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold text-white shrink-0"
@@ -164,11 +187,7 @@ export default function FeedProfile() {
         </Card>
       )}
 
-      {!profileLoading && !profile && (
-        <div className="text-center py-12 text-muted-foreground">
-          Profile not found
-        </div>
-      )}
+      {!profileLoading && !profile && <div className="text-center py-12 text-muted-foreground">Profile not found</div>}
 
       {isLoading && (
         <div className="flex justify-center py-12">
@@ -176,7 +195,6 @@ export default function FeedProfile() {
         </div>
       )}
 
-      {/* Posts */}
       {posts.map((post) => {
         if (post.post_type === "youtube") return <YouTubePost key={post.id} post={post} />;
         if (post.post_type === "tweet") return <TweetPost key={post.id} post={post} />;
@@ -185,38 +203,67 @@ export default function FeedProfile() {
         return <TweetPost key={post.id} post={post} />;
       })}
 
-      {!isLoading && profile && posts.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          No posts from this profile yet
-        </div>
-      )}
+      {!isLoading && profile && posts.length === 0 && <div className="text-center py-12 text-muted-foreground">No posts from this profile yet</div>}
     </div>
   );
 }
 
-/* ── Shared Avatar ───────────────────────────────────── */
-
-function ProfileAvatar({ name, accent, avatarUrl, size = "md", className = "" }: {
-  name: string; accent: string; avatarUrl?: string | null; size?: "sm" | "md"; className?: string;
-}) {
-  const dims = size === "sm" ? "h-9 w-9 text-xs" : "h-10 w-10 text-sm";
-  if (avatarUrl) {
-    return <img src={avatarUrl} alt={name} className={`${dims} rounded-full object-cover shrink-0 ${className}`} />;
-  }
-  return (
-    <div className={`${dims} rounded-full flex items-center justify-center font-bold text-white shrink-0 ${className}`} style={{ background: accent }}>
-      {name[0]?.toUpperCase()}
-    </div>
-  );
+interface ProfileAvatarProps {
+  name: string;
+  accent: string;
+  avatarUrl?: string | null;
+  size?: "sm" | "md";
+  className?: string;
 }
 
-/* ── YouTube ─────────────────────────────────────────── */
+const ProfileAvatar = React.forwardRef<HTMLDivElement, ProfileAvatarProps>(
+  ({ name, accent, avatarUrl, size = "md", className = "" }, ref) => {
+    const dims = size === "sm" ? "h-9 w-9 text-xs" : "h-10 w-10 text-sm";
+
+    return (
+      <div
+        ref={ref}
+        className={`${dims} rounded-full shrink-0 overflow-hidden ${avatarUrl ? "" : "flex items-center justify-center font-bold text-white"} ${className}`}
+        style={avatarUrl ? undefined : { background: accent }}
+      >
+        {avatarUrl ? <img src={avatarUrl} alt={name} className="h-full w-full object-cover" /> : name[0]?.toUpperCase()}
+      </div>
+    );
+  },
+);
+ProfileAvatar.displayName = "ProfileAvatar";
+
+interface HandleLinkProps {
+  handle?: string | null;
+  name: string;
+  className?: string;
+}
+
+const HandleLink = React.forwardRef<HTMLAnchorElement, HandleLinkProps>(
+  ({ handle, name, className = "" }, ref) => {
+    if (!handle) return <span className={className}>{name}</span>;
+    const cleanHandle = handle.startsWith("@") ? handle : `@${handle}`;
+
+    return (
+      <Link
+        ref={ref}
+        to={`/feed/profile/${encodeURIComponent(cleanHandle)}`}
+        className={`hover:underline hover:text-primary transition-colors ${className}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {name}
+      </Link>
+    );
+  },
+);
+HandleLink.displayName = "HandleLink";
 
 function YouTubePost({ post }: { post: SocialPost }) {
   const creator = post.social_creators;
   const player = post.player_cards;
-  const channelName = creator?.name ?? player?.name ?? "GTeam League";
-  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const channelName = creator?.name ?? player?.name ?? LEAGUE_NAME;
+  const channelHandle = creator?.handle ?? player?.social_handle ?? LEAGUE_HANDLE;
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? LEAGUE_ACCENT;
   const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
 
   return (
@@ -241,7 +288,7 @@ function YouTubePost({ post }: { post: SocialPost }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-snug line-clamp-2">{post.content}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            <HandleLink handle={creator?.handle ?? player?.social_handle} name={channelName} /> · {formatViews(post.likes_count)} views · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
+            <HandleLink handle={channelHandle} name={channelName} /> · {formatViews(post.likes_count)} views · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
           </p>
         </div>
       </div>
@@ -249,14 +296,12 @@ function YouTubePost({ post }: { post: SocialPost }) {
   );
 }
 
-/* ── Tweet ───────────────────────────────────────────── */
-
 function TweetPost({ post }: { post: SocialPost }) {
   const creator = post.social_creators;
   const player = post.player_cards;
-  const displayName = creator?.name ?? player?.name ?? "GTeam League";
-  const handle = creator?.handle ?? player?.social_handle ?? (player ? `@${player.name}` : null);
-  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const displayName = creator?.name ?? player?.name ?? LEAGUE_NAME;
+  const handle = creator?.handle ?? player?.social_handle ?? LEAGUE_HANDLE;
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? LEAGUE_ACCENT;
   const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
   const retweetCount = Math.floor(post.likes_count * 0.4);
 
@@ -272,16 +317,14 @@ function TweetPost({ post }: { post: SocialPost }) {
                 <BadgeCheck className="h-3.5 w-3.5 text-primary shrink-0" />
               </div>
               <span className="text-xs text-muted-foreground">
-                <HandleLink handle={handle} name={handle} /> · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
+                <HandleLink handle={handle} name={handle.startsWith("@") ? handle : `@${handle}`} /> · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
               </span>
             </div>
           </div>
           <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
         </div>
         <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>
-        {post.image_url && (
-          <img src={post.image_url} alt="" className="rounded-xl w-full max-h-64 object-cover border border-border" loading="lazy" />
-        )}
+        {post.image_url && <img src={post.image_url} alt="" className="rounded-xl w-full max-h-64 object-cover border border-border" loading="lazy" />}
         <div className="flex items-center justify-between text-muted-foreground text-xs pt-1 px-2">
           <span className="flex items-center gap-1 hover:text-primary cursor-pointer"><MessageCircle className="h-4 w-4" /> {post.comments_count.toLocaleString()}</span>
           <span className="flex items-center gap-1 hover:text-green-500 cursor-pointer"><Repeat2 className="h-4 w-4" /> {retweetCount.toLocaleString()}</span>
@@ -293,22 +336,20 @@ function TweetPost({ post }: { post: SocialPost }) {
   );
 }
 
-/* ── Instagram ───────────────────────────────────────── */
-
 function InstagramPost({ post }: { post: SocialPost }) {
   const creator = post.social_creators;
   const player = post.player_cards;
-  const displayName = creator?.name ?? player?.name ?? "gteamleague";
-  const handle = creator?.handle ?? player?.social_handle ?? (player ? `@${player.name}` : null);
-  const handleClean = (handle ?? "@gteamleague").replace("@", "");
-  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const rawHandle = creator?.handle ?? player?.social_handle ?? LEAGUE_HANDLE;
+  const displayHandle = rawHandle.replace(/^@/, "");
+  const linkHandle = rawHandle.startsWith("@") ? rawHandle : `@${rawHandle}`;
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? LEAGUE_ACCENT;
   const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
 
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-2.5">
-        <ProfileAvatar name={handleClean} accent={accent} avatarUrl={avatarUrl} size="sm" className="ring-2 ring-pink-500 ring-offset-2 ring-offset-background" />
-        <HandleLink handle={handle} name={handleClean} className="font-semibold text-sm flex-1 truncate" />
+        <ProfileAvatar name={displayHandle} accent={accent} avatarUrl={avatarUrl} size="sm" className="ring-2 ring-pink-500 ring-offset-2 ring-offset-background" />
+        <HandleLink handle={linkHandle} name={displayHandle} className="font-semibold text-sm flex-1 truncate" />
         <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
       </div>
       {post.image_url ? (
@@ -327,7 +368,7 @@ function InstagramPost({ post }: { post: SocialPost }) {
         </div>
         <p className="text-sm font-semibold">{post.likes_count.toLocaleString()} likes</p>
         <p className="text-sm pb-2.5">
-          <HandleLink handle={handle} name={handleClean} className="font-semibold mr-1" />
+          <HandleLink handle={linkHandle} name={displayHandle} className="font-semibold mr-1" />
           {post.content}
         </p>
         {post.comments_count > 0 && <p className="text-xs text-muted-foreground pb-2">View all {post.comments_count.toLocaleString()} comments</p>}
@@ -338,8 +379,6 @@ function InstagramPost({ post }: { post: SocialPost }) {
     </Card>
   );
 }
-
-/* ── Announcement ────────────────────────────────────── */
 
 function AnnouncementPost({ post }: { post: SocialPost }) {
   return (
@@ -355,21 +394,5 @@ function AnnouncementPost({ post }: { post: SocialPost }) {
         <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}</p>
       </div>
     </Card>
-  );
-}
-
-/* ── Handle Link ─────────────────────────────────────── */
-
-function HandleLink({ handle, name, className = "" }: { handle?: string | null; name: string; className?: string }) {
-  if (!handle) return <span className={className}>{name}</span>;
-  const cleanHandle = handle.startsWith("@") ? handle : `@${handle}`;
-  return (
-    <Link
-      to={`/feed/profile/${encodeURIComponent(cleanHandle)}`}
-      className={`hover:underline hover:text-primary transition-colors ${className}`}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {name}
-    </Link>
   );
 }
