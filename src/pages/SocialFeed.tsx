@@ -158,11 +158,12 @@ function YouTubePost({ post }: { post: SocialPost }) {
 /* ── Tweet ───────────────────────────────────────────── */
 
 function TweetPost({ post }: { post: SocialPost }) {
+  const creator = post.social_creators;
   const player = post.player_cards;
-  const hasAttribution = !!post.player_card_id && !!player;
-  const handle = hasAttribution ? (player.social_handle ?? `@${player.name}`) : null;
-  const displayName = player?.name ?? "GTeam League";
-  const accent = player?.card_color_primary ?? "hsl(var(--primary))";
+  const displayName = creator?.name ?? player?.name ?? "GTeam League";
+  const handle = creator?.handle ?? player?.social_handle ?? (player ? `@${player.name}` : null);
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
   const retweetCount = Math.floor(post.likes_count * 0.4);
 
   return (
@@ -170,7 +171,7 @@ function TweetPost({ post }: { post: SocialPost }) {
       <div className="p-4 space-y-2.5">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2.5">
-            <ProfileAvatar name={displayName} accent={accent} avatarUrl={player?.avatar_url} />
+            <ProfileAvatar name={displayName} accent={accent} avatarUrl={avatarUrl} />
             <div className="min-w-0">
               <div className="flex items-center gap-1">
                 <HandleLink handle={handle} name={displayName} className="font-semibold text-sm truncate" />
@@ -199,17 +200,18 @@ function TweetPost({ post }: { post: SocialPost }) {
 /* ── Instagram ───────────────────────────────────────── */
 
 function InstagramPost({ post }: { post: SocialPost }) {
+  const creator = post.social_creators;
   const player = post.player_cards;
-  const hasAttribution = !!post.player_card_id && !!player;
-  const handle = player?.social_handle?.replace("@", "") ?? player?.name ?? "gteamleague";
-  const linkHandle = hasAttribution ? `@${handle}` : null;
-  const accent = player?.card_color_primary ?? "hsl(var(--primary))";
+  const displayHandle = creator?.handle?.replace("@", "") ?? player?.social_handle?.replace("@", "") ?? player?.name ?? "gteamleague";
+  const linkHandle = (creator || player) ? `@${displayHandle}` : null;
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
 
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-2.5">
-        <ProfileAvatar name={handle} accent={accent} avatarUrl={player?.avatar_url} size="sm" className="ring-2 ring-pink-500 ring-offset-2 ring-offset-background" />
-        <HandleLink handle={linkHandle} name={handle} className="font-semibold text-sm flex-1 truncate" />
+        <ProfileAvatar name={displayHandle} accent={accent} avatarUrl={avatarUrl} size="sm" className="ring-2 ring-pink-500 ring-offset-2 ring-offset-background" />
+        <HandleLink handle={linkHandle} name={displayHandle} className="font-semibold text-sm flex-1 truncate" />
         <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
       </div>
       {post.image_url ? (
@@ -228,7 +230,7 @@ function InstagramPost({ post }: { post: SocialPost }) {
         </div>
         <p className="text-sm font-semibold">{post.likes_count.toLocaleString()} likes</p>
         <p className="text-sm pb-2.5">
-          <HandleLink handle={linkHandle} name={handle} className="font-semibold mr-1" />
+          <HandleLink handle={linkHandle} name={displayHandle} className="font-semibold mr-1" />
           {post.content}
         </p>
         {post.comments_count > 0 && <p className="text-xs text-muted-foreground pb-2">View all {post.comments_count.toLocaleString()} comments</p>}
