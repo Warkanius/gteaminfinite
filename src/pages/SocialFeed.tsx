@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -82,33 +83,59 @@ export default function SocialFeed() {
 
 /* ── Shared Components ───────────────────────────────── */
 
-function ProfileAvatar({ name, accent, avatarUrl, size = "md", className = "" }: {
-  name: string; accent: string; avatarUrl?: string | null; size?: "sm" | "md"; className?: string;
-}) {
-  const dims = size === "sm" ? "h-9 w-9 text-xs" : "h-10 w-10 text-sm";
-  if (avatarUrl) {
-    return <img src={avatarUrl} alt={name} className={`${dims} rounded-full object-cover shrink-0 ${className}`} />;
-  }
-  return (
-    <div className={`${dims} rounded-full flex items-center justify-center font-bold text-white shrink-0 ${className}`} style={{ background: accent }}>
-      {name[0]?.toUpperCase()}
-    </div>
-  );
+interface ProfileAvatarProps {
+  name: string;
+  accent: string;
+  avatarUrl?: string | null;
+  size?: "sm" | "md";
+  className?: string;
 }
 
-function HandleLink({ handle, name, className = "" }: { handle?: string | null; name: string; className?: string }) {
-  if (!handle) return <span className={className}>{name}</span>;
-  const cleanHandle = handle.startsWith("@") ? handle : `@${handle}`;
-  return (
-    <Link
-      to={`/feed/profile/${encodeURIComponent(cleanHandle)}`}
-      className={`hover:underline hover:text-primary transition-colors ${className}`}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {name}
-    </Link>
-  );
+const ProfileAvatar = React.forwardRef<HTMLDivElement, ProfileAvatarProps>(
+  ({ name, accent, avatarUrl, size = "md", className = "" }, ref) => {
+    const dims = size === "sm" ? "h-9 w-9 text-xs" : "h-10 w-10 text-sm";
+
+    return (
+      <div
+        ref={ref}
+        className={`${dims} rounded-full shrink-0 overflow-hidden ${avatarUrl ? "" : "flex items-center justify-center font-bold text-white"} ${className}`}
+        style={avatarUrl ? undefined : { background: accent }}
+      >
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
+        ) : (
+          name[0]?.toUpperCase()
+        )}
+      </div>
+    );
+  },
+);
+ProfileAvatar.displayName = "ProfileAvatar";
+
+interface HandleLinkProps {
+  handle?: string | null;
+  name: string;
+  className?: string;
 }
+
+const HandleLink = React.forwardRef<HTMLAnchorElement, HandleLinkProps>(
+  ({ handle, name, className = "" }, ref) => {
+    if (!handle) return <span className={className}>{name}</span>;
+    const cleanHandle = handle.startsWith("@") ? handle : `@${handle}`;
+
+    return (
+      <Link
+        ref={ref}
+        to={`/feed/profile/${encodeURIComponent(cleanHandle)}`}
+        className={`hover:underline hover:text-primary transition-colors ${className}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {name}
+      </Link>
+    );
+  },
+);
+HandleLink.displayName = "HandleLink";
 
 function formatViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -174,10 +201,12 @@ function TweetPost({ post }: { post: SocialPost }) {
             <ProfileAvatar name={displayName} accent={accent} avatarUrl={avatarUrl} />
             <div className="min-w-0">
               <div className="flex items-center gap-1">
-                <HandleLink handle={handle} name={displayName} className="font-semibold text-sm truncate" />
+                <span className="font-semibold text-sm truncate">{displayName}</span>
                 <BadgeCheck className="h-3.5 w-3.5 text-primary shrink-0" />
               </div>
-              <span className="text-xs text-muted-foreground">{handle ?? "@GTeamLeague"} · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}</span>
+              <span className="text-xs text-muted-foreground">
+                <HandleLink handle={handle} name={handle ?? "@GTeamLeague"} /> · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
+              </span>
             </div>
           </div>
           <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
