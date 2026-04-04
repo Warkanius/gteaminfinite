@@ -1,75 +1,63 @@
 
 
-# Distinct Social Post Types — Instagram + Tweet Style
+# YouTube Post Type + Creator Handles
 
-## Problem
-Right now every post renders with the same generic card layout regardless of `post_type`. The feed feels flat and repetitive.
+## Overview
+Add a YouTube-style post type to the social feed and introduce "creators" — non-player personalities who make content about the league (commentators, analysts, fan channels, etc.).
 
-## Solution
-Redesign the feed so each post type has a visually distinct layout mimicking real social platforms:
+## Database Changes
 
-### Tweet Style (`post_type: "tweet"`)
-- Compact text-first layout with Twitter/X-like styling
-- Handle displayed as `@handle` with a subtle verified-style check icon
-- Content text is prominent, no image border treatment
-- Retweet count added alongside likes/comments
-- Light top-border accent using player's card color
+### New table: `social_creators`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| name | text | Display name (e.g. "HoopsTakeTV") |
+| handle | text | YouTube-style handle (e.g. "@HoopsTakeTV") |
+| accent_color | text | HSL color for avatar circle |
+| created_at | timestamp | |
 
-### Instagram Style (`post_type: "story"` or new type `"instagram"`)
-- Image-forward layout: large image taking full card width with no rounded corners inside
-- Username + avatar row at top (Instagram header style)
-- Action row below image: heart, comment, share icons in a row
-- Likes shown as "Liked by X and Y others" text style
-- Caption shown below with handle bolded inline
+RLS: admins full CRUD, authenticated can read.
 
-### Announcement Style (`post_type: "announcement"`)
-- Full-width banner with gradient background using primary/accent colors
-- Megaphone icon prominent, "LEAGUE ANNOUNCEMENT" label
-- Bolder typography, centered text
-- No engagement metrics (likes/comments hidden) — feels official
+## Feed Changes (`SocialFeed.tsx`)
 
-### Admin Changes
-- Add `"instagram"` to the post type options in admin form
-- Add optional fields: `retweet_count` (for tweets), `caption` (separate from content for Instagram posts) — but we can reuse existing columns to avoid a migration:
-  - `content` = caption/text for all types
-  - `image_url` = required for instagram, optional for others
-  - `likes_count` / `comments_count` already exist
+### New `YouTubePost` component
+- Large thumbnail image (16:9 aspect ratio) with a play button overlay and duration badge
+- Below: title text (bold, 2-line clamp) + creator avatar circle + creator name + view count + time ago
+- Clean, minimal YouTube card style
+- Post `content` = video title, `image_url` = thumbnail, `likes_count` repurposed as view count
 
-No database migration needed — just UI changes.
+### Data: query joins `social_creators` alongside `player_cards`
+
+## Admin Changes (`AdminSocialFeed.tsx`)
+
+### Creator management
+- Add a small "Manage Creators" section or button that opens a sub-dialog to add/edit/delete creators
+- Each creator has: name, handle, accent color
+
+### Post form updates
+- Add "youtube" to POST_TYPES
+- When post type is "youtube": show a "Creator" dropdown (from `social_creators`) instead of "Player"
+- Relabel "Content" → "Video Title" and "Image" → "Thumbnail" contextually
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `src/pages/SocialFeed.tsx` | Rewrite to render 3 distinct post layouts based on `post_type` |
-| `src/pages/admin/AdminSocialFeed.tsx` | Add `"instagram"` to POST_TYPES array |
+| Migration SQL | Create `social_creators` table + RLS |
+| `src/pages/SocialFeed.tsx` | Add YouTubePost component, fetch creators, route "youtube" post_type |
+| `src/pages/admin/AdminSocialFeed.tsx` | Add creator CRUD, "youtube" post type, contextual form fields |
 
-## Feed Page Structure
-
+## YouTube Card Layout
 ```text
-┌─────────────────────────┐
-│ 🐦 Tweet Post           │
-│ @handle  ·  2h ago      │
-│ "Just dropped 40 on..." │
-│ ♥ 1.2k  💬 89  🔁 340   │
-└─────────────────────────┘
-
-┌─────────────────────────┐
-│ 📸 Instagram Post       │
-│ handle  ·  avatar       │
-│ ┌─────────────────────┐ │
-│ │                     │ │
-│ │    FULL IMAGE       │ │
-│ │                     │ │
-│ └─────────────────────┘ │
-│ ♥ 💬 ➤  icons row       │
-│ 2,340 likes             │
-│ handle Game day 🔥      │
-└─────────────────────────┘
-
-╔═════════════════════════╗
-║ 📢 LEAGUE ANNOUNCEMENT ║
-║ Season 3 tips off...    ║
-╚═════════════════════════╝
+┌─────────────────────────────┐
+│ ┌─────────────────────────┐ │
+│ │                         │ │
+│ │    THUMBNAIL (16:9)     │ │
+│ │         ▶  12:34        │ │
+│ └─────────────────────────┘ │
+│ 🔴 Why Team X Will Win...   │
+│    HoopsTakeTV · 24K views  │
+│    · 3 hours ago            │
+└─────────────────────────────┘
 ```
 
