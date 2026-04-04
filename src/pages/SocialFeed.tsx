@@ -209,7 +209,7 @@ function InstagramPost({ post }: { post: SocialPost }) {
     <Card className="overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-2.5">
         <ProfileAvatar name={handle} accent={accent} avatarUrl={player?.avatar_url} size="sm" className="ring-2 ring-pink-500 ring-offset-2 ring-offset-background" />
-        <HandleLink handle={`@${handle}`} name={handle} className="font-semibold text-sm flex-1 truncate" />
+        <HandleLink handle={linkHandle} name={handle} className="font-semibold text-sm flex-1 truncate" />
         <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
       </div>
       {post.image_url ? (
