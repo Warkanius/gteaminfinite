@@ -61,6 +61,7 @@ const adminItems = [
   { title: "Gem Tasks", url: "/admin/gem-tasks", icon: Gem },
   { title: "Auction House", url: "/admin/auction", icon: ShoppingCart },
   { title: "Starter Packs", url: "/admin/starter-packs", icon: Gift },
+  { title: "Social Feed", url: "/admin/social-feed", icon: Newspaper },
 ];
 
 export function AppSidebar() {

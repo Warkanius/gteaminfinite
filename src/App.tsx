@@ -92,6 +92,9 @@ const App = () => (
             <Route path="/admin/gem-tasks" element={<ProtectedRoute><LazyLoad><AdminGemTasks /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/auction" element={<ProtectedRoute><LazyLoad><AdminAuction /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/starter-packs" element={<ProtectedRoute><LazyLoad><AdminStarterPacks /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/social-feed" element={<ProtectedRoute><LazyLoad><AdminSocialFeed /></LazyLoad></ProtectedRoute>} />
+            <Route path="/feed" element={<ProtectedRoute><LazyLoad><SocialFeed /></LazyLoad></ProtectedRoute>} />
+            <Route path="/install" element={<ProtectedRoute><LazyLoad><Install /></LazyLoad></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
