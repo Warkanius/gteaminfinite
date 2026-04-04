@@ -496,8 +496,9 @@ export default function AdminSocialFeed() {
           <div className="space-y-1">
             <Label>Accent Color</Label>
             <HslColorPicker
+              label="Accent Color"
               value={creatorForm.accent_color ?? "hsl(0, 70%, 50%)"}
-              onChange={(v) => setCreatorForm((f) => ({ ...f, accent_color: v }))}
+              onChange={(v) => setCreatorForm((f) => ({ ...f, accent_color: v ?? "hsl(0, 70%, 50%)" }))}
             />
           </div>
         </div>
