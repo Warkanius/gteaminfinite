@@ -265,7 +265,7 @@ function TweetPost({ post }: { post: SocialPost }) {
       <div className="p-4 space-y-2.5">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2.5">
-            <ProfileAvatar name={displayName} accent={accent} avatarUrl={player?.avatar_url} />
+            <ProfileAvatar name={displayName} accent={accent} avatarUrl={avatarUrl} />
             <div className="min-w-0">
               <div className="flex items-center gap-1">
                 <span className="font-semibold text-sm truncate">{displayName}</span>
