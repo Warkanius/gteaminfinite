@@ -220,12 +220,51 @@ export default function AdminSocialFeed() {
               placeholder="What's happening in the league…"
             />
           </div>
-          <div className="space-y-1">
-            <Label>Image URL (optional)</Label>
+          <div className="space-y-2">
+            <Label>Image</Label>
+            {form.image_url ? (
+              <div className="relative rounded-md overflow-hidden border border-border">
+                <img src={form.image_url} alt="Preview" className="w-full max-h-48 object-cover" />
+                <Button
+                  size="icon"
+                  variant="destructive"
+                  className="absolute top-2 right-2 h-6 w-6"
+                  onClick={() => setForm((f) => ({ ...f, image_url: null }))}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <div
+                className="flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-muted-foreground/25 p-6 cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => fileRef.current?.click()}
+              >
+                {uploading ? (
+                  <p className="text-sm text-muted-foreground">Uploading…</p>
+                ) : (
+                  <>
+                    <Upload className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Click to upload an image</p>
+                  </>
+                )}
+              </div>
+            )}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageUpload(file);
+                e.target.value = "";
+              }}
+            />
             <Input
               value={form.image_url ?? ""}
               onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value || null }))}
-              placeholder="https://…"
+              placeholder="Or paste a URL…"
+              className="text-xs"
             />
           </div>
           <div className="space-y-1">
