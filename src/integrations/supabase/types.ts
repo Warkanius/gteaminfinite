@@ -730,6 +730,7 @@ export type Database = {
       }
       player_cards: {
         Row: {
+          avatar_url: string | null
           card_animation: string | null
           card_color_primary: string | null
           card_color_secondary: string | null
@@ -768,6 +769,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           card_animation?: string | null
           card_color_primary?: string | null
           card_color_secondary?: string | null
@@ -806,6 +808,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           card_animation?: string | null
           card_color_primary?: string | null
           card_color_secondary?: string | null
@@ -1060,6 +1063,7 @@ export type Database = {
       social_creators: {
         Row: {
           accent_color: string | null
+          avatar_url: string | null
           created_at: string
           handle: string
           id: string
@@ -1067,6 +1071,7 @@ export type Database = {
         }
         Insert: {
           accent_color?: string | null
+          avatar_url?: string | null
           created_at?: string
           handle: string
           id?: string
@@ -1074,6 +1079,7 @@ export type Database = {
         }
         Update: {
           accent_color?: string | null
+          avatar_url?: string | null
           created_at?: string
           handle?: string
           id?: string

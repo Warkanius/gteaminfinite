@@ -1,11 +1,12 @@
+import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import {
   Heart, MessageCircle, Megaphone, Repeat2, Send, Bookmark,
-  BadgeCheck, MoreHorizontal, Play,
+  BadgeCheck, MoreHorizontal, Play, ArrowLeft,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -38,24 +39,136 @@ interface SocialPost {
   social_creators: SocialCreator | null;
 }
 
-export default function SocialFeed() {
-  const { data: posts = [], isLoading } = useQuery({
-    queryKey: ["social-feed"],
+function formatViews(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+export default function FeedProfile() {
+  const { handle } = useParams<{ handle: string }>();
+  const decodedHandle = decodeURIComponent(handle ?? "");
+
+  // Find the profile — could be a player or creator
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ["feed-profile", decodedHandle],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Try player first
+      const { data: player } = await supabase
+        .from("player_cards")
+        .select("id, name, social_handle, card_color_primary, position1, rating, avatar_url")
+        .or(`social_handle.eq.${decodedHandle},social_handle.eq.@${decodedHandle.replace("@", "")}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (player) {
+        return {
+          type: "player" as const,
+          id: player.id,
+          name: player.name,
+          handle: player.social_handle ?? `@${player.name}`,
+          accent: player.card_color_primary ?? "hsl(var(--primary))",
+          avatar_url: player.avatar_url,
+          subtitle: `${player.position1 ?? ""} · ${player.rating} OVR`,
+        };
+      }
+
+      // Try creator
+      const { data: creator } = await supabase
+        .from("social_creators")
+        .select("id, name, handle, accent_color, avatar_url")
+        .or(`handle.eq.${decodedHandle},handle.eq.@${decodedHandle.replace("@", "")}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (creator) {
+        return {
+          type: "creator" as const,
+          id: creator.id,
+          name: creator.name,
+          handle: creator.handle,
+          accent: creator.accent_color ?? "hsl(var(--primary))",
+          avatar_url: creator.avatar_url,
+          subtitle: "Content Creator",
+        };
+      }
+
+      return null;
+    },
+  });
+
+  // Fetch posts for this profile
+  const { data: posts = [], isLoading: postsLoading } = useQuery({
+    queryKey: ["feed-profile-posts", profile?.type, profile?.id],
+    enabled: !!profile,
+    queryFn: async () => {
+      let query = supabase
         .from("social_posts")
         .select("*, player_cards(name, social_handle, card_color_primary, rating, position1, avatar_url), social_creators(id, name, handle, accent_color, avatar_url)")
         .order("posted_at", { ascending: false })
         .limit(50);
+
+      if (profile!.type === "player") {
+        query = query.eq("player_card_id", profile!.id);
+      } else {
+        query = query.eq("creator_id", profile!.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data as unknown as SocialPost[];
     },
   });
 
+  const isLoading = profileLoading || postsLoading;
+
   return (
     <div className="max-w-lg mx-auto space-y-4">
-      <h1 className="text-2xl font-display font-bold tracking-wide">Feed</h1>
-      <p className="text-sm text-muted-foreground">Latest from around the league</p>
+      {/* Back */}
+      <Link to="/feed">
+        <Button variant="ghost" size="sm" className="gap-1.5 -ml-2">
+          <ArrowLeft className="h-4 w-4" /> Feed
+        </Button>
+      </Link>
+
+      {/* Profile Header */}
+      {profile && (
+        <Card className="overflow-hidden" style={{ borderTopColor: profile.accent, borderTopWidth: 4 }}>
+          <div className="p-5 flex items-center gap-4">
+            {profile.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={profile.name}
+                className="h-16 w-16 rounded-full object-cover border-2 border-border"
+              />
+            ) : (
+              <div
+                className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold text-white shrink-0"
+                style={{ background: profile.accent }}
+              >
+                {profile.name[0]?.toUpperCase()}
+              </div>
+            )}
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-lg font-bold">{profile.name}</h1>
+                {profile.type === "player" && <BadgeCheck className="h-4 w-4 text-primary" />}
+              </div>
+              <p className="text-sm text-muted-foreground">{profile.handle}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{profile.subtitle}</p>
+            </div>
+          </div>
+          <div className="border-t border-border px-5 py-2.5 flex items-center gap-4 text-sm text-muted-foreground">
+            <span><strong className="text-foreground">{posts.length}</strong> posts</span>
+          </div>
+        </Card>
+      )}
+
+      {!profileLoading && !profile && (
+        <div className="text-center py-12 text-muted-foreground">
+          Profile not found
+        </div>
+      )}
 
       {isLoading && (
         <div className="flex justify-center py-12">
@@ -63,6 +176,7 @@ export default function SocialFeed() {
         </div>
       )}
 
+      {/* Posts */}
       {posts.map((post) => {
         if (post.post_type === "youtube") return <YouTubePost key={post.id} post={post} />;
         if (post.post_type === "tweet") return <TweetPost key={post.id} post={post} />;
@@ -71,16 +185,16 @@ export default function SocialFeed() {
         return <TweetPost key={post.id} post={post} />;
       })}
 
-      {!isLoading && posts.length === 0 && (
+      {!isLoading && profile && posts.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
-          No posts yet — check back later!
+          No posts from this profile yet
         </div>
       )}
     </div>
   );
 }
 
-/* ── Shared Components ───────────────────────────────── */
+/* ── Shared Avatar ───────────────────────────────────── */
 
 function ProfileAvatar({ name, accent, avatarUrl, size = "md", className = "" }: {
   name: string; accent: string; avatarUrl?: string | null; size?: "sm" | "md"; className?: string;
@@ -94,26 +208,6 @@ function ProfileAvatar({ name, accent, avatarUrl, size = "md", className = "" }:
       {name[0]?.toUpperCase()}
     </div>
   );
-}
-
-function HandleLink({ handle, name, className = "" }: { handle?: string | null; name: string; className?: string }) {
-  if (!handle) return <span className={className}>{name}</span>;
-  const cleanHandle = handle.startsWith("@") ? handle : `@${handle}`;
-  return (
-    <Link
-      to={`/feed/profile/${encodeURIComponent(cleanHandle)}`}
-      className={`hover:underline hover:text-primary transition-colors ${className}`}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {name}
-    </Link>
-  );
-}
-
-function formatViews(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
 }
 
 /* ── YouTube ─────────────────────────────────────────── */
@@ -172,10 +266,12 @@ function TweetPost({ post }: { post: SocialPost }) {
             <ProfileAvatar name={displayName} accent={accent} avatarUrl={player?.avatar_url} />
             <div className="min-w-0">
               <div className="flex items-center gap-1">
-                <HandleLink handle={handle} name={displayName} className="font-semibold text-sm truncate" />
+                <span className="font-semibold text-sm truncate">{displayName}</span>
                 <BadgeCheck className="h-3.5 w-3.5 text-primary shrink-0" />
               </div>
-              <span className="text-xs text-muted-foreground">{handle} · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}</span>
+              <span className="text-xs text-muted-foreground">
+                <HandleLink handle={handle} name={handle} /> · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
+              </span>
             </div>
           </div>
           <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
@@ -253,5 +349,21 @@ function AnnouncementPost({ post }: { post: SocialPost }) {
         <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}</p>
       </div>
     </Card>
+  );
+}
+
+/* ── Handle Link ─────────────────────────────────────── */
+
+function HandleLink({ handle, name, className = "" }: { handle?: string | null; name: string; className?: string }) {
+  if (!handle) return <span className={className}>{name}</span>;
+  const cleanHandle = handle.startsWith("@") ? handle : `@${handle}`;
+  return (
+    <Link
+      to={`/feed/profile/${encodeURIComponent(cleanHandle)}`}
+      className={`hover:underline hover:text-primary transition-colors ${className}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {name}
+    </Link>
   );
 }

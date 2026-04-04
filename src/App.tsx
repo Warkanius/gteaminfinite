@@ -34,6 +34,7 @@ const AdminAuction = lazy(() => import("@/pages/admin/AdminAuction"));
 const AdminStarterPacks = lazy(() => import("@/pages/admin/AdminStarterPacks"));
 const AdminSocialFeed = lazy(() => import("@/pages/admin/AdminSocialFeed"));
 const SocialFeed = lazy(() => import("@/pages/SocialFeed"));
+const FeedProfile = lazy(() => import("@/pages/FeedProfile"));
 const Install = lazy(() => import("@/pages/Install"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
@@ -94,6 +95,7 @@ const App = () => (
             <Route path="/admin/starter-packs" element={<ProtectedRoute><LazyLoad><AdminStarterPacks /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/social-feed" element={<ProtectedRoute><LazyLoad><AdminSocialFeed /></LazyLoad></ProtectedRoute>} />
             <Route path="/feed" element={<ProtectedRoute><LazyLoad><SocialFeed /></LazyLoad></ProtectedRoute>} />
+            <Route path="/feed/profile/:handle" element={<ProtectedRoute><LazyLoad><FeedProfile /></LazyLoad></ProtectedRoute>} />
             <Route path="/install" element={<ProtectedRoute><LazyLoad><Install /></LazyLoad></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

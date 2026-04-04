@@ -37,6 +37,7 @@ interface Creator {
   name: string;
   handle: string;
   accent_color: string | null;
+  avatar_url: string | null;
   created_at: string;
 }
 
@@ -56,6 +57,7 @@ const emptyCreator = (): Partial<Creator> => ({
   name: "",
   handle: "",
   accent_color: "hsl(0, 70%, 50%)",
+  avatar_url: null,
 });
 
 /* ── Main ──────────────────────────────────── */
@@ -75,6 +77,25 @@ export default function AdminSocialFeed() {
   const [creatorEditId, setCreatorEditId] = useState<string | null>(null);
   const [creatorDeleteId, setCreatorDeleteId] = useState<string | null>(null);
   const [creatorsOpen, setCreatorsOpen] = useState(false);
+  const [creatorUploading, setCreatorUploading] = useState(false);
+  const creatorFileRef = useRef<HTMLInputElement>(null);
+
+  const handleCreatorAvatarUpload = async (file: File) => {
+    setCreatorUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `avatars/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("social-images").upload(path, file);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("social-images").getPublicUrl(path);
+      setCreatorForm((f) => ({ ...f, avatar_url: urlData.publicUrl }));
+      toast.success("Avatar uploaded");
+    } catch (e: any) {
+      toast.error(e.message ?? "Upload failed");
+    } finally {
+      setCreatorUploading(false);
+    }
+  };
 
   /* ── Queries ─────────────────────────────── */
 
@@ -183,6 +204,7 @@ export default function AdminSocialFeed() {
         name: creatorForm.name ?? "",
         handle: creatorForm.handle ?? "",
         accent_color: creatorForm.accent_color ?? "hsl(0, 70%, 50%)",
+        avatar_url: creatorForm.avatar_url ?? null,
       };
       if (creatorEditId) {
         const { error } = await supabase.from("social_creators").update(payload).eq("id", creatorEditId);
@@ -499,6 +521,50 @@ export default function AdminSocialFeed() {
               label="Accent Color"
               value={creatorForm.accent_color ?? "hsl(0, 70%, 50%)"}
               onChange={(v) => setCreatorForm((f) => ({ ...f, accent_color: v ?? "hsl(0, 70%, 50%)" }))}
+            />
+          </div>
+          {/* Avatar upload */}
+          <div className="space-y-2">
+            <Label>Profile Picture</Label>
+            <div className="flex items-center gap-3">
+              {creatorForm.avatar_url ? (
+                <div className="relative">
+                  <img src={creatorForm.avatar_url} alt="Avatar" className="h-14 w-14 rounded-full object-cover border border-border" />
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 h-5 w-5"
+                    onClick={() => setCreatorForm((f) => ({ ...f, avatar_url: null }))}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="h-14 w-14 rounded-full border-2 border-dashed border-muted-foreground/25 flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => creatorFileRef.current?.click()}
+                >
+                  {creatorUploading ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  ) : (
+                    <Upload className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+              )}
+              <Button variant="outline" size="sm" onClick={() => creatorFileRef.current?.click()} disabled={creatorUploading}>
+                {creatorUploading ? "Uploading…" : "Upload"}
+              </Button>
+            </div>
+            <input
+              ref={creatorFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleCreatorAvatarUpload(file);
+                e.target.value = "";
+              }}
             />
           </div>
         </div>
