@@ -494,7 +494,7 @@ export default function AdminSocialFeed() {
         title={creatorEditId ? "Edit Creator" : "New Creator"}
         onSave={() => saveCreatorMut.mutate()}
         saving={saveCreatorMut.isPending}
-        className="max-w-md"
+        className="max-w-md max-h-[85vh] flex flex-col overflow-hidden"
       >
         <div className="space-y-4 p-1">
           <div className="space-y-1">

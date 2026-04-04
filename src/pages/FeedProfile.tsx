@@ -327,7 +327,7 @@ function InstagramPost({ post }: { post: SocialPost }) {
         </div>
         <p className="text-sm font-semibold">{post.likes_count.toLocaleString()} likes</p>
         <p className="text-sm pb-2.5">
-          <HandleLink handle={`@${handle}`} name={handle} className="font-semibold mr-1" />
+          <HandleLink handle={handle} name={handleClean} className="font-semibold mr-1" />
           {post.content}
         </p>
         {post.comments_count > 0 && <p className="text-xs text-muted-foreground pb-2">View all {post.comments_count.toLocaleString()} comments</p>}
