@@ -77,6 +77,25 @@ export default function AdminSocialFeed() {
   const [creatorEditId, setCreatorEditId] = useState<string | null>(null);
   const [creatorDeleteId, setCreatorDeleteId] = useState<string | null>(null);
   const [creatorsOpen, setCreatorsOpen] = useState(false);
+  const [creatorUploading, setCreatorUploading] = useState(false);
+  const creatorFileRef = useRef<HTMLInputElement>(null);
+
+  const handleCreatorAvatarUpload = async (file: File) => {
+    setCreatorUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `avatars/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("social-images").upload(path, file);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("social-images").getPublicUrl(path);
+      setCreatorForm((f) => ({ ...f, avatar_url: urlData.publicUrl }));
+      toast.success("Avatar uploaded");
+    } catch (e: any) {
+      toast.error(e.message ?? "Upload failed");
+    } finally {
+      setCreatorUploading(false);
+    }
+  };
 
   /* ── Queries ─────────────────────────────── */
 
