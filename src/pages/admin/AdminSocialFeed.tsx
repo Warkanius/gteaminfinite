@@ -157,10 +157,9 @@ export default function AdminSocialFeed() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const isYoutube = form.post_type === "youtube";
       const payload: any = {
-        player_card_id: isYoutube ? null : (form.player_card_id || null),
-        creator_id: isYoutube ? (form.creator_id || null) : null,
+        player_card_id: form.player_card_id || null,
+        creator_id: form.creator_id || null,
         content: form.content,
         image_url: form.image_url || null,
         likes_count: form.likes_count ?? 0,
