@@ -5,8 +5,15 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import {
-  Heart, MessageCircle, Megaphone, Repeat2, Send, Bookmark,
-  BadgeCheck, MoreHorizontal, Play,
+  Heart,
+  MessageCircle,
+  Megaphone,
+  Repeat2,
+  Send,
+  Bookmark,
+  BadgeCheck,
+  MoreHorizontal,
+  Play,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -38,6 +45,10 @@ interface SocialPost {
   } | null;
   social_creators: SocialCreator | null;
 }
+
+const LEAGUE_NAME = "GTeam League";
+const LEAGUE_HANDLE = "@GTeamLeague";
+const LEAGUE_ACCENT = "hsl(var(--primary))";
 
 export default function SocialFeed() {
   const { data: posts = [], isLoading } = useQuery({
@@ -73,15 +84,11 @@ export default function SocialFeed() {
       })}
 
       {!isLoading && posts.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          No posts yet — check back later!
-        </div>
+        <div className="text-center py-12 text-muted-foreground">No posts yet — check back later!</div>
       )}
     </div>
   );
 }
-
-/* ── Shared Components ───────────────────────────────── */
 
 interface ProfileAvatarProps {
   name: string;
@@ -101,11 +108,7 @@ const ProfileAvatar = React.forwardRef<HTMLDivElement, ProfileAvatarProps>(
         className={`${dims} rounded-full shrink-0 overflow-hidden ${avatarUrl ? "" : "flex items-center justify-center font-bold text-white"} ${className}`}
         style={avatarUrl ? undefined : { background: accent }}
       >
-        {avatarUrl ? (
-          <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
-        ) : (
-          name[0]?.toUpperCase()
-        )}
+        {avatarUrl ? <img src={avatarUrl} alt={name} className="h-full w-full object-cover" /> : name[0]?.toUpperCase()}
       </div>
     );
   },
@@ -143,13 +146,12 @@ function formatViews(n: number): string {
   return n.toLocaleString();
 }
 
-/* ── YouTube ─────────────────────────────────────────── */
-
 function YouTubePost({ post }: { post: SocialPost }) {
   const creator = post.social_creators;
   const player = post.player_cards;
-  const channelName = creator?.name ?? player?.name ?? "GTeam League";
-  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const channelName = creator?.name ?? player?.name ?? LEAGUE_NAME;
+  const channelHandle = creator?.handle ?? player?.social_handle ?? LEAGUE_HANDLE;
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? LEAGUE_ACCENT;
   const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
 
   return (
@@ -174,7 +176,7 @@ function YouTubePost({ post }: { post: SocialPost }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-snug line-clamp-2">{post.content}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            <HandleLink handle={creator?.handle ?? player?.social_handle} name={channelName} /> · {formatViews(post.likes_count)} views · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
+            <HandleLink handle={channelHandle} name={channelName} /> · {formatViews(post.likes_count)} views · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
           </p>
         </div>
       </div>
@@ -182,14 +184,12 @@ function YouTubePost({ post }: { post: SocialPost }) {
   );
 }
 
-/* ── Tweet ───────────────────────────────────────────── */
-
 function TweetPost({ post }: { post: SocialPost }) {
   const creator = post.social_creators;
   const player = post.player_cards;
-  const displayName = creator?.name ?? player?.name ?? "GTeam League";
-  const handle = creator?.handle ?? player?.social_handle ?? (player ? `@${player.name}` : null);
-  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const displayName = creator?.name ?? player?.name ?? LEAGUE_NAME;
+  const handle = creator?.handle ?? player?.social_handle ?? LEAGUE_HANDLE;
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? LEAGUE_ACCENT;
   const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
   const retweetCount = Math.floor(post.likes_count * 0.4);
 
@@ -205,16 +205,14 @@ function TweetPost({ post }: { post: SocialPost }) {
                 <BadgeCheck className="h-3.5 w-3.5 text-primary shrink-0" />
               </div>
               <span className="text-xs text-muted-foreground">
-                <HandleLink handle={handle} name={handle ?? "@GTeamLeague"} /> · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
+                <HandleLink handle={handle} name={handle.startsWith("@") ? handle : `@${handle}`} /> · {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
               </span>
             </div>
           </div>
           <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
         </div>
         <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>
-        {post.image_url && (
-          <img src={post.image_url} alt="" className="rounded-xl w-full max-h-64 object-cover border border-border" loading="lazy" />
-        )}
+        {post.image_url && <img src={post.image_url} alt="" className="rounded-xl w-full max-h-64 object-cover border border-border" loading="lazy" />}
         <div className="flex items-center justify-between text-muted-foreground text-xs pt-1 px-2">
           <span className="flex items-center gap-1 hover:text-primary cursor-pointer"><MessageCircle className="h-4 w-4" /> {post.comments_count.toLocaleString()}</span>
           <span className="flex items-center gap-1 hover:text-green-500 cursor-pointer"><Repeat2 className="h-4 w-4" /> {retweetCount.toLocaleString()}</span>
@@ -226,14 +224,13 @@ function TweetPost({ post }: { post: SocialPost }) {
   );
 }
 
-/* ── Instagram ───────────────────────────────────────── */
-
 function InstagramPost({ post }: { post: SocialPost }) {
   const creator = post.social_creators;
   const player = post.player_cards;
-  const displayHandle = creator?.handle?.replace("@", "") ?? player?.social_handle?.replace("@", "") ?? player?.name ?? "gteamleague";
-  const linkHandle = (creator || player) ? `@${displayHandle}` : null;
-  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const rawHandle = creator?.handle ?? player?.social_handle ?? LEAGUE_HANDLE;
+  const displayHandle = rawHandle.replace(/^@/, "");
+  const linkHandle = rawHandle.startsWith("@") ? rawHandle : `@${rawHandle}`;
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? LEAGUE_ACCENT;
   const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
 
   return (
@@ -270,8 +267,6 @@ function InstagramPost({ post }: { post: SocialPost }) {
     </Card>
   );
 }
-
-/* ── Announcement ────────────────────────────────────── */
 
 function AnnouncementPost({ post }: { post: SocialPost }) {
   return (
