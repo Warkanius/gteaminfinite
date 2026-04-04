@@ -49,6 +49,25 @@ export default function AdminSocialFeed() {
   const [editId, setEditId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("social-images").upload(path, file);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("social-images").getPublicUrl(path);
+      setForm((f) => ({ ...f, image_url: urlData.publicUrl }));
+      toast.success("Image uploaded");
+    } catch (e: any) {
+      toast.error(e.message ?? "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ["admin-social-posts"],
