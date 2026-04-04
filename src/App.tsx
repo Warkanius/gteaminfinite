@@ -34,6 +34,7 @@ const AdminAuction = lazy(() => import("@/pages/admin/AdminAuction"));
 const AdminStarterPacks = lazy(() => import("@/pages/admin/AdminStarterPacks"));
 const AdminSocialFeed = lazy(() => import("@/pages/admin/AdminSocialFeed"));
 const SocialFeed = lazy(() => import("@/pages/SocialFeed"));
+const FeedProfile = lazy(() => import("@/pages/FeedProfile"));
 const Install = lazy(() => import("@/pages/Install"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
