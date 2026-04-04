@@ -523,6 +523,50 @@ export default function AdminSocialFeed() {
               onChange={(v) => setCreatorForm((f) => ({ ...f, accent_color: v ?? "hsl(0, 70%, 50%)" }))}
             />
           </div>
+          {/* Avatar upload */}
+          <div className="space-y-2">
+            <Label>Profile Picture</Label>
+            <div className="flex items-center gap-3">
+              {creatorForm.avatar_url ? (
+                <div className="relative">
+                  <img src={creatorForm.avatar_url} alt="Avatar" className="h-14 w-14 rounded-full object-cover border border-border" />
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 h-5 w-5"
+                    onClick={() => setCreatorForm((f) => ({ ...f, avatar_url: null }))}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="h-14 w-14 rounded-full border-2 border-dashed border-muted-foreground/25 flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => creatorFileRef.current?.click()}
+                >
+                  {creatorUploading ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  ) : (
+                    <Upload className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+              )}
+              <Button variant="outline" size="sm" onClick={() => creatorFileRef.current?.click()} disabled={creatorUploading}>
+                {creatorUploading ? "Uploading…" : "Upload"}
+              </Button>
+            </div>
+            <input
+              ref={creatorFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleCreatorAvatarUpload(file);
+                e.target.value = "";
+              }}
+            />
+          </div>
         </div>
       </FormDialog>
 
