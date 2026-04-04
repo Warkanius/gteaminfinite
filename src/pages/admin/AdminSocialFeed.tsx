@@ -365,44 +365,43 @@ export default function AdminSocialFeed() {
             </Select>
           </div>
 
-          {/* Attribution */}
-          {isYoutube ? (
-            <div className="space-y-1">
-              <Label>Creator</Label>
-              <Select
-                value={form.creator_id ?? "none"}
-                onValueChange={(v) => setForm((f) => ({ ...f, creator_id: v === "none" ? null : v }))}
-              >
-                <SelectTrigger><SelectValue placeholder="Select creator" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">🏀 League Channel</SelectItem>
-                  {creators.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.handle} — {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <Label>Player (optional)</Label>
-              <Select
-                value={form.player_card_id ?? "none"}
-                onValueChange={(v) => setForm((f) => ({ ...f, player_card_id: v === "none" ? null : v }))}
-              >
-                <SelectTrigger><SelectValue placeholder="League post" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">🏀 League Post</SelectItem>
-                  {players.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.social_handle ?? p.name} — {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {/* Attribution — Player */}
+          <div className="space-y-1">
+            <Label>Player (optional)</Label>
+            <Select
+              value={form.player_card_id ?? "none"}
+              onValueChange={(v) => setForm((f) => ({ ...f, player_card_id: v === "none" ? null : v, creator_id: v === "none" ? f.creator_id : null }))}
+            >
+              <SelectTrigger><SelectValue placeholder="League post" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— None —</SelectItem>
+                {players.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.social_handle ?? p.name} — {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Attribution — Creator */}
+          <div className="space-y-1">
+            <Label>Creator (optional)</Label>
+            <Select
+              value={form.creator_id ?? "none"}
+              onValueChange={(v) => setForm((f) => ({ ...f, creator_id: v === "none" ? null : v, player_card_id: v === "none" ? f.player_card_id : null }))}
+            >
+              <SelectTrigger><SelectValue placeholder="No creator" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— None —</SelectItem>
+                {creators.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.handle} — {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Content */}
           <div className="space-y-1">
