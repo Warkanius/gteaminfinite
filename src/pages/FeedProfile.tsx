@@ -252,10 +252,12 @@ function YouTubePost({ post }: { post: SocialPost }) {
 /* ── Tweet ───────────────────────────────────────────── */
 
 function TweetPost({ post }: { post: SocialPost }) {
+  const creator = post.social_creators;
   const player = post.player_cards;
-  const handle = player?.social_handle ?? `@${player?.name ?? "GTeamLeague"}`;
-  const displayName = player?.name ?? "GTeam League";
-  const accent = player?.card_color_primary ?? "hsl(var(--primary))";
+  const displayName = creator?.name ?? player?.name ?? "GTeam League";
+  const handle = creator?.handle ?? player?.social_handle ?? (player ? `@${player.name}` : null);
+  const accent = creator?.accent_color ?? player?.card_color_primary ?? "hsl(var(--primary))";
+  const avatarUrl = creator?.avatar_url ?? player?.avatar_url;
   const retweetCount = Math.floor(post.likes_count * 0.4);
 
   return (
