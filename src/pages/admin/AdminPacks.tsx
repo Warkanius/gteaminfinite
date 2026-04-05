@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -179,10 +180,12 @@ export default function AdminPacks() {
               <div className="flex gap-2 items-end">
                 <div className="space-y-1 flex-1">
                   <Label>Player</Label>
-                  <Select value={slotPlayer} onValueChange={setSlotPlayer}>
-                    <SelectTrigger><SelectValue placeholder="Select player" /></SelectTrigger>
-                    <SelectContent>{playerCards.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <PlayerCombobox
+                    players={playerCards}
+                    value={slotPlayer}
+                    onValueChange={setSlotPlayer}
+                    placeholder="Search players…"
+                  />
                 </div>
                 <div className="space-y-1 w-24"><Label>Slot</Label><Input type="number" min={1} value={slotNum} onChange={(e) => setSlotNum(Number(e.target.value))} /></div>
                 <Button disabled={!slotPlayer} onClick={() => { addSlotMut.mutate({ packId: detailPack!.id, playerCardId: slotPlayer, slot: slotNum }); setSlotPlayer(""); }}><Plus className="h-4 w-4 mr-1" /> Add Player</Button>

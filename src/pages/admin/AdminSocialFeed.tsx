@@ -28,6 +28,8 @@ interface SocialPost {
   post_type: string;
   posted_at: string;
   created_at: string;
+  scheduled_at: string | null;
+  is_published: boolean;
 }
 
 interface PlayerOption { id: string; name: string; social_handle: string | null; }
@@ -51,6 +53,8 @@ const emptyForm = (): Partial<SocialPost> => ({
   likes_count: Math.floor(Math.random() * 500) + 10,
   comments_count: Math.floor(Math.random() * 80),
   post_type: "tweet",
+  scheduled_at: null,
+  is_published: true,
 });
 
 const emptyCreator = (): Partial<Creator> => ({
@@ -157,6 +161,7 @@ export default function AdminSocialFeed() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      const isScheduled = !!form.scheduled_at;
       const payload: any = {
         player_card_id: form.player_card_id || null,
         creator_id: form.creator_id || null,
@@ -165,6 +170,8 @@ export default function AdminSocialFeed() {
         likes_count: form.likes_count ?? 0,
         comments_count: form.comments_count ?? 0,
         post_type: form.post_type ?? "tweet",
+        scheduled_at: form.scheduled_at || null,
+        is_published: isScheduled ? false : true,
       };
       if (editId) {
         const { error } = await supabase.from("social_posts").update(payload).eq("id", editId);
@@ -256,7 +263,12 @@ export default function AdminSocialFeed() {
       key: "posted_at",
       label: "Posted",
       sortable: true,
-      render: (r) => formatDistanceToNow(new Date(r.posted_at), { addSuffix: true }),
+      render: (r) => {
+        if (!r.is_published && r.scheduled_at) {
+          return <span className="text-yellow-500">📅 {new Date(r.scheduled_at).toLocaleString()}</span>;
+        }
+        return formatDistanceToNow(new Date(r.posted_at), { addSuffix: true });
+      },
     },
   ];
 
@@ -483,6 +495,19 @@ export default function AdminSocialFeed() {
                 onChange={(e) => setForm((f) => ({ ...f, comments_count: Number(e.target.value) || 0 }))}
               />
             </div>
+          </div>
+
+          {/* Schedule */}
+          <div className="space-y-1">
+            <Label>Schedule (optional)</Label>
+            <Input
+              type="datetime-local"
+              value={form.scheduled_at ? new Date(form.scheduled_at).toISOString().slice(0, 16) : ""}
+              onChange={(e) => setForm((f) => ({ ...f, scheduled_at: e.target.value ? new Date(e.target.value).toISOString() : null }))}
+            />
+            <p className="text-xs text-muted-foreground">
+              {form.scheduled_at ? "Post will be hidden until this time, then auto-published." : "Leave empty to publish immediately."}
+            </p>
           </div>
         </div>
       </FormDialog>
