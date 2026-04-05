@@ -209,6 +209,15 @@ export default function AdminPlayers() {
     setDialogOpen(true);
   }
 
+  async function createEvoForm(player: PlayerCard) {
+    const data = await loadPlayerData(player);
+    setForm({ ...data, name: `${player.name} Evo`, id: undefined });
+    setEditId(null);
+    setEvoSourceId(player.id);
+    setGeneratorText("");
+    setDialogOpen(true);
+  }
+
   async function copyFromPlayer(playerId: string) {
     const player = players.find((p) => p.id === playerId);
     if (!player) return;
