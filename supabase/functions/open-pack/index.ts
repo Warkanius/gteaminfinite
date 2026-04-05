@@ -13,15 +13,37 @@ function jsonResp(body: unknown, status = 200) {
   });
 }
 
-// Maps text result_slot to a rank index (0-based)
-const SLOT_RANK_MAP: Record<string, number> = {
-  "Top Rated Player": 0,
-  "2nd Rated Player": 1,
-  "3rd Rated Player": 2,
-  "4th Rated Player": 3,
-  "5th Rated Player": 4,
-  "Player of Choice": -1, // special: random from top 10
-};
+/**
+ * Weighted random selection using cumulative percentages.
+ * Falls back to legacy dice-roll parsing if no percentage data exists.
+ */
+function pickSlotByPercentage(odds: any[]): string | null {
+  // Check if we have percentage-based odds
+  const hasPercentages = odds.some((o) => (o.percentage ?? 0) > 0);
+
+  if (hasPercentages) {
+    const total = odds.reduce((s: number, o: any) => s + (o.percentage ?? 0), 0);
+    if (total <= 0) return null;
+    const rand = Math.random() * total;
+    let cumulative = 0;
+    for (const o of odds) {
+      cumulative += o.percentage ?? 0;
+      if (rand < cumulative) return o.result_slot;
+    }
+    return odds[odds.length - 1].result_slot;
+  }
+
+  // Legacy dice-roll fallback
+  const parsed = odds.map((o: any) => {
+    const parts = o.dice_roll.split("-").map(Number);
+    return { ...o, min: parts[0], max: parts.length > 1 ? parts[1] : parts[0] };
+  });
+  const minDice = Math.min(...parsed.map((o: any) => o.min));
+  const maxDice = Math.max(...parsed.map((o: any) => o.max));
+  const roll = Math.floor(Math.random() * (maxDice - minDice + 1)) + minDice;
+  const matched = parsed.find((o: any) => roll >= o.min && roll <= o.max);
+  return matched?.result_slot ?? null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -89,17 +111,7 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "No odds configured for this pack type" }, 500);
     }
 
-    // Parse dice values — supports single "5" or range "1-3"
-    const parsedOdds = odds.map((o: any) => {
-      const parts = o.dice_roll.split("-").map(Number);
-      return { ...o, min: parts[0], max: parts.length > 1 ? parts[1] : parts[0] };
-    });
-
-    // Determine dice range from odds
-    const minDice = Math.min(...parsedOdds.map((o: any) => o.min));
-    const maxDice = Math.max(...parsedOdds.map((o: any) => o.max));
-
-    // Check if we have pack_players for numeric slot resolution
+    // Check if we have pack_players for slot resolution
     const { data: allPackPlayers } = await admin
       .from("pack_players")
       .select("slot_number, player_card_id")
@@ -107,7 +119,7 @@ Deno.serve(async (req) => {
 
     const hasPackPlayers = allPackPlayers && allPackPlayers.length > 0;
 
-    // Build numeric slot map if applicable
+    // Build slot map
     const slotMap: Record<string, string[]> = {};
     if (hasPackPlayers) {
       for (const pp of allPackPlayers!) {
@@ -132,33 +144,32 @@ Deno.serve(async (req) => {
     const pulledCardIds: string[] = [];
 
     for (let i = 0; i < quantity; i++) {
-      const roll = Math.floor(Math.random() * (maxDice - minDice + 1)) + minDice;
-      const matched = parsedOdds.find((o: any) => roll >= o.min && roll <= o.max);
-      if (!matched) continue;
-
-      const slot = matched.result_slot;
+      const slot = pickSlotByPercentage(odds);
+      if (!slot) continue;
 
       if (hasPackPlayers) {
-        // Numeric slot resolution
         const candidates = slotMap[slot] || slotMap["1"] || [];
         if (candidates.length > 0) {
           pulledCardIds.push(candidates[Math.floor(Math.random() * candidates.length)]);
         }
       } else {
-        // Text-based slot resolution using rating rank
+        // Text-based fallback (legacy)
+        const SLOT_RANK_MAP: Record<string, number> = {
+          "Top Rated Player": 0,
+          "2nd Rated Player": 1,
+          "3rd Rated Player": 2,
+          "4th Rated Player": 3,
+          "5th Rated Player": 4,
+          "Player of Choice": -1,
+        };
         const rankIndex = SLOT_RANK_MAP[slot];
         if (rankIndex === undefined) continue;
-
         if (rankIndex === -1) {
-          // "Player of Choice" — random from top 10
           const top = rankedCards.slice(0, Math.min(10, rankedCards.length));
-          if (top.length > 0) {
-            pulledCardIds.push(top[Math.floor(Math.random() * top.length)].id);
-          }
+          if (top.length > 0) pulledCardIds.push(top[Math.floor(Math.random() * top.length)].id);
         } else if (rankIndex < rankedCards.length) {
           pulledCardIds.push(rankedCards[rankIndex].id);
         } else if (rankedCards.length > 0) {
-          // Fallback to random card
           pulledCardIds.push(rankedCards[Math.floor(Math.random() * rankedCards.length)].id);
         }
       }
