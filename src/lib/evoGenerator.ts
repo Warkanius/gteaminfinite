@@ -7,6 +7,13 @@ export interface GemTier {
   stars: number;
 }
 
+export interface CompoundChallenge {
+  type: string;
+  stat: string | null;
+  target: number;
+  description: string;
+}
+
 export interface EvoStep {
   from_tier_id: string | null;
   to_tier_id: string;
@@ -18,6 +25,7 @@ export interface EvoStep {
   stat_boosts: Record<string, number>;
   new_badges: { badge_id: string; tier: string }[];
   evolves_to_card_id: string | null;
+  compound_challenges: CompoundChallenge[];
 }
 
 const CHALLENGE_TYPES = ["points_scored", "games_won", "total_stat", "single_game_stat", "stat_game_count"] as const;
@@ -80,13 +88,12 @@ export function generateEvoPath(
       const stat = shuffledStats[s];
       const boost = stepNum >= 3 ? 2 : 1;
       const currentVal = cardStats[stat] ?? 0;
-      // Don't boost beyond 99 for star-based stats
       if (currentVal + boost <= 99) {
         statBoosts[stat] = boost;
       }
     }
 
-    // Badge upgrades: promote one existing badge to next tier
+    // Badge upgrades
     const TIERS_ORDER = ["base", "gold", "hof", "diamond", "actolytrene"];
     const newBadges: { badge_id: string; tier: string }[] = [];
     if (existingBadges.length > 0 && stepNum < existingBadges.length) {
@@ -97,21 +104,48 @@ export function generateEvoPath(
       }
     }
 
-    // Pick a random stat for stat-based challenges
     const isStatChallenge = ["total_stat", "single_game_stat", "stat_game_count"].includes(challengeType);
     const challengeStat = isStatChallenge ? shuffledStats[0] : null;
+
+    // For later steps (3+), generate compound challenges
+    const compoundChallenges: CompoundChallenge[] = [];
+    if (stepNum >= 3) {
+      // Pick 2-3 different challenge types
+      const compoundCount = stepNum >= 4 ? 3 : 2;
+      const usedTypes = new Set<string>();
+      const compoundStats = [...STAT_KEYS].sort(() => Math.random() - 0.5);
+      
+      for (let c = 0; c < compoundCount; c++) {
+        const cType = CHALLENGE_TYPES[(challengeIdx + c) % CHALLENGE_TYPES.length];
+        if (usedTypes.has(cType)) continue;
+        usedTypes.add(cType);
+        const cTargets = BASE_TARGETS[cType];
+        const cTarget = cTargets[Math.min(stepNum, cTargets.length - 1)];
+        const cIsStatChallenge = ["total_stat", "single_game_stat", "stat_game_count"].includes(cType);
+        const cStat = cIsStatChallenge ? compoundStats[c % compoundStats.length] : null;
+        compoundChallenges.push({
+          type: cType,
+          stat: cStat,
+          target: cTarget,
+          description: CHALLENGE_TEMPLATES[cType](cTarget, cStat ?? undefined),
+        });
+      }
+    }
 
     steps.push({
       from_tier_id: fromTier.id,
       to_tier_id: toTier.id,
       step_order: stepNum + 1,
-      challenge_description: CHALLENGE_TEMPLATES[challengeType](target, challengeStat ?? undefined),
+      challenge_description: compoundChallenges.length > 0
+        ? compoundChallenges.map(c => c.description).join(" AND ")
+        : CHALLENGE_TEMPLATES[challengeType](target, challengeStat ?? undefined),
       challenge_type: challengeType,
       challenge_target: target,
       challenge_stat: challengeStat,
       stat_boosts: statBoosts,
       new_badges: newBadges,
       evolves_to_card_id: null,
+      compound_challenges: compoundChallenges,
     });
   }
 

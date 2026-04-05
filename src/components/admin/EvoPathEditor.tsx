@@ -7,9 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Wand2, ChevronDown, Trash2, Plus, Save, Loader2 } from "lucide-react";
+import { Wand2, ChevronDown, Trash2, Plus, Save, Loader2, Layers } from "lucide-react";
 import { toast } from "sonner";
-import { generateEvoPath, type EvoStep } from "@/lib/evoGenerator";
+import { generateEvoPath, type EvoStep, type CompoundChallenge } from "@/lib/evoGenerator";
 import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 
 const CHALLENGE_TYPES = ["points_scored", "games_won", "total_stat", "single_game_stat", "stat_game_count"];
@@ -71,6 +71,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
         stat_boosts: (s.stat_boosts as Record<string, number>) ?? {},
         new_badges: (s.new_badges as any[]) ?? [],
         evolves_to_card_id: (s as any).evolves_to_card_id ?? null,
+        compound_challenges: ((s as any).compound_challenges as CompoundChallenge[]) ?? [],
       })));
     }
   }, [existingSteps]);
@@ -93,6 +94,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
       stat_boosts: {},
       new_badges: [],
       evolves_to_card_id: null,
+      compound_challenges: [],
     }]);
   }
 
@@ -104,11 +106,26 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
     setSteps(s => s.map((step, i) => i === idx ? { ...step, ...updates } : step));
   }
 
+  function addCompoundReq(stepIdx: number) {
+    const step = steps[stepIdx];
+    const newReq: CompoundChallenge = { type: "points_scored", stat: null, target: 100, description: "" };
+    updateStep(stepIdx, { compound_challenges: [...step.compound_challenges, newReq] });
+  }
+
+  function updateCompoundReq(stepIdx: number, reqIdx: number, updates: Partial<CompoundChallenge>) {
+    const step = steps[stepIdx];
+    const updated = step.compound_challenges.map((r, i) => i === reqIdx ? { ...r, ...updates } : r);
+    updateStep(stepIdx, { compound_challenges: updated });
+  }
+
+  function removeCompoundReq(stepIdx: number, reqIdx: number) {
+    const step = steps[stepIdx];
+    updateStep(stepIdx, { compound_challenges: step.compound_challenges.filter((_, i) => i !== reqIdx) });
+  }
+
   const saveMut = useMutation({
     mutationFn: async () => {
-      // Delete all existing steps for this player
       await supabase.from("evo_paths").delete().eq("player_card_id", playerId);
-      // Insert new steps
       if (steps.length > 0) {
         const { error } = await supabase.from("evo_paths").insert(
           steps.map((s) => ({
@@ -123,6 +140,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
             stat_boosts: s.stat_boosts,
             new_badges: s.new_badges,
             evolves_to_card_id: s.evolves_to_card_id || null,
+            compound_challenges: s.compound_challenges,
           } as any))
         );
         if (error) throw error;
@@ -197,31 +215,81 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Challenge Type</Label>
-                    <Select value={step.challenge_type} onValueChange={(v) => updateStep(idx, { challenge_type: v })}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>{CHALLENGE_TYPES.map(t => <SelectItem key={t} value={t} className="text-xs">{t.replace(/_/g, " ")}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  {["total_stat", "single_game_stat", "stat_game_count"].includes(step.challenge_type) && (
+                {/* Single challenge (used when no compound challenges) */}
+                {step.compound_challenges.length === 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">Target Stat</Label>
-                      <Select value={step.challenge_stat ?? ""} onValueChange={(v) => updateStep(idx, { challenge_stat: v || null } as any)}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Pick stat" /></SelectTrigger>
-                        <SelectContent>{STAT_KEYS.map(s => <SelectItem key={s} value={s} className="text-xs">{STAT_LABELS[s]}</SelectItem>)}</SelectContent>
+                      <Label className="text-xs">Challenge Type</Label>
+                      <Select value={step.challenge_type} onValueChange={(v) => updateStep(idx, { challenge_type: v })}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>{CHALLENGE_TYPES.map(t => <SelectItem key={t} value={t} className="text-xs">{t.replace(/_/g, " ")}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                  )}
-                  <div className="space-y-1">
-                    <Label className="text-xs">Target</Label>
-                    <Input type="number" className="h-8 text-xs" value={step.challenge_target} onChange={(e) => updateStep(idx, { challenge_target: Number(e.target.value) })} />
+                    {["total_stat", "single_game_stat", "stat_game_count"].includes(step.challenge_type) && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">Target Stat</Label>
+                        <Select value={step.challenge_stat ?? ""} onValueChange={(v) => updateStep(idx, { challenge_stat: v || null } as any)}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Pick stat" /></SelectTrigger>
+                          <SelectContent>{STAT_KEYS.map(s => <SelectItem key={s} value={s} className="text-xs">{STAT_LABELS[s]}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Target</Label>
+                      <Input type="number" className="h-8 text-xs" value={step.challenge_target} onChange={(e) => updateStep(idx, { challenge_target: Number(e.target.value) })} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Description</Label>
+                      <Input className="h-8 text-xs" value={step.challenge_description} onChange={(e) => updateStep(idx, { challenge_description: e.target.value })} placeholder="Score 50 points…" />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Description</Label>
-                    <Input className="h-8 text-xs" value={step.challenge_description} onChange={(e) => updateStep(idx, { challenge_description: e.target.value })} placeholder="Score 50 points…" />
+                )}
+
+                {/* Compound challenges */}
+                {step.compound_challenges.length > 0 && (
+                  <div className="space-y-2 border border-dashed border-primary/30 rounded-lg p-2">
+                    <div className="flex items-center gap-2">
+                      <Layers className="h-3.5 w-3.5 text-primary" />
+                      <Label className="text-xs font-semibold text-primary">Compound Challenge ({step.compound_challenges.length} requirements)</Label>
+                    </div>
+                    {step.compound_challenges.map((req, rIdx) => (
+                      <div key={rIdx} className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end bg-muted/50 p-2 rounded">
+                        <div className="space-y-1">
+                          <Label className="text-[10px]">Type</Label>
+                          <Select value={req.type} onValueChange={(v) => updateCompoundReq(idx, rIdx, { type: v })}>
+                            <SelectTrigger className="h-7 text-[10px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>{CHALLENGE_TYPES.map(t => <SelectItem key={t} value={t} className="text-xs">{t.replace(/_/g, " ")}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        {["total_stat", "single_game_stat", "stat_game_count"].includes(req.type) && (
+                          <div className="space-y-1">
+                            <Label className="text-[10px]">Stat</Label>
+                            <Select value={req.stat ?? ""} onValueChange={(v) => updateCompoundReq(idx, rIdx, { stat: v || null })}>
+                              <SelectTrigger className="h-7 text-[10px]"><SelectValue placeholder="Stat" /></SelectTrigger>
+                              <SelectContent>{STAT_KEYS.map(s => <SelectItem key={s} value={s} className="text-xs">{STAT_LABELS[s]}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <Label className="text-[10px]">Target</Label>
+                          <Input type="number" className="h-7 text-[10px]" value={req.target} onChange={(e) => updateCompoundReq(idx, rIdx, { target: Number(e.target.value) })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px]">Description</Label>
+                          <Input className="h-7 text-[10px]" value={req.description} onChange={(e) => updateCompoundReq(idx, rIdx, { description: e.target.value })} />
+                        </div>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeCompoundReq(idx, rIdx)}>
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => addCompoundReq(idx)}>
+                    <Layers className="h-3 w-3" /> Add Requirement
+                  </Button>
                 </div>
 
                 {/* Evolves To card */}
