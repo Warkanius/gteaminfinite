@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Pencil, Trash2, X, Copy, Zap, RefreshCw, Wand2, Search } from "lucide-react";
+import { Pencil, Trash2, X, Copy, Zap, RefreshCw, Wand2, Search, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
@@ -71,6 +71,7 @@ export default function AdminPlayers() {
   const [wizardEditPlayer, setWizardEditPlayer] = useState<PlayerCard | null>(null);
   const [badgeSearch, setBadgeSearch] = useState("");
   const [pendingBadgeId, setPendingBadgeId] = useState<string | null>(null);
+  const [evoSourceId, setEvoSourceId] = useState<string | null>(null);
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["admin-players"],
@@ -143,11 +144,35 @@ export default function AdminPlayers() {
           traits.map((t) => ({ player_card_id: cardId!, trait_id: t.trait_id, tier: t.tier, target_stat: t.target_stat }))
         );
       }
+
+      // Auto-link evo path if creating an evo form
+      if (!editId && evoSourceId && cardId) {
+        const { data: evoStep } = await supabase
+          .from("evo_paths")
+          .select("id")
+          .eq("player_card_id", evoSourceId)
+          .is("evolves_to_card_id", null)
+          .order("step_order", { ascending: true })
+          .limit(1)
+          .single();
+
+        if (evoStep) {
+          await supabase.from("evo_paths").update({ evolves_to_card_id: cardId }).eq("id", evoStep.id);
+        }
+      }
+
+      return { cardId, wasInsert: !editId };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["admin-players"] });
       setDialogOpen(false);
-      toast.success(editId ? "Player updated" : "Player created");
+      if (evoSourceId && result?.wasInsert) {
+        const sourceName = players.find(p => p.id === evoSourceId)?.name ?? "source";
+        toast.success(`Evo form created and linked to ${sourceName}`);
+      } else {
+        toast.success(editId ? "Player updated" : "Player created");
+      }
+      setEvoSourceId(null);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -181,6 +206,15 @@ export default function AdminPlayers() {
     const data = await loadPlayerData(player);
     setForm(data);
     setEditId(player.id);
+    setDialogOpen(true);
+  }
+
+  async function createEvoForm(player: PlayerCard) {
+    const data = await loadPlayerData(player);
+    setForm({ ...data, name: `${player.name} Evo`, id: undefined });
+    setEditId(null);
+    setEvoSourceId(player.id);
+    setGeneratorText("");
     setDialogOpen(true);
   }
 
@@ -329,6 +363,7 @@ export default function AdminPlayers() {
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" onClick={() => openEdit(row)} title="Edit"><Pencil className="h-4 w-4" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => openWizardForEdit(row as PlayerCard)} title="Wizard"><Wand2 className="h-4 w-4 text-primary" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => createEvoForm(row as PlayerCard)} title="Create Evo Form"><GitBranch className="h-4 w-4 text-accent-foreground" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             )}
