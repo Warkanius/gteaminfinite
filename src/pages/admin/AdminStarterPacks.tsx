@@ -93,7 +93,14 @@ export default function AdminStarterPacks() {
 
   const addPlayerMut = useMutation({
     mutationFn: async (playerCardId: string) => {
-      const nextSlot = packPlayers.length + 1;
+      // Auto-assign next slot number from DB
+      const { data: existing } = await supabase
+        .from("pack_players")
+        .select("slot_number")
+        .eq("pack_id", managingPack!.id)
+        .order("slot_number", { ascending: false })
+        .limit(1);
+      const nextSlot = existing && existing.length > 0 ? existing[0].slot_number + 1 : 1;
       const { error } = await supabase.from("pack_players").insert({
         pack_id: managingPack!.id,
         player_card_id: playerCardId,
