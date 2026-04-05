@@ -1,76 +1,77 @@
 
 
-# Searchable Player Selects + Announcement Notification System
+# Add Web Push Notifications for Announcements
 
-## 1. Searchable Player Combobox
+The app already has a PWA manifest and in-app notifications. We need to add the Web Push API so players get lock-screen alerts when announcements go live, even if the app is closed.
 
-**Problem**: Player dropdowns in AdminPacks (pack player slots) and AdminTeams (domination game players) use plain `<Select>` which becomes unusable with many players.
+## Architecture
 
-**Solution**: Build a reusable `PlayerCombobox` component using the existing `cmdk` (Command) primitives + Popover. It provides a search input that filters the player list as you type.
+```text
+Admin schedules announcement
+        ↓
+pg_cron triggers publish-scheduled-posts edge function
+        ↓
+Edge function publishes post + creates in-app notifications
+        ↓  (NEW)
+Edge function sends web-push to all subscribed users
+        ↓
+Player sees native push notification on their device
+```
 
-**Files**:
-- **New**: `src/components/admin/PlayerCombobox.tsx` — Popover + Command-based searchable select
-- **Edit**: `src/pages/admin/AdminPacks.tsx` — Replace the player `<Select>` in the Pack Players tab with `PlayerCombobox`
-- **Edit**: `src/pages/admin/AdminTeams.tsx` — Replace any player selects with `PlayerCombobox` (domination game rosters, etc.)
+## Database Changes
 
-## 2. Scheduled Announcements with Notification System
+**New table: `push_subscriptions`**
+- `id` uuid PK
+- `user_id` uuid (references auth.users)
+- `endpoint` text (push service URL)
+- `p256dh` text (encryption key)
+- `auth` text (auth secret)
+- `created_at` timestamptz
+- RLS: users insert/read/delete own subscriptions
+- Unique constraint on `(user_id, endpoint)` to prevent duplicates
 
-**Problem**: Announcements go live immediately. There's no way to schedule them or notify players when they appear.
+## Secrets Needed
 
-### Database Changes
+**VAPID keys** — a public/private key pair for Web Push authentication:
+- `VAPID_PUBLIC_KEY` — stored as a Vite env var (public, safe for client)
+- `VAPID_PRIVATE_KEY` — stored as a backend secret (edge function only)
+- `VAPID_SUBJECT` — mailto or URL identifier (e.g. `mailto:admin@gteaminfinite.com`)
 
-Add columns to `social_posts`:
-- `scheduled_at` (timestamptz, nullable) — when the post should go live; null = immediate
-- `is_published` (boolean, default true) — false for scheduled posts not yet live
+I will generate these keys via a script and configure them.
 
-Add a new `notifications` table:
-- `id` (uuid, PK)
-- `user_id` (uuid, references auth.users)
-- `title` (text)
-- `body` (text)
-- `link` (text, nullable) — e.g. `/feed`
-- `read` (boolean, default false)
-- `created_at` (timestamptz)
-- RLS: users read/update own notifications
+## Implementation
 
-### Scheduled Publishing
+### 1. Service Worker (`public/sw.js`)
+A minimal service worker that listens for `push` events and displays native notifications. Clicking the notification opens the app to the linked route.
 
-Create an edge function `publish-scheduled-posts` that:
-1. Queries `social_posts` where `scheduled_at <= now()` and `is_published = false`
-2. Sets `is_published = true` and `posted_at = now()`
-3. For announcement-type posts, inserts a notification row for every user in `profiles`
-4. Scheduled via pg_cron to run every minute
+### 2. Push Subscription Hook (`src/hooks/usePushNotifications.ts`)
+- Checks browser support for `PushManager`
+- Requests notification permission
+- Subscribes to push using the VAPID public key
+- Saves the subscription (endpoint, keys) to `push_subscriptions` table
+- Provides `subscribed` state and `subscribe()`/`unsubscribe()` functions
 
-### Feed Filtering
+### 3. UI — Enable Push Button
+Add a "Enable Push Notifications" prompt in the notification bell popover or on the Dashboard. When clicked, triggers the permission flow and saves the subscription.
 
-Update `SocialFeed.tsx` and `FeedProfile.tsx` queries to add `.eq("is_published", true)` so scheduled posts don't appear early.
+### 4. Edge Function Update (`publish-scheduled-posts`)
+After inserting in-app notifications for announcements, also:
+- Query `push_subscriptions` for all users
+- Send web-push to each subscription using the `web-push` library (Deno-compatible)
+- Remove stale subscriptions that return 410 Gone
 
-### Admin UI
+### 5. Service Worker Registration (`src/main.tsx`)
+Register `sw.js` only in production and not inside iframes (to avoid breaking Lovable preview).
 
-Update the post creation form in `AdminSocialFeed.tsx`:
-- Add a "Schedule" datetime picker (only for announcement type, or all types)
-- When a `scheduled_at` value is set, save `is_published = false`
+## Files
 
-### Notification Bell
-
-Add a notification bell icon to the app header (`AppLayout.tsx`):
-- Shows unread count badge
-- Dropdown/popover listing recent notifications
-- Clicking a notification marks it read and navigates to the link
-- Query `notifications` table filtered by current user, ordered by `created_at` desc
-
-### Files Changed
-
-| File | Change |
+| File | Action |
 |------|--------|
-| `src/components/admin/PlayerCombobox.tsx` | New searchable player select component |
-| `src/pages/admin/AdminPacks.tsx` | Use PlayerCombobox for player slot selection |
-| `src/pages/admin/AdminTeams.tsx` | Use PlayerCombobox where players are selected |
-| `src/pages/admin/AdminSocialFeed.tsx` | Add scheduled_at datetime picker, set is_published |
-| `src/pages/SocialFeed.tsx` | Filter to is_published = true |
-| `src/pages/FeedProfile.tsx` | Filter to is_published = true |
-| `src/components/AppLayout.tsx` | Add notification bell with unread count + dropdown |
-| `supabase/functions/publish-scheduled-posts/index.ts` | Edge function to publish and notify |
-| Migration | Add scheduled_at, is_published to social_posts; create notifications table |
-| pg_cron | Schedule the edge function every minute |
+| `public/sw.js` | Create — push event listener + notification click handler |
+| `src/hooks/usePushNotifications.ts` | Create — subscription management hook |
+| `src/components/AppLayout.tsx` | Edit — add push notification opt-in UI in bell popover |
+| `src/main.tsx` | Edit — register service worker in production |
+| `supabase/functions/publish-scheduled-posts/index.ts` | Edit — send web-push after publishing announcements |
+| Migration | Create `push_subscriptions` table with RLS |
+| Secrets | Generate and store VAPID keys |
 
