@@ -280,6 +280,7 @@ export type Database = {
           challenge_stat: string | null
           challenge_target: number
           challenge_type: string
+          compound_challenges: Json
           created_at: string
           evolves_to_card_id: string | null
           from_tier_id: string | null
@@ -295,6 +296,7 @@ export type Database = {
           challenge_stat?: string | null
           challenge_target?: number
           challenge_type?: string
+          compound_challenges?: Json
           created_at?: string
           evolves_to_card_id?: string | null
           from_tier_id?: string | null
@@ -310,6 +312,7 @@ export type Database = {
           challenge_stat?: string | null
           challenge_target?: number
           challenge_type?: string
+          compound_challenges?: Json
           created_at?: string
           evolves_to_card_id?: string | null
           from_tier_id?: string | null
@@ -1281,6 +1284,7 @@ export type Database = {
           claimed: boolean
           completed: boolean
           completed_at: string | null
+          compound_progress: Json
           created_at: string
           current_value: number
           evo_path_id: string
@@ -1292,6 +1296,7 @@ export type Database = {
           claimed?: boolean
           completed?: boolean
           completed_at?: string | null
+          compound_progress?: Json
           created_at?: string
           current_value?: number
           evo_path_id: string
@@ -1303,6 +1308,7 @@ export type Database = {
           claimed?: boolean
           completed?: boolean
           completed_at?: string | null
+          compound_progress?: Json
           created_at?: string
           current_value?: number
           evo_path_id?: string
