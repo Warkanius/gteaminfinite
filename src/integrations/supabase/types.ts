@@ -577,23 +577,26 @@ export type Database = {
       pack_odds: {
         Row: {
           description: string | null
-          dice_roll: string
+          dice_roll: string | null
           id: string
           pack_type: string
+          percentage: number
           result_slot: string
         }
         Insert: {
           description?: string | null
-          dice_roll: string
+          dice_roll?: string | null
           id?: string
           pack_type: string
+          percentage?: number
           result_slot: string
         }
         Update: {
           description?: string | null
-          dice_roll?: string
+          dice_roll?: string | null
           id?: string
           pack_type?: string
+          percentage?: number
           result_slot?: string
         }
         Relationships: []
