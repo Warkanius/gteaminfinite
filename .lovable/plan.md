@@ -1,51 +1,42 @@
 
 
-# Linked Card Versions for Evolution
+# Create Evo Form from Existing Card
 
-## Current State
+## What It Does
 
-Right now, evolution steps define `stat_boosts` and `new_badges` but there's no target card. When a step completes, `completed = true` is set in `user_evo_progress` and nothing else happens. The card stays the same.
+Adds a "Create Evo Form" button to each player row in the admin table. Clicking it duplicates the card (name, info, stats, badges, traits, visuals) into the editor as a new card, appends a tier suffix to the name (e.g. "LeBron → LeBron Emerald"), and after saving the new card, automatically links it as the `evolves_to_card_id` on the next unlinked evo step of the source card.
 
-## Design: Linked Card Versions
+## User Flow
 
-Each evolution step will point to a **separate player card** that the user receives upon completion. For example, "LeBron Gold" has an evo path where step 1 leads to "LeBron Emerald" (a distinct card in `player_cards`). When the challenge is completed, the old card is swapped for the new one in the user's collection.
+1. Admin clicks the new **Evo Form** button (DNA/copy icon) on a player row
+2. The system loads the player's full data (stats, badges, traits) and opens the editor as a **new card** (no `editId`)
+3. Name is pre-filled as `"{Original Name} Evo"` — admin adjusts it
+4. Admin tweaks stats, badges, gem tier, etc., then saves
+5. On save, the system finds the first evo step on the **source card** where `evolves_to_card_id` is null and sets it to the newly created card's ID
+6. Toast confirms: "Evo form created and linked to {source name}"
 
-## Database Changes
+## Technical Changes
 
-**Add column to `evo_paths`:**
-```sql
-ALTER TABLE public.evo_paths ADD COLUMN evolves_to_card_id uuid;
-```
-This references the destination `player_cards` entry. The existing `stat_boosts` and `new_badges` columns remain for display purposes (showing what's different) but the actual evolved card is a pre-built card with those stats/badges already set.
+### `src/pages/admin/AdminPlayers.tsx`
 
-## Admin UI Changes (`EvoPathEditor.tsx`)
+**New state**: `evoSourceId` — tracks which card we're creating an evo form for (null for normal creates/edits).
 
-- Add a **"Evolves To" player card selector** on each evo step (using the existing `PlayerCombobox` component)
-- The admin creates the evolved card version first (e.g., "LeBron Emerald" with higher stats), then links it as the evolution target
-- Update save logic to persist `evolves_to_card_id`
+**New function `createEvoForm(player)`**:
+- Calls `loadPlayerData(player)` to get badges/traits
+- Sets form with all data but `name: "{player.name} Evo"`, `id: undefined`
+- Sets `editId = null` (new card mode)
+- Sets `evoSourceId = player.id`
+- Opens dialog
 
-## Evolution Claim Flow
+**Modify `saveMut`**: After a successful insert (not update), if `evoSourceId` is set:
+- Query `evo_paths` for `player_card_id = evoSourceId` where `evolves_to_card_id IS NULL`, ordered by `step_order`, limit 1
+- Update that row's `evolves_to_card_id` to the new card's ID
+- Reset `evoSourceId` to null
+- Show appropriate toast
 
-**New "Claim Evolution" button** on `CardDetailDialog.tsx`:
-- Appears when an evo step is completed but not yet claimed
-- Add a `claimed` boolean to `user_evo_progress` (or use `completed` + check if the card was swapped)
-- On claim: insert the new card (`evolves_to_card_id`) into `user_collections` and remove the old card
-- Show a brief congratulatory animation/toast
+**Add button to row actions**: New icon button (e.g. `Copy` or `GitBranch`) next to Edit/Wizard/Delete with title "Create Evo Form"
 
-**Progress tracker (`evoProgressTracker.ts`):**
-- No changes needed — it already marks steps as completed. The claim is a separate user action.
+### No other files changed
 
-## Card Detail UI (`CardDetailDialog.tsx`)
-
-- On each completed-but-unclaimed step, show a **"Claim Evolution"** button with the target card name
-- When claimed, show the step as fully done and the next step becomes active
-
-## Files to Change
-
-| File | Change |
-|------|--------|
-| Migration | Add `evolves_to_card_id` column to `evo_paths`, add `claimed` column to `user_evo_progress` |
-| `src/components/admin/EvoPathEditor.tsx` | Add player card selector for "Evolves To" on each step |
-| `src/components/cards/CardDetailDialog.tsx` | Add "Claim Evolution" button that swaps cards in collection |
-| `src/lib/evoGenerator.ts` | Update `EvoStep` type to include `evolves_to_card_id` |
+The existing `EvoPathEditor`, `PlayerCombobox`, and save logic remain untouched. The auto-link is a single update query after insert.
 
