@@ -11,7 +11,7 @@ import { Wand2, ChevronDown, Trash2, Plus, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { generateEvoPath, type EvoStep } from "@/lib/evoGenerator";
 
-const CHALLENGE_TYPES = ["points_scored", "games_won", "stat_threshold"];
+const CHALLENGE_TYPES = ["points_scored", "games_won", "total_stat", "single_game_stat", "stat_game_count"];
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"];
 const STAT_LABELS: Record<string, string> = {
   stat_3pt: "3PT", stat_mid: "MID", stat_fin: "FIN", stat_dnk: "DNK",
@@ -58,6 +58,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
         challenge_description: s.challenge_description,
         challenge_type: s.challenge_type,
         challenge_target: s.challenge_target,
+        challenge_stat: (s as any).challenge_stat ?? null,
         stat_boosts: (s.stat_boosts as Record<string, number>) ?? {},
         new_badges: (s.new_badges as any[]) ?? [],
       })));
@@ -78,6 +79,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
       challenge_description: "",
       challenge_type: "points_scored",
       challenge_target: 100,
+      challenge_stat: null,
       stat_boosts: {},
       new_badges: [],
     }]);

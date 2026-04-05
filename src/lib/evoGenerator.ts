@@ -96,13 +96,18 @@ export function generateEvoPath(
       }
     }
 
+    // Pick a random stat for stat-based challenges
+    const isStatChallenge = ["total_stat", "single_game_stat", "stat_game_count"].includes(challengeType);
+    const challengeStat = isStatChallenge ? shuffledStats[0] : null;
+
     steps.push({
       from_tier_id: fromTier.id,
       to_tier_id: toTier.id,
       step_order: stepNum + 1,
-      challenge_description: CHALLENGE_TEMPLATES[challengeType](target),
+      challenge_description: CHALLENGE_TEMPLATES[challengeType](target, challengeStat ?? undefined),
       challenge_type: challengeType,
       challenge_target: target,
+      challenge_stat: challengeStat,
       stat_boosts: statBoosts,
       new_badges: newBadges,
     });
