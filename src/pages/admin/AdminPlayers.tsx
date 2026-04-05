@@ -71,6 +71,7 @@ export default function AdminPlayers() {
   const [wizardEditPlayer, setWizardEditPlayer] = useState<PlayerCard | null>(null);
   const [badgeSearch, setBadgeSearch] = useState("");
   const [pendingBadgeId, setPendingBadgeId] = useState<string | null>(null);
+  const [evoSourceId, setEvoSourceId] = useState<string | null>(null);
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["admin-players"],
