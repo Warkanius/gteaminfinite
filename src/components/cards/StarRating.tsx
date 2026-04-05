@@ -35,8 +35,9 @@ export function StarRating({ rating, glowColor = "hsl(var(--primary))", size = "
           <span key={i} className="relative inline-flex">
             {/* Empty star (background) */}
             <Star
-              className={cn(sizeClass, "text-foreground/20")}
-              strokeWidth={1.5}
+              className={cn(sizeClass, "text-foreground/50")}
+              strokeWidth={2.5}
+              style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.4))" }}
             />
             {/* Filled overlay */}
             {(isFull || isHalf) && (

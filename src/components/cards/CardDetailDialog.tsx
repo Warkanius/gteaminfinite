@@ -99,7 +99,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-8 shrink-0">
                 {STAT_LABELS[k]}
               </span>
-              <StarRating rating={(card as any)[k] ?? 0} glowColor={bg(visuals.glow)} size="sm" />
+              <StarRating rating={(card as any)[k] ?? 0} glowColor={bg(visuals.glow)} size="md" />
             </div>
           ))}
         </div>
