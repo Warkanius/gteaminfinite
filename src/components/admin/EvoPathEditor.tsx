@@ -108,9 +108,10 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
             challenge_description: s.challenge_description,
             challenge_type: s.challenge_type,
             challenge_target: s.challenge_target,
+            challenge_stat: s.challenge_stat || null,
             stat_boosts: s.stat_boosts,
             new_badges: s.new_badges,
-          }))
+          } as any))
         );
         if (error) throw error;
       }
@@ -184,7 +185,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Challenge Type</Label>
                     <Select value={step.challenge_type} onValueChange={(v) => updateStep(idx, { challenge_type: v })}>
@@ -192,11 +193,20 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
                       <SelectContent>{CHALLENGE_TYPES.map(t => <SelectItem key={t} value={t} className="text-xs">{t.replace(/_/g, " ")}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
+                  {["total_stat", "single_game_stat", "stat_game_count"].includes(step.challenge_type) && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Target Stat</Label>
+                      <Select value={step.challenge_stat ?? ""} onValueChange={(v) => updateStep(idx, { challenge_stat: v || null } as any)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Pick stat" /></SelectTrigger>
+                        <SelectContent>{STAT_KEYS.map(s => <SelectItem key={s} value={s} className="text-xs">{STAT_LABELS[s]}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <Label className="text-xs">Target</Label>
                     <Input type="number" className="h-8 text-xs" value={step.challenge_target} onChange={(e) => updateStep(idx, { challenge_target: Number(e.target.value) })} />
                   </div>
-                  <div className="space-y-1 col-span-1">
+                  <div className="space-y-1">
                     <Label className="text-xs">Description</Label>
                     <Input className="h-8 text-xs" value={step.challenge_description} onChange={(e) => updateStep(idx, { challenge_description: e.target.value })} placeholder="Score 50 points…" />
                   </div>

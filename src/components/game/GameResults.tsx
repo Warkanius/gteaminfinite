@@ -105,6 +105,14 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
           }
         }
       }
+
+      // Track evolution progress for user cards
+      try {
+        await trackEvoProgress(user.id, result.userCards, won);
+      } catch (e) {
+        console.error("Evo progress tracking error:", e);
+      }
+
       setSaved(true);
     };
     save();
