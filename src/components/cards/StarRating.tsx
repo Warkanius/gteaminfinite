@@ -14,10 +14,8 @@ interface StarRatingProps {
  * - Ratings above 5 show extra stars with scale-breaking glow
  */
 export function StarRating({ rating, glowColor = "hsl(var(--primary))", size = "sm", className }: StarRatingProps) {
-  const totalStars = Math.max(5, Math.ceil(rating));
   const fullStars = Math.floor(rating);
-  const fraction = rating - fullStars;
-  const hasHalf = fraction >= 0.25;
+  const totalStars = Math.max(5, fullStars);
   const isScaleBreaker = rating > 5;
 
   const sizeClass = size === "sm" ? "w-3 h-3" : size === "md" ? "w-4 h-4" : "w-5 h-5";
@@ -29,7 +27,6 @@ export function StarRating({ rating, glowColor = "hsl(var(--primary))", size = "
     >
       {Array.from({ length: totalStars }, (_, i) => {
         const isFull = i < fullStars;
-        const isHalf = i === fullStars && hasHalf;
 
         return (
           <span key={i} className="relative inline-flex">
@@ -40,21 +37,21 @@ export function StarRating({ rating, glowColor = "hsl(var(--primary))", size = "
               style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.4))" }}
             />
             {/* Filled overlay */}
-            {(isFull || isHalf) && (
+            {isFull && (
               <span
                 className="absolute inset-0 overflow-hidden"
-                style={{ width: isFull ? "100%" : "50%" }}
+                style={{ width: "100%" }}
               >
                 <Star
                   className={cn(sizeClass)}
                   strokeWidth={1.5}
-                  fill={glowColor}
-                  stroke={glowColor}
+                  fill="#ffffff"
+                  stroke="#ffffff"
                   style={{
                     filter: isScaleBreaker
-                      ? `drop-shadow(0 0 2px ${glowColor})`
-                      : isFull && i >= 4
-                        ? `drop-shadow(0 0 3px ${glowColor})`
+                      ? "drop-shadow(0 0 2px #ffffff)"
+                      : i >= 4
+                        ? "drop-shadow(0 0 3px #ffffff)"
                         : undefined,
                   }}
                 />
