@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Pencil, Trash2, X, Copy, Zap, RefreshCw, Wand2, Search } from "lucide-react";
+import { Pencil, Trash2, X, Copy, Zap, RefreshCw, Wand2, Search, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
