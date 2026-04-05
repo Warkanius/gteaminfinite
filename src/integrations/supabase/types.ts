@@ -528,6 +528,36 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          link: string | null
+          read: boolean
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          link?: string | null
+          read?: boolean
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          link?: string | null
+          read?: boolean
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pack_odds: {
         Row: {
           description: string | null
@@ -1095,10 +1125,12 @@ export type Database = {
           creator_id: string | null
           id: string
           image_url: string | null
+          is_published: boolean
           likes_count: number
           player_card_id: string | null
           post_type: string
           posted_at: string
+          scheduled_at: string | null
         }
         Insert: {
           comments_count?: number
@@ -1107,10 +1139,12 @@ export type Database = {
           creator_id?: string | null
           id?: string
           image_url?: string | null
+          is_published?: boolean
           likes_count?: number
           player_card_id?: string | null
           post_type?: string
           posted_at?: string
+          scheduled_at?: string | null
         }
         Update: {
           comments_count?: number
@@ -1119,10 +1153,12 @@ export type Database = {
           creator_id?: string | null
           id?: string
           image_url?: string | null
+          is_published?: boolean
           likes_count?: number
           player_card_id?: string | null
           post_type?: string
           posted_at?: string
+          scheduled_at?: string | null
         }
         Relationships: [
           {
