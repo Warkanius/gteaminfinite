@@ -111,6 +111,7 @@ export function generateEvoPath(
       challenge_stat: challengeStat,
       stat_boosts: statBoosts,
       new_badges: newBadges,
+      evolves_to_card_id: null,
     });
   }
 
