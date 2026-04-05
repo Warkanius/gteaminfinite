@@ -44,8 +44,8 @@ export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked
       }}
     >
       {/* Star rating */}
-      <div className="absolute top-2 right-2">
-        <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="sm" />
+      <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-background/60 backdrop-blur-sm px-1.5 py-0.5">
+        <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="md" />
       </div>
 
       {/* Badge count */}

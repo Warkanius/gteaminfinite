@@ -1,0 +1,1 @@
+ALTER TABLE public.evo_paths ADD COLUMN challenge_stat text;

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { STAT_LABELS, STATS, type CardGameResult, type StatKey } from "@/lib/gameEngine";
 import { PackReveal } from "@/components/packs/PackReveal";
 import type { FullGameResult } from "@/pages/Play";
+import { trackEvoProgress } from "@/lib/evoProgressTracker";
 
 const DEFAULT_WIN_REWARD = 100;
 
@@ -104,6 +105,14 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
           }
         }
       }
+
+      // Track evolution progress for user cards
+      try {
+        await trackEvoProgress(user.id, result.userCards, won);
+      } catch (e) {
+        console.error("Evo progress tracking error:", e);
+      }
+
       setSaved(true);
     };
     save();
