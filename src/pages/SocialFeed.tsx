@@ -57,6 +57,7 @@ export default function SocialFeed() {
       const { data, error } = await supabase
         .from("social_posts")
         .select("*, player_cards(name, social_handle, card_color_primary, rating, position1, avatar_url), social_creators(id, name, handle, accent_color, avatar_url)")
+        .eq("is_published", true)
         .order("posted_at", { ascending: false })
         .limit(50);
       if (error) throw error;
