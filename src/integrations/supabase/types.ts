@@ -277,6 +277,7 @@ export type Database = {
       evo_paths: {
         Row: {
           challenge_description: string
+          challenge_stat: string | null
           challenge_target: number
           challenge_type: string
           created_at: string
@@ -290,6 +291,7 @@ export type Database = {
         }
         Insert: {
           challenge_description?: string
+          challenge_stat?: string | null
           challenge_target?: number
           challenge_type?: string
           created_at?: string
@@ -303,6 +305,7 @@ export type Database = {
         }
         Update: {
           challenge_description?: string
+          challenge_stat?: string | null
           challenge_target?: number
           challenge_type?: string
           created_at?: string
