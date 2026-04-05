@@ -52,7 +52,7 @@ export function usePushNotifications() {
       });
 
       const json = sub.toJSON();
-      await supabase.from("push_subscriptions").upsert(
+      await (supabase as any).from("push_subscriptions").upsert(
         {
           user_id: user.id,
           endpoint: json.endpoint!,
@@ -78,7 +78,7 @@ export function usePushNotifications() {
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
         await sub.unsubscribe();
-        await supabase
+        await (supabase as any)
           .from("push_subscriptions")
           .delete()
           .eq("user_id", user.id)
