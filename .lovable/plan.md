@@ -1,29 +1,51 @@
 
 
-# Fix Star Colors & Consistent Rating Display
+# Linked Card Versions for Evolution
 
-## Changes
+## Current State
 
-### `src/components/cards/StarRating.tsx`
-- Change filled star `fill` and `stroke` from `glowColor` to **white** (`"#ffffff"`)
-- Remove the half-star logic — use **floor rounding**: `Math.floor(rating)` full stars, no partial fills
-- This ensures: 0–0.99 = 0 stars, 1–1.99 = 1 star, 2–2.99 = 2 stars, etc.
-- Keep the scale-breaker glow effect on the container for ratings > 5, but filled stars themselves stay white
-- Keep the empty star styling (thick border, drop-shadow) as-is
+Right now, evolution steps define `stat_boosts` and `new_badges` but there's no target card. When a step completes, `completed = true` is set in `user_evo_progress` and nothing else happens. The card stays the same.
 
-### `src/components/cards/PlayerCard.tsx`
-- No changes needed — already passes `card.rating` and uses `size="md"`
+## Design: Linked Card Versions
 
-### `src/components/cards/CardDetailDialog.tsx`
-- No changes needed — overall rating (line 85) uses `card.rating` with `size="lg"`, individual stats (line 102) use the stat values with `size="md"`. Both go through the same `StarRating` component so they'll be consistent after the fix above.
+Each evolution step will point to a **separate player card** that the user receives upon completion. For example, "LeBron Gold" has an evo path where step 1 leads to "LeBron Emerald" (a distinct card in `player_cards`). When the challenge is completed, the old card is swapped for the new one in the user's collection.
 
-### Summary of StarRating logic after fix
+## Database Changes
+
+**Add column to `evo_paths`:**
+```sql
+ALTER TABLE public.evo_paths ADD COLUMN evolves_to_card_id uuid;
 ```
-fullStars = Math.floor(rating)
-totalStars = max(5, fullStars)
-Filled stars: white fill, white stroke, with drop-shadow for scale-breakers
-Empty stars: foreground/50 outline, strokeWidth 2.5
-```
+This references the destination `player_cards` entry. The existing `stat_boosts` and `new_badges` columns remain for display purposes (showing what's different) but the actual evolved card is a pre-built card with those stats/badges already set.
 
-No database or backend changes.
+## Admin UI Changes (`EvoPathEditor.tsx`)
+
+- Add a **"Evolves To" player card selector** on each evo step (using the existing `PlayerCombobox` component)
+- The admin creates the evolved card version first (e.g., "LeBron Emerald" with higher stats), then links it as the evolution target
+- Update save logic to persist `evolves_to_card_id`
+
+## Evolution Claim Flow
+
+**New "Claim Evolution" button** on `CardDetailDialog.tsx`:
+- Appears when an evo step is completed but not yet claimed
+- Add a `claimed` boolean to `user_evo_progress` (or use `completed` + check if the card was swapped)
+- On claim: insert the new card (`evolves_to_card_id`) into `user_collections` and remove the old card
+- Show a brief congratulatory animation/toast
+
+**Progress tracker (`evoProgressTracker.ts`):**
+- No changes needed — it already marks steps as completed. The claim is a separate user action.
+
+## Card Detail UI (`CardDetailDialog.tsx`)
+
+- On each completed-but-unclaimed step, show a **"Claim Evolution"** button with the target card name
+- When claimed, show the step as fully done and the next step becomes active
+
+## Files to Change
+
+| File | Change |
+|------|--------|
+| Migration | Add `evolves_to_card_id` column to `evo_paths`, add `claimed` column to `user_evo_progress` |
+| `src/components/admin/EvoPathEditor.tsx` | Add player card selector for "Evolves To" on each step |
+| `src/components/cards/CardDetailDialog.tsx` | Add "Claim Evolution" button that swaps cards in collection |
+| `src/lib/evoGenerator.ts` | Update `EvoStep` type to include `evolves_to_card_id` |
 
