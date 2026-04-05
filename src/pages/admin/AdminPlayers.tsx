@@ -144,11 +144,35 @@ export default function AdminPlayers() {
           traits.map((t) => ({ player_card_id: cardId!, trait_id: t.trait_id, tier: t.tier, target_stat: t.target_stat }))
         );
       }
+
+      // Auto-link evo path if creating an evo form
+      if (!editId && evoSourceId && cardId) {
+        const { data: evoStep } = await supabase
+          .from("evo_paths")
+          .select("id")
+          .eq("player_card_id", evoSourceId)
+          .is("evolves_to_card_id", null)
+          .order("step_order", { ascending: true })
+          .limit(1)
+          .single();
+
+        if (evoStep) {
+          await supabase.from("evo_paths").update({ evolves_to_card_id: cardId }).eq("id", evoStep.id);
+        }
+      }
+
+      return { cardId, wasInsert: !editId };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["admin-players"] });
       setDialogOpen(false);
-      toast.success(editId ? "Player updated" : "Player created");
+      if (evoSourceId && result?.wasInsert) {
+        const sourceName = players.find(p => p.id === evoSourceId)?.name ?? "source";
+        toast.success(`Evo form created and linked to ${sourceName}`);
+      } else {
+        toast.success(editId ? "Player updated" : "Player created");
+      }
+      setEvoSourceId(null);
     },
     onError: (e) => toast.error(e.message),
   });
