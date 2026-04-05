@@ -5,11 +5,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { Bell } from "lucide-react";
+import { Bell, BellRing } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -37,6 +38,7 @@ function NotificationBell() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { supported, subscribed, loading: pushLoading, subscribe, unsubscribe } = usePushNotifications();
 
   const { data: notifications = [] } = useQuery({
     queryKey: ["notifications", user?.id],
@@ -89,8 +91,20 @@ function NotificationBell() {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="end">
-        <div className="px-4 py-3 border-b border-border">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <h4 className="font-semibold text-sm">Notifications</h4>
+          {supported && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              disabled={pushLoading}
+              onClick={subscribed ? unsubscribe : subscribe}
+            >
+              <BellRing className="h-3 w-3" />
+              {subscribed ? "Push On" : "Enable Push"}
+            </Button>
+          )}
         </div>
         <ScrollArea className="max-h-72">
           {notifications.length === 0 ? (
