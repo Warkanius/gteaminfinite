@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { STAT_LABELS, STATS, type CardGameResult, type StatKey } from "@/lib/gameEngine";
 import { PackReveal } from "@/components/packs/PackReveal";
 import type { FullGameResult } from "@/pages/Play";
+import { trackEvoProgress } from "@/lib/evoProgressTracker";
 
 const DEFAULT_WIN_REWARD = 100;
 

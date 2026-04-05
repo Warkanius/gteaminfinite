@@ -14,25 +14,36 @@ export interface EvoStep {
   challenge_description: string;
   challenge_type: string;
   challenge_target: number;
+  challenge_stat: string | null;
   stat_boosts: Record<string, number>;
   new_badges: { badge_id: string; tier: string }[];
 }
 
-const CHALLENGE_TYPES = ["points_scored", "games_won", "stat_threshold"] as const;
+const CHALLENGE_TYPES = ["points_scored", "games_won", "total_stat", "single_game_stat", "stat_game_count"] as const;
 
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"];
 
-const CHALLENGE_TEMPLATES: Record<string, (target: number) => string> = {
+const STAT_LABELS: Record<string, string> = {
+  stat_3pt: "3-pointers", stat_mid: "mid-range shots", stat_fin: "finishes",
+  stat_dnk: "dunks", stat_ast: "assists", stat_stl: "steals",
+  stat_reb: "rebounds", stat_blk: "blocks", stat_int: "interceptions",
+};
+
+const CHALLENGE_TEMPLATES: Record<string, (target: number, stat?: string) => string> = {
   points_scored: (t) => `Score ${t} total points with this card`,
   games_won: (t) => `Win ${t} games with this card in your lineup`,
-  stat_threshold: (t) => `Accumulate ${t} total stat rolls with this card`,
+  total_stat: (t, s) => `Record ${t} total ${s ? STAT_LABELS[s] ?? s : "stat rolls"} with this card`,
+  single_game_stat: (t, s) => `Record ${t}+ ${s ? STAT_LABELS[s] ?? s : "stat"} in a single game`,
+  stat_game_count: (t, s) => `Record ${t} games with 20+ ${s ? STAT_LABELS[s] ?? s : "stat"}`,
 };
 
 // Scale challenge difficulty by tier progression step
 const BASE_TARGETS: Record<string, number[]> = {
   points_scored: [50, 100, 200, 400, 750],
   games_won: [3, 5, 10, 15, 25],
-  stat_threshold: [100, 200, 400, 600, 1000],
+  total_stat: [50, 100, 200, 400, 750],
+  single_game_stat: [15, 20, 25, 30, 40],
+  stat_game_count: [3, 5, 10, 15, 20],
 };
 
 export function generateEvoPath(
