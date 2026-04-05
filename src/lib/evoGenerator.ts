@@ -17,6 +17,7 @@ export interface EvoStep {
   challenge_stat: string | null;
   stat_boosts: Record<string, number>;
   new_badges: { badge_id: string; tier: string }[];
+  evolves_to_card_id: string | null;
 }
 
 const CHALLENGE_TYPES = ["points_scored", "games_won", "total_stat", "single_game_stat", "stat_game_count"] as const;
