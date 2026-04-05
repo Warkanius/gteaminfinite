@@ -55,7 +55,7 @@ export async function trackEvoProgress(
     });
     if (!activeStep) continue;
 
-    const compounds = (activeStep.compound_challenges as CompoundChallenge[] | null) ?? [];
+    const compounds = (activeStep.compound_challenges as unknown as CompoundChallenge[] | null) ?? [];
     const isCompound = compounds.length > 0;
 
     if (isCompound) {
