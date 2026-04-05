@@ -143,7 +143,16 @@ export default function AdminPacks() {
             <h3 className="font-semibold text-sm">Basic Details</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-              <div className="space-y-1"><Label>Pack Type</Label><Input value={form.pack_type} onChange={(e) => setForm((f) => ({ ...f, pack_type: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Pack Type</Label>
+                <Select value={form.pack_type} onValueChange={(v) => setForm((f) => ({ ...f, pack_type: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="reward">Reward</SelectItem>
+                    <SelectItem value="starter">Starter</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <div className="bg-muted/30 p-4 rounded-lg border space-y-4">

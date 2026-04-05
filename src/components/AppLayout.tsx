@@ -13,7 +13,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 flex flex-col">
-          <header className="h-14 flex items-center border-b border-border px-4 gap-4 bg-background/40 backdrop-blur-md sticky top-0 z-10">
+          <header className="flex items-center border-b border-border px-4 gap-4 bg-background/40 backdrop-blur-md sticky top-0 z-10 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]">
             <SidebarTrigger />
             <div className="flex-1" />
             <CurrencyDisplay />
