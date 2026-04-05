@@ -1,42 +1,27 @@
 
 
-# Create Evo Form from Existing Card
+# Dynamic Odds Templates Based on Pack Player Count
 
-## What It Does
+## Problem
+The current odds templates have hardcoded slot counts (3, 4, or 5 slots). But packs can have any number of players, so the templates need to generate odds rows dynamically based on how many players are actually in the pack.
 
-Adds a "Create Evo Form" button to each player row in the admin table. Clicking it duplicates the card (name, info, stats, badges, traits, visuals) into the editor as a new card, appends a tier suffix to the name (e.g. "LeBron → LeBron Emerald"), and after saving the new card, automatically links it as the `evolves_to_card_id` on the next unlinked evo step of the source card.
+## Solution
+Replace the fixed-slot templates with **distribution functions** that take the current player count (from `packPlayers.length`) and generate the appropriate number of odds rows with percentages that sum to 100%.
 
-## User Flow
+### Templates (now distribution strategies)
+- **Standard (top-heavy)**: Higher odds for lower slots, tapering down. e.g. for 8 players, slot 1 gets the most %, slot 8 the least.
+- **Equal**: Even split across all slots (100 / N, remainder added to last slot).
+- **Heavy Hitter (bottom-heavy)**: Inverse of standard — higher-numbered slots get better odds.
+- **Bell Curve**: Middle slots get highest odds, edges get lowest.
 
-1. Admin clicks the new **Evo Form** button (DNA/copy icon) on a player row
-2. The system loads the player's full data (stats, badges, traits) and opens the editor as a **new card** (no `editId`)
-3. Name is pre-filled as `"{Original Name} Evo"` — admin adjusts it
-4. Admin tweaks stats, badges, gem tier, etc., then saves
-5. On save, the system finds the first evo step on the **source card** where `evolves_to_card_id` is null and sets it to the newly created card's ID
-6. Toast confirms: "Evo form created and linked to {source name}"
+### How it works
+1. When admin clicks a template, it reads `packPlayers.length` to determine how many slots to generate.
+2. If no players exist yet, show a message: "Add players first before applying a template."
+3. Each template function receives `N` (number of slots) and returns an array of `{ result_slot, percentage, description }`.
+4. The `applyTemplateMut` clears existing odds and inserts the generated rows.
 
-## Technical Changes
-
-### `src/pages/admin/AdminPlayers.tsx`
-
-**New state**: `evoSourceId` — tracks which card we're creating an evo form for (null for normal creates/edits).
-
-**New function `createEvoForm(player)`**:
-- Calls `loadPlayerData(player)` to get badges/traits
-- Sets form with all data but `name: "{player.name} Evo"`, `id: undefined`
-- Sets `editId = null` (new card mode)
-- Sets `evoSourceId = player.id`
-- Opens dialog
-
-**Modify `saveMut`**: After a successful insert (not update), if `evoSourceId` is set:
-- Query `evo_paths` for `player_card_id = evoSourceId` where `evolves_to_card_id IS NULL`, ordered by `step_order`, limit 1
-- Update that row's `evolves_to_card_id` to the new card's ID
-- Reset `evoSourceId` to null
-- Show appropriate toast
-
-**Add button to row actions**: New icon button (e.g. `Copy` or `GitBranch`) next to Edit/Wizard/Delete with title "Create Evo Form"
-
-### No other files changed
-
-The existing `EvoPathEditor`, `PlayerCombobox`, and save logic remain untouched. The auto-link is a single update query after insert.
+### Files Changed
+| File | Change |
+|------|--------|
+| `src/pages/admin/AdminPacks.tsx` | Replace `ODDS_TEMPLATES` static object with distribution generator functions; pass `packPlayers.length` to template application; disable template buttons when no players exist |
 
