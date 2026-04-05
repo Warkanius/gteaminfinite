@@ -281,6 +281,7 @@ export type Database = {
           challenge_target: number
           challenge_type: string
           created_at: string
+          evolves_to_card_id: string | null
           from_tier_id: string | null
           id: string
           new_badges: Json
@@ -295,6 +296,7 @@ export type Database = {
           challenge_target?: number
           challenge_type?: string
           created_at?: string
+          evolves_to_card_id?: string | null
           from_tier_id?: string | null
           id?: string
           new_badges?: Json
@@ -309,6 +311,7 @@ export type Database = {
           challenge_target?: number
           challenge_type?: string
           created_at?: string
+          evolves_to_card_id?: string | null
           from_tier_id?: string | null
           id?: string
           new_badges?: Json
@@ -318,6 +321,13 @@ export type Database = {
           to_tier_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "evo_paths_evolves_to_card_id_fkey"
+            columns: ["evolves_to_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "evo_paths_from_tier_id_fkey"
             columns: ["from_tier_id"]
@@ -1268,6 +1278,7 @@ export type Database = {
       }
       user_evo_progress: {
         Row: {
+          claimed: boolean
           completed: boolean
           completed_at: string | null
           created_at: string
@@ -1278,6 +1289,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          claimed?: boolean
           completed?: boolean
           completed_at?: string | null
           created_at?: string
@@ -1288,6 +1300,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          claimed?: boolean
           completed?: boolean
           completed_at?: string | null
           created_at?: string

@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Wand2, ChevronDown, Trash2, Plus, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { generateEvoPath, type EvoStep } from "@/lib/evoGenerator";
+import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 
 const CHALLENGE_TYPES = ["points_scored", "games_won", "total_stat", "single_game_stat", "stat_game_count"];
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"];
@@ -48,6 +49,14 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
     enabled: !!playerId,
   });
 
+  const { data: allPlayers = [] } = useQuery({
+    queryKey: ["all-player-cards-combo"],
+    queryFn: async () => {
+      const { data } = await supabase.from("player_cards").select("id, name").order("name");
+      return data ?? [];
+    },
+  });
+
   useEffect(() => {
     if (existingSteps.length > 0) {
       setSteps(existingSteps.map((s) => ({
@@ -61,6 +70,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
         challenge_stat: (s as any).challenge_stat ?? null,
         stat_boosts: (s.stat_boosts as Record<string, number>) ?? {},
         new_badges: (s.new_badges as any[]) ?? [],
+        evolves_to_card_id: (s as any).evolves_to_card_id ?? null,
       })));
     }
   }, [existingSteps]);
@@ -82,6 +92,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
       challenge_stat: null,
       stat_boosts: {},
       new_badges: [],
+      evolves_to_card_id: null,
     }]);
   }
 
@@ -111,6 +122,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
             challenge_stat: s.challenge_stat || null,
             stat_boosts: s.stat_boosts,
             new_badges: s.new_badges,
+            evolves_to_card_id: s.evolves_to_card_id || null,
           } as any))
         );
         if (error) throw error;
@@ -210,6 +222,17 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
                     <Label className="text-xs">Description</Label>
                     <Input className="h-8 text-xs" value={step.challenge_description} onChange={(e) => updateStep(idx, { challenge_description: e.target.value })} placeholder="Score 50 points…" />
                   </div>
+                </div>
+
+                {/* Evolves To card */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Evolves To (Target Card)</Label>
+                  <PlayerCombobox
+                    players={allPlayers}
+                    value={step.evolves_to_card_id ?? ""}
+                    onValueChange={(v) => updateStep(idx, { evolves_to_card_id: v || null } as any)}
+                    placeholder="Select evolved card…"
+                  />
                 </div>
 
                 {/* Stat boosts inline */}

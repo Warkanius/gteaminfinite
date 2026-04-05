@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { StarRating } from "@/components/cards/StarRating";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
-import { Lock, Unlock, Coins, CheckCircle, Circle, ArrowRight } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Lock, Unlock, Coins, CheckCircle, Circle, ArrowRight, Sparkles } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 interface CardDetailProps {
   open: boolean;
@@ -163,6 +164,8 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
 
 // Evo Timeline sub-component
 function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string; userId?: string; glowColor: string }) {
+  const qc = useQueryClient();
+
   const { data: evoSteps = [] } = useQuery({
     queryKey: ["evo-paths", playerCardId],
     queryFn: async () => {
@@ -171,7 +174,7 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
     },
   });
 
-  const { data: progress = [] } = useQuery({
+  const { data: progress = [], refetch: refetchProgress } = useQuery({
     queryKey: ["evo-progress", playerCardId, userId],
     queryFn: async () => {
       if (!userId) return [];
@@ -179,6 +182,42 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
       return data ?? [];
     },
     enabled: !!userId,
+  });
+
+  const claimMut = useMutation({
+    mutationFn: async ({ step, progressRow }: { step: any; progressRow: any }) => {
+      const evolvesToCardId = (step as any).evolves_to_card_id;
+      if (!evolvesToCardId || !userId) throw new Error("No evolution target configured");
+
+      // Insert the new evolved card into user's collection
+      const { error: insertErr } = await supabase.from("user_collections").insert({
+        user_id: userId,
+        player_card_id: evolvesToCardId,
+      });
+      if (insertErr) throw insertErr;
+
+      // Remove one copy of the old card
+      const { data: oldCopies } = await supabase.from("user_collections")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("player_card_id", playerCardId)
+        .limit(1);
+      if (oldCopies && oldCopies.length > 0) {
+        await supabase.from("user_collections").delete().eq("id", oldCopies[0].id);
+      }
+
+      // Mark as claimed
+      const { error: claimErr } = await supabase.from("user_evo_progress")
+        .update({ claimed: true } as any)
+        .eq("id", progressRow.id);
+      if (claimErr) throw claimErr;
+    },
+    onSuccess: () => {
+      toast.success("Evolution claimed! Check your collection for the new card.");
+      refetchProgress();
+      qc.invalidateQueries({ queryKey: ["user-collection"] });
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   if (evoSteps.length === 0) return null;
@@ -192,8 +231,10 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
         {evoSteps.map((step: any, idx: number) => {
           const prog = progressMap[step.id];
           const completed = prog?.completed ?? false;
+          const claimed = (prog as any)?.claimed ?? false;
           const currentValue = prog?.current_value ?? 0;
           const pct = Math.min(100, Math.round((currentValue / step.challenge_target) * 100));
+          const canClaim = completed && !claimed && !!(step as any).evolves_to_card_id;
 
           return (
             <div key={step.id} className={`flex items-start gap-2 p-2 rounded-lg transition-colors ${completed ? "bg-primary/10" : idx === 0 || progressMap[evoSteps[idx - 1]?.id]?.completed ? "bg-muted/50" : "bg-muted/20 opacity-60"}`}>
@@ -211,6 +252,20 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
                   <span className="font-medium" style={{ color: glowColor }}>{(step as any).to_tier?.name ?? "?"}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">{step.challenge_description}</p>
+                {canClaim && (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 h-7 text-xs mt-1"
+                    disabled={claimMut.isPending}
+                    onClick={() => claimMut.mutate({ step, progressRow: prog })}
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    {claimMut.isPending ? "Claiming…" : "Claim Evolution"}
+                  </Button>
+                )}
+                {completed && claimed && (
+                  <span className="text-[10px] text-primary font-medium">Claimed ✓</span>
+                )}
                 {!completed && (
                   <div className="flex items-center gap-2">
                     <Progress value={pct} className="h-1.5 flex-1" />
