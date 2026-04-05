@@ -50,8 +50,8 @@ const STAT_LABELS: Record<string, string> = {
 const TIER_COLORS: Record<string, string> = {
   base: "hsl(var(--muted-foreground))",
   gold: "hsl(var(--gem-gold))",
-  hof: "hsl(var(--gem-diamond))",
-  diamond: "hsl(var(--gem-pink-diamond))",
+  hof: "hsl(var(--gem-hof))",
+  diamond: "hsl(var(--gem-diamond))",
   actolytrene: "hsl(var(--gem-actolytrene))",
 };
 

@@ -91,15 +91,16 @@ export default {
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
   			},
-  			gem: {
-  				gold: 'hsl(var(--gem-gold))',
-  				emerald: 'hsl(var(--gem-emerald))',
-  				amethyst: 'hsl(var(--gem-amethyst))',
-  				diamond: 'hsl(var(--gem-diamond))',
-  				'pink-diamond': 'hsl(var(--gem-pink-diamond))',
-  				actolytrene: 'hsl(var(--gem-actolytrene))',
-  				'game-over': 'hsl(var(--gem-game-over))'
-  			}
+			gem: {
+				gold: 'hsl(var(--gem-gold))',
+				emerald: 'hsl(var(--gem-emerald))',
+				amethyst: 'hsl(var(--gem-amethyst))',
+				diamond: 'hsl(var(--gem-diamond))',
+				'pink-diamond': 'hsl(var(--gem-pink-diamond))',
+				hof: 'hsl(var(--gem-hof))',
+				actolytrene: 'hsl(var(--gem-actolytrene))',
+				'game-over': 'hsl(var(--gem-game-over))'
+			}
   		},
   		borderRadius: {
   			lg: 'var(--radius)',

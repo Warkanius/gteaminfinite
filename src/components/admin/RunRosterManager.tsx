@@ -295,10 +295,10 @@ export function RunRosterManager({ runId }: Props) {
 
   const tierColor: Record<string, string> = {
     base: "bg-muted text-muted-foreground",
-    gold: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    hof: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-    diamond: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
-    actolytrene: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+    gold: "bg-gem-gold/20 text-gem-gold border-gem-gold/30",
+    hof: "bg-gem-hof/20 text-gem-hof border-gem-hof/30",
+    diamond: "bg-gem-diamond/20 text-gem-diamond border-gem-diamond/30",
+    actolytrene: "bg-gem-actolytrene/20 text-gem-actolytrene border-gem-actolytrene/30",
   };
 
   return (
