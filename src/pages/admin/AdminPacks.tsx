@@ -20,42 +20,61 @@ type Pack = Tables<"packs">;
 
 const emptyPack = () => ({ name: "", pack_type: "standard", cost: 0, ten_box_cost: null as number | null });
 
-/* ── Odds Templates ── */
-const ODDS_TEMPLATES: Record<string, { label: string; slots: { result_slot: string; percentage: number; description: string }[] }> = {
-  standard_5: {
-    label: "Standard (5 tiers)",
-    slots: [
-      { result_slot: "1", percentage: 40, description: "Common" },
-      { result_slot: "2", percentage: 25, description: "Uncommon" },
-      { result_slot: "3", percentage: 18, description: "Rare" },
-      { result_slot: "4", percentage: 12, description: "Epic" },
-      { result_slot: "5", percentage: 5, description: "Legendary" },
-    ],
+/* ── Dynamic Odds Distribution Generators ── */
+type OddsSlot = { result_slot: string; percentage: number; description: string };
+type DistributionFn = (n: number) => OddsSlot[];
+
+const distributeRemainder = (base: number[], total: number): number[] => {
+  const sum = base.reduce((a, b) => a + b, 0);
+  const diff = total - sum;
+  const result = [...base];
+  if (diff > 0) result[result.length - 1] += diff;
+  return result;
+};
+
+const DISTRIBUTIONS: Record<string, { label: string; fn: DistributionFn }> = {
+  standard: {
+    label: "Standard (top-heavy)",
+    fn: (n) => {
+      const weights = Array.from({ length: n }, (_, i) => n - i);
+      const total = weights.reduce((a, b) => a + b, 0);
+      const raw = weights.map((w) => Math.floor((w / total) * 100));
+      const pcts = distributeRemainder(raw, 100);
+      return pcts.map((p, i) => ({ result_slot: String(i + 1), percentage: p, description: `Slot ${i + 1}` }));
+    },
   },
-  premium_3: {
-    label: "Premium (3 tiers)",
-    slots: [
-      { result_slot: "1", percentage: 50, description: "Good" },
-      { result_slot: "2", percentage: 35, description: "Great" },
-      { result_slot: "3", percentage: 15, description: "Elite" },
-    ],
+  equal: {
+    label: "Equal",
+    fn: (n) => {
+      const base = Math.floor(100 / n);
+      const raw = Array(n).fill(base);
+      const pcts = distributeRemainder(raw, 100);
+      return pcts.map((p, i) => ({ result_slot: String(i + 1), percentage: p, description: `Slot ${i + 1}` }));
+    },
   },
-  elite_3: {
-    label: "Elite (equal odds)",
-    slots: [
-      { result_slot: "1", percentage: 34, description: "Tier 1" },
-      { result_slot: "2", percentage: 33, description: "Tier 2" },
-      { result_slot: "3", percentage: 33, description: "Tier 3" },
-    ],
+  heavy_hitter: {
+    label: "Heavy Hitter (bottom-heavy)",
+    fn: (n) => {
+      const weights = Array.from({ length: n }, (_, i) => i + 1);
+      const total = weights.reduce((a, b) => a + b, 0);
+      const raw = weights.map((w) => Math.floor((w / total) * 100));
+      const pcts = distributeRemainder(raw, 100);
+      return pcts.map((p, i) => ({ result_slot: String(i + 1), percentage: p, description: `Slot ${i + 1}` }));
+    },
   },
-  heavy_hitter_4: {
-    label: "Heavy Hitter (top-heavy)",
-    slots: [
-      { result_slot: "1", percentage: 10, description: "Low tier" },
-      { result_slot: "2", percentage: 20, description: "Mid tier" },
-      { result_slot: "3", percentage: 30, description: "High tier" },
-      { result_slot: "4", percentage: 40, description: "Top tier" },
-    ],
+  bell_curve: {
+    label: "Bell Curve",
+    fn: (n) => {
+      const mid = (n - 1) / 2;
+      const weights = Array.from({ length: n }, (_, i) => {
+        const dist = Math.abs(i - mid);
+        return Math.max(1, n - dist);
+      });
+      const total = weights.reduce((a, b) => a + b, 0);
+      const raw = weights.map((w) => Math.floor((w / total) * 100));
+      const pcts = distributeRemainder(raw, 100);
+      return pcts.map((p, i) => ({ result_slot: String(i + 1), percentage: p, description: `Slot ${i + 1}` }));
+    },
   },
 };
 
@@ -167,12 +186,13 @@ export default function AdminPacks() {
 
   const applyTemplateMut = useMutation({
     mutationFn: async (templateKey: string) => {
-      const template = ODDS_TEMPLATES[templateKey];
-      if (!template || !detailPack) return;
-      // Delete existing odds for this pack type
+      const dist = DISTRIBUTIONS[templateKey];
+      if (!dist || !detailPack) return;
+      const n = packPlayers.length;
+      if (n === 0) { toast.error("Add players first before applying a template."); return; }
       await supabase.from("pack_odds").delete().eq("pack_type", detailPack.pack_type);
-      // Insert template rows
-      const rows = template.slots.map((s) => ({
+      const slots = dist.fn(n);
+      const rows = slots.map((s) => ({
         pack_type: detailPack.pack_type,
         result_slot: s.result_slot,
         percentage: s.percentage,
@@ -297,17 +317,17 @@ export default function AdminPacks() {
               <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
                 {/* Template selector */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-muted-foreground">Templates:</span>
-                  {Object.entries(ODDS_TEMPLATES).map(([key, tmpl]) => (
+                  <span className="text-sm font-medium text-muted-foreground">Distribute ({packPlayers.length} slots):</span>
+                  {Object.entries(DISTRIBUTIONS).map(([key, dist]) => (
                     <Button
                       key={key}
                       size="sm"
                       variant="outline"
                       className="text-xs"
                       onClick={() => applyTemplateMut.mutate(key)}
-                      disabled={applyTemplateMut.isPending}
+                      disabled={applyTemplateMut.isPending || packPlayers.length === 0}
                     >
-                      <Zap className="h-3 w-3 mr-1" /> {tmpl.label}
+                      <Zap className="h-3 w-3 mr-1" /> {dist.label}
                     </Button>
                   ))}
                 </div>
