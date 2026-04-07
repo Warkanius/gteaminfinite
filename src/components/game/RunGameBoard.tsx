@@ -36,6 +36,7 @@ type Possession = "player" | "cpu";
 interface LogEntry {
   msg: string;
   type: "score-player" | "score-cpu" | "miss" | "rebound" | "info" | "badge";
+  activation?: (BadgeActivation | TraitActivation);
 }
 
 export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, onGameComplete }: Props) {
@@ -145,8 +146,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
 
   const logBadgeActivations = (activations: (BadgeActivation | TraitActivation)[]) => {
     for (const ba of activations) {
-      const name = 'badgeName' in ba ? ba.abbreviation : ba.abbreviation;
-      addLog({ msg: `🏅 ${name} (${ba.tier}) — ${ba.effect}`, type: "badge" });
+      addLog({ msg: `${ba.abbreviation} (${ba.tier}) — ${ba.effect}`, type: "badge", activation: ba });
     }
   };
 
