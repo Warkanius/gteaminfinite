@@ -336,6 +336,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">Used only for stat scaling — does not assign this player to the Gem Market.</p>
             </div>
 
             {/* Inspired by */}
