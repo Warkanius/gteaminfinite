@@ -7,7 +7,7 @@ import { DiceRoll } from "@/components/game/DiceRoll";
 import { StatResult } from "@/components/game/StatResult";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
+
 import { Dice5 } from "lucide-react";
 import {
   STATS, STAT_LABELS, getDiceCount, resolveStatRoll, buildCardResult,
