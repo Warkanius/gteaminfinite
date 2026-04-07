@@ -456,18 +456,21 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
         <h4 className="font-display text-sm mb-2">Play-by-Play</h4>
         <div className="space-y-1.5 max-h-48 overflow-y-auto">
           {logs.map((log, i) => (
-            <div
-              key={i}
-              className={`text-xs p-2 rounded-md border-l-4 ${
-                log.type === "score-player" ? "bg-primary/10 border-primary" :
-                log.type === "score-cpu" ? "bg-destructive/10 border-destructive" :
-                log.type === "rebound" ? "bg-accent/20 border-accent" :
-                log.type === "badge" ? "bg-secondary/30 border-secondary" :
-                "bg-muted border-muted-foreground"
-              }`}
-            >
-              {log.msg}
-            </div>
+            log.type === "badge" && log.activation ? (
+              <ActivationLogEntry key={i} activation={log.activation} />
+            ) : (
+              <div
+                key={i}
+                className={`text-xs p-2 rounded-md border-l-4 ${
+                  log.type === "score-player" ? "bg-primary/10 border-primary" :
+                  log.type === "score-cpu" ? "bg-destructive/10 border-destructive" :
+                  log.type === "rebound" ? "bg-accent/20 border-accent" :
+                  "bg-muted border-muted-foreground"
+                }`}
+              >
+                {log.msg}
+              </div>
+            )
           ))}
           {logs.length === 0 && <p className="text-xs text-muted-foreground">Tip the ball to start!</p>}
         </div>
