@@ -17,13 +17,20 @@ interface PulledCard {
   gem_tiers?: { color?: string; name?: string } | null;
 }
 
+interface PackProgress {
+  current: number;
+  total: number;
+}
+
 interface PackRevealProps {
   cards: PulledCard[];
   onOpenAnother: () => void;
   onClose: () => void;
+  packProgress?: PackProgress | null;
+  onNextPack?: () => void;
 }
 
-export function PackReveal({ cards, onOpenAnother, onClose }: PackRevealProps) {
+export function PackReveal({ cards, onOpenAnother, onClose, packProgress, onNextPack }: PackRevealProps) {
   const navigate = useNavigate();
   const [revealedCount, setRevealedCount] = useState(0);
   const allRevealed = revealedCount >= cards.length;
@@ -37,10 +44,17 @@ export function PackReveal({ cards, onOpenAnother, onClose }: PackRevealProps) {
     });
   }, []);
 
+  const isMultiPack = packProgress && packProgress.total > 1;
+  const isLastPack = isMultiPack && packProgress.current >= packProgress.total;
+
   return (
     <div className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6 p-4">
       <h2 className="font-display text-2xl font-bold text-foreground uppercase tracking-wider">
-        {allRevealed ? "Pack Opened!" : "Tap cards to reveal!"}
+        {!allRevealed
+          ? "Tap cards to reveal!"
+          : isMultiPack && !isLastPack
+            ? `Pack ${packProgress.current} of ${packProgress.total}`
+            : "Pack Opened!"}
       </h2>
 
       <div className="flex flex-wrap justify-center gap-4 max-w-3xl">
@@ -62,12 +76,20 @@ export function PackReveal({ cards, onOpenAnother, onClose }: PackRevealProps) {
 
       {allRevealed && (
         <div className="flex gap-3 mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <Button onClick={onOpenAnother}>Open Another</Button>
-          <Button variant="secondary" onClick={() => navigate("/collection")}>
-            View Collection
-          </Button>
+          {isMultiPack && !isLastPack ? (
+            <Button onClick={onNextPack}>
+              Next Pack ({packProgress.current}/{packProgress.total})
+            </Button>
+          ) : (
+            <>
+              <Button onClick={onOpenAnother}>Open Another</Button>
+              <Button variant="secondary" onClick={() => navigate("/collection")}>
+                View Collection
+              </Button>
+            </>
+          )}
           <Button variant="ghost" onClick={onClose}>
-            Back to Market
+            {isMultiPack && !isLastPack ? "Skip All" : "Back"}
           </Button>
         </div>
       )}

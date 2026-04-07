@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { PackCard } from "@/components/packs/PackCard";
@@ -23,7 +23,10 @@ export default function PackMarket() {
   const [opening, setOpening] = useState(false);
   const [pulledCards, setPulledCards] = useState<any[] | null>(null);
   const [lastPackId, setLastPackId] = useState<string | null>(null);
-  const [lastQty, setLastQty] = useState<1 | 10>(1);
+
+  // Sequential 10-box state
+  const [multiPackQueue, setMultiPackQueue] = useState<number>(0); // total packs in sequence
+  const [multiPackIndex, setMultiPackIndex] = useState<number>(0); // current pack (1-based)
 
   useEffect(() => {
     fetchData();
@@ -41,13 +44,9 @@ export default function PackMarket() {
     setLoading(false);
   }
 
-  async function handleBuy(packId: string, quantity: 1 | 10) {
-    setOpening(true);
-    setLastPackId(packId);
-    setLastQty(quantity);
-
+  const openSinglePack = useCallback(async (packId: string): Promise<any[] | null> => {
     const { data, error } = await supabase.functions.invoke("open-pack", {
-      body: { pack_id: packId, quantity },
+      body: { pack_id: packId },
     });
 
     if (error || data?.error) {
@@ -56,18 +55,69 @@ export default function PackMarket() {
         description: data?.error || error?.message || "Failed to open pack",
         variant: "destructive",
       });
-      setOpening(false);
-      return;
+      return null;
     }
 
     setCoins(data.coins_remaining);
-    setPulledCards(data.cards);
+    return data.cards;
+  }, [toast]);
+
+  async function handleBuy(packId: string, quantity: 1 | 10) {
+    setOpening(true);
+    setLastPackId(packId);
+
+    if (quantity === 10) {
+      // Sequential 10-box: open first pack, set up queue
+      setMultiPackQueue(10);
+      setMultiPackIndex(1);
+      const cards = await openSinglePack(packId);
+      if (cards) {
+        setPulledCards(cards);
+      } else {
+        setMultiPackQueue(0);
+        setMultiPackIndex(0);
+      }
+    } else {
+      setMultiPackQueue(0);
+      setMultiPackIndex(0);
+      const cards = await openSinglePack(packId);
+      if (cards) {
+        setPulledCards(cards);
+      }
+    }
+
+    setOpening(false);
+  }
+
+  async function handleNextPack() {
+    if (!lastPackId || multiPackIndex >= multiPackQueue) return;
+    setOpening(true);
+    const nextIndex = multiPackIndex + 1;
+    setMultiPackIndex(nextIndex);
+    setPulledCards(null);
+
+    const cards = await openSinglePack(lastPackId);
+    if (cards) {
+      setPulledCards(cards);
+    } else {
+      // Error — stop the sequence
+      setMultiPackQueue(0);
+      setMultiPackIndex(0);
+    }
     setOpening(false);
   }
 
   function handleOpenAnother() {
     setPulledCards(null);
-    if (lastPackId) handleBuy(lastPackId, lastQty);
+    setMultiPackQueue(0);
+    setMultiPackIndex(0);
+    if (lastPackId) handleBuy(lastPackId, 1);
+  }
+
+  function handleClose() {
+    setPulledCards(null);
+    setMultiPackQueue(0);
+    setMultiPackIndex(0);
   }
 
   if (loading) {
@@ -115,7 +165,9 @@ export default function PackMarket() {
         <PackReveal
           cards={pulledCards}
           onOpenAnother={handleOpenAnother}
-          onClose={() => setPulledCards(null)}
+          onClose={handleClose}
+          packProgress={multiPackQueue > 1 ? { current: multiPackIndex, total: multiPackQueue } : null}
+          onNextPack={handleNextPack}
         />
       )}
     </div>

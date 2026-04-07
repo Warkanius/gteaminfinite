@@ -1,15 +1,75 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { KeyRound, Gift, Loader2 } from "lucide-react";
+import { KeyRound, Gift, Loader2, Package } from "lucide-react";
 import { toast } from "sonner";
+import { PackReveal } from "@/components/packs/PackReveal";
+
+interface PendingPack {
+  id: string;
+  pack_id: string;
+  source: string;
+  pack_name: string;
+}
 
 export default function LockerCodes() {
+  const { user } = useAuth();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [reward, setReward] = useState<{ type: string; description: string } | null>(null);
+  const [pendingPacks, setPendingPacks] = useState<PendingPack[]>([]);
+  const [loadingPacks, setLoadingPacks] = useState(false);
+
+  // Pack reveal state
+  const [revealCards, setRevealCards] = useState<any[] | null>(null);
+  const [openingInventoryId, setOpeningInventoryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) fetchPendingPacks();
+  }, [user]);
+
+  async function fetchPendingPacks() {
+    if (!user) return;
+    setLoadingPacks(true);
+    const { data } = await supabase
+      .from("user_pack_inventory")
+      .select("id, pack_id, source, packs(name)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    setPendingPacks(
+      (data || []).map((d: any) => ({
+        id: d.id,
+        pack_id: d.pack_id,
+        source: d.source,
+        pack_name: d.packs?.name ?? "Unknown Pack",
+      }))
+    );
+    setLoadingPacks(false);
+  }
+
+  async function openInventoryPack(inventoryId: string) {
+    setOpeningInventoryId(inventoryId);
+    try {
+      const { data, error } = await supabase.functions.invoke("open-pack", {
+        body: { inventory_id: inventoryId },
+      });
+      if (error || data?.error) {
+        toast.error(data?.error || error?.message || "Failed to open pack");
+        setOpeningInventoryId(null);
+        return;
+      }
+      setRevealCards(data.cards);
+      // Remove from pending list
+      setPendingPacks((prev) => prev.filter((p) => p.id !== inventoryId));
+    } catch {
+      toast.error("Failed to open pack");
+      setOpeningInventoryId(null);
+    }
+  }
 
   async function handleRedeem() {
     if (!code.trim()) { toast.error("Enter a code"); return; }
@@ -20,10 +80,16 @@ export default function LockerCodes() {
         body: { code: code.trim().toUpperCase() },
       });
       if (error) throw error;
-      if (data?.error) { toast.error(data.error); return; }
+      if (data?.error) { toast.error(data.error); setLoading(false); return; }
+
       setReward({ type: data.reward_type, description: data.reward_description });
       toast.success("Code redeemed!");
       setCode("");
+
+      // If it's a pack reward, immediately open it
+      if (data.reward_type === "pack" && data.inventory_id) {
+        await openInventoryPack(data.inventory_id);
+      }
     } catch (e: any) {
       toast.error(e.message ?? "Failed to redeem");
     } finally {
@@ -71,6 +137,51 @@ export default function LockerCodes() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Pending Packs Section */}
+      {pendingPacks.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" /> Your Packs
+          </h2>
+          {pendingPacks.map((pp) => (
+            <Card key={pp.id} className="border-border/50">
+              <CardContent className="flex items-center justify-between py-4">
+                <div>
+                  <p className="font-semibold">{pp.pack_name}</p>
+                  <p className="text-xs text-muted-foreground capitalize">From: {pp.source.replace("_", " ")}</p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => openInventoryPack(pp.id)}
+                  disabled={openingInventoryId === pp.id}
+                >
+                  {openingInventoryId === pp.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Open"
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Pack Reveal Overlay */}
+      {revealCards && revealCards.length > 0 && (
+        <PackReveal
+          cards={revealCards}
+          onOpenAnother={() => {
+            setRevealCards(null);
+            setOpeningInventoryId(null);
+          }}
+          onClose={() => {
+            setRevealCards(null);
+            setOpeningInventoryId(null);
+          }}
+        />
       )}
     </div>
   );
