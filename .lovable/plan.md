@@ -1,45 +1,42 @@
 
 
-# Fix Stat Rolls to Use Individual Stat Values
+# Show Badge & Trait Activations During Gameplay
 
-## Problem
-`resolveStatRoll` calculates: `rollResult = diceTotal × starModifier(overallStars)`
+## Current State
+- **5v5 (`GameBoard.tsx`)**: Activations are collected and shown after each stat roll as tiny `Badge` chips — but they're small, unstyled, and use a generic emoji. No distinction between badges vs traits, or between tiers.
+- **Runs (`RunGameBoard.tsx`)**: Activations are logged into the play-by-play log as plain text lines with a 🏅 prefix. No visual flair.
 
-The individual stat value (e.g., 3PT=8, MID=3) is passed in but **never used**. A card with 12 in 3PT rolls identically to one with 1 in 3PT if they share the same overall star rating.
+Both modes already collect all activation data — the issue is purely **presentation**.
 
-## Difficulty Modifier Status
-The difficulty modifier (`±10% per star difference`) is working correctly — it compares the card's overall gem tier stars against the game's difficulty stars, which is the intended design.
+## Plan
 
-## Fix: Incorporate `statValue` into the Roll Formula
+### 1. Create `ActivationBanner` component
+A new reusable component (`src/components/game/ActivationBanner.tsx`) that renders a list of badge/trait activations with visual distinction:
 
-**Current formula:**
-`rollResult = diceTotal × starModifier`
+- **Badge activations**: Shield icon, tier-colored background (Base=gray, Gold=amber, HOF=magenta, Diamond=cyan, Actolytrene=deep purple)
+- **Trait activations**: Zap/lightning icon, same tier color scheme
+- Each activation shows: abbreviation, tier label, and effect text
+- Animate in with a subtle slide-up + fade entrance
+- Compact layout for 430px mobile viewport
 
-**New formula:**
-`rollResult = diceTotal × starModifier × (statValue / 6)`
+### 2. Update `StatResult.tsx`
+- Accept an `activations` prop
+- Render `ActivationBanner` below the dice math, inside the result card — so badge/trait effects appear contextually with the roll they affected
 
-Using `/6` as the normalizer (stat range 0–12, midpoint 6):
-- A stat of 6 → 1.0× (neutral)
-- A stat of 12 → 2.0× (double effectiveness)
-- A stat of 3 → 0.5× (half effectiveness)
-- A stat of 0 → 0× (no output)
+### 3. Update `GameBoard.tsx` (5v5)
+- Pass `lastBadgeActivations` to `StatResult` instead of rendering separate `Badge` chips below it
+- Remove the existing plain badge chip rendering
 
-This means individual stats now meaningfully differentiate card performance per category while the overall star rating still determines dice count and base modifier.
+### 4. Update `RunGameBoard.tsx` (Runs)
+- Keep activations in the play-by-play log but enhance the badge log entries with tier-colored left borders and icons matching the `ActivationBanner` style
+- Add a brief toast-style popup when activations fire during a possession, so players see them before they scroll away in the log
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `src/lib/gameEngine.ts` | Update `resolveStatRoll` to multiply by `statValue / 6` |
-
-### Single-line change in `resolveStatRoll`:
-```
-// Before:
-let rollResult = Math.round(diceTotal * modifier);
-
-// After:
-let rollResult = Math.round(diceTotal * modifier * (statValue / 6));
-```
-
-No other files need changes — `GameBoard.tsx` already passes the correct per-stat value (`userBadgeResult.adjustedStat` / `cpuBadgeResult.adjustedStat`) which traces back to `userCard[currentStat]`.
+| `src/components/game/ActivationBanner.tsx` | New component — tier-colored activation display |
+| `src/components/game/StatResult.tsx` | Accept + render activations prop |
+| `src/components/game/GameBoard.tsx` | Pass activations to StatResult, remove old chips |
+| `src/components/game/RunGameBoard.tsx` | Enhanced badge log styling + popup on activation |
 
