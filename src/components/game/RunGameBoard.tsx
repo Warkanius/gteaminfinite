@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PlayerCard } from "@/components/cards/PlayerCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ActivationLogEntry } from "@/components/game/ActivationBanner";
 import {
   SCORING_STATS, STAT_LABELS, type StatKey,
   rollDice, getRunDiceCount, getDefenseStat, isInsideStat,
