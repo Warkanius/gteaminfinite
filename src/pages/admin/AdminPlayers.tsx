@@ -451,6 +451,18 @@ export default function AdminPlayers() {
                   <SelectContent>{teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <Label>Gem Tier</Label>
+                <Select value={form.gem_tier_id ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, gem_tier_id: v || null }))}>
+                  <SelectTrigger><SelectValue placeholder="Select tier…" /></SelectTrigger>
+                  <SelectContent>
+                    {gemTiers.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{"⭐".repeat(g.stars)} {g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Determines card color and base rating scaling for the generator.</p>
+              </div>
             </div>
             {/* Social Handle */}
             <div className="space-y-1">
