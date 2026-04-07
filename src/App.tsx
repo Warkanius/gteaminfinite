@@ -31,6 +31,7 @@ const AuctionHouse = lazy(() => import("@/pages/AuctionHouse"));
 const GemTasks = lazy(() => import("@/pages/GemTasks"));
 const AdminGemTasks = lazy(() => import("@/pages/admin/AdminGemTasks"));
 const AdminAuction = lazy(() => import("@/pages/admin/AdminAuction"));
+const AdminGemMarket = lazy(() => import("@/pages/admin/AdminGemMarket"));
 const AdminStarterPacks = lazy(() => import("@/pages/admin/AdminStarterPacks"));
 const AdminSocialFeed = lazy(() => import("@/pages/admin/AdminSocialFeed"));
 const SocialFeed = lazy(() => import("@/pages/SocialFeed"));
@@ -92,6 +93,7 @@ const App = () => (
             <Route path="/gem-tasks" element={<ProtectedRoute><LazyLoad><GemTasks /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/gem-tasks" element={<ProtectedRoute><LazyLoad><AdminGemTasks /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/auction" element={<ProtectedRoute><LazyLoad><AdminAuction /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/gem-market" element={<ProtectedRoute><LazyLoad><AdminGemMarket /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/starter-packs" element={<ProtectedRoute><LazyLoad><AdminStarterPacks /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/social-feed" element={<ProtectedRoute><LazyLoad><AdminSocialFeed /></LazyLoad></ProtectedRoute>} />
             <Route path="/feed" element={<ProtectedRoute><LazyLoad><SocialFeed /></LazyLoad></ProtectedRoute>} />

@@ -59,6 +59,7 @@ const adminItems = [
   { title: "Rules Config", url: "/admin/rules", icon: Settings },
   { title: "Locker Codes", url: "/admin/locker-codes", icon: KeyRound },
   { title: "Gem Tasks", url: "/admin/gem-tasks", icon: Gem },
+  { title: "Gem Market", url: "/admin/gem-market", icon: Gem },
   { title: "Auction House", url: "/admin/auction", icon: ShoppingCart },
   { title: "Starter Packs", url: "/admin/starter-packs", icon: Gift },
   { title: "Social Feed", url: "/admin/social-feed", icon: Newspaper },

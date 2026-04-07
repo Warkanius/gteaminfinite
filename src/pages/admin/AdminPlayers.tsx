@@ -431,10 +431,6 @@ export default function AdminPlayers() {
                 <Input value={form.name ?? ""} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label>Gem Name</Label>
-                <Input value={form.gem_name ?? ""} onChange={(e) => setForm((f) => ({ ...f, gem_name: e.target.value || null }))} />
-              </div>
-              <div className="space-y-1">
                 <Label>Position 1</Label>
                 <Select value={form.position1 ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, position1: v || null }))}>
                   <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
@@ -446,13 +442,6 @@ export default function AdminPlayers() {
                 <Select value={form.position2 ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, position2: v || null }))}>
                   <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>{POSITIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Gem Tier</Label>
-                <Select value={form.gem_tier_id ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, gem_tier_id: v || null }))}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>{gemTiers.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
