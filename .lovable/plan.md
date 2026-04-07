@@ -1,27 +1,41 @@
 
 
-# Dynamic Odds Templates Based on Pack Player Count
+# Fix Gem Market: Dedicated Admin Interface
 
 ## Problem
-The current odds templates have hardcoded slot counts (3, 4, or 5 slots). But packs can have any number of players, so the templates need to generate odds rows dynamically based on how many players are actually in the pack.
+Players are appearing in the Gem Market because `gem_tier_id` is set directly on the player card form/wizard. There's no dedicated Gem Market admin -- any time an admin edits a player and sets a gem tier, they show up. This has led to 14 players in Gold and Emerald instead of the intended 10.
 
 ## Solution
-Replace the fixed-slot templates with **distribution functions** that take the current player count (from `packPlayers.length`) and generate the appropriate number of odds rows with percentages that sum to 100%.
+Create a dedicated **Admin Gem Market** page where admins explicitly manage which players appear in each tier. Remove `gem_tier_id` controls from the player editor to prevent accidental assignments.
 
-### Templates (now distribution strategies)
-- **Standard (top-heavy)**: Higher odds for lower slots, tapering down. e.g. for 8 players, slot 1 gets the most %, slot 8 the least.
-- **Equal**: Even split across all slots (100 / N, remainder added to last slot).
-- **Heavy Hitter (bottom-heavy)**: Inverse of standard — higher-numbered slots get better odds.
-- **Bell Curve**: Middle slots get highest odds, edges get lowest.
+## Plan
 
-### How it works
-1. When admin clicks a template, it reads `packPlayers.length` to determine how many slots to generate.
-2. If no players exist yet, show a message: "Add players first before applying a template."
-3. Each template function receives `N` (number of slots) and returns an array of `{ result_slot, percentage, description }`.
-4. The `applyTemplateMut` clears existing odds and inserts the generated rows.
+### 1. Create Admin Gem Market page (`src/pages/admin/AdminGemMarket.tsx`)
+- Show each gem tier as a section with its current players listed
+- Each tier section has an "Add Player" button that opens a player search/combobox (reuse `PlayerCombobox`)
+- Each player in a tier has a remove button to unassign them (`gem_tier_id = null`)
+- Adding a player sets their `gem_tier_id` to that tier and allows setting an optional `gem_name`
+- Show player count per tier (e.g. "Gold - 14/10 players") with a warning if over the recommended 10
+- Allow drag or manual reordering within a tier (optional, low priority)
+
+### 2. Remove gem tier controls from PlayerWizard and AdminPlayers form
+- Remove the `gem_tier_id` and `gem_name` fields from the player card editor
+- These should only be managed through the dedicated Gem Market admin
+
+### 3. Add route and sidebar link
+- Add `/admin/gem-market` route in `App.tsx`
+- Add sidebar entry under admin section in `AppSidebar.tsx`
+
+### 4. Clean up existing data
+- Optionally: no code change needed, the admin can use the new UI to remove the extra 4 players from Gold and Emerald
 
 ### Files Changed
+
 | File | Change |
 |------|--------|
-| `src/pages/admin/AdminPacks.tsx` | Replace `ODDS_TEMPLATES` static object with distribution generator functions; pass `packPlayers.length` to template application; disable template buttons when no players exist |
+| `src/pages/admin/AdminGemMarket.tsx` | New -- tier-based player management UI |
+| `src/App.tsx` | Add route |
+| `src/components/AppSidebar.tsx` | Add admin nav link |
+| `src/components/admin/PlayerWizard.tsx` | Remove gem_tier_id / gem_name fields |
+| `src/pages/admin/AdminPlayers.tsx` | Remove gem_tier_id / gem_name from form |
 
