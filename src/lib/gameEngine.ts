@@ -217,7 +217,7 @@ export function resolveStatRoll(
   const baseModifier = getStarModifier(stars);
   // 5+ star doubles = base modifier + 0.5 bonus
   const modifier = (stars >= 5 && isDoubles) ? baseModifier + 0.5 : baseModifier;
-  let rollResult = Math.round(diceTotal * modifier);
+  let rollResult = Math.round(diceTotal * modifier * (statValue / 6));
 
   // Apply difficulty scaling (user cards only — caller decides when to pass difficultyStars)
   if (difficultyStars != null) {
