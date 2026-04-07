@@ -18,7 +18,6 @@ function jsonResp(body: unknown, status = 200) {
  * Falls back to legacy dice-roll parsing if no percentage data exists.
  */
 function pickSlotByPercentage(odds: any[]): string | null {
-  // Check if we have percentage-based odds
   const hasPercentages = odds.some((o) => (o.percentage ?? 0) > 0);
 
   if (hasPercentages) {
@@ -74,9 +73,26 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { pack_id, quantity = 1 } = await req.json();
-    if (!pack_id || ![1, 10].includes(quantity)) {
-      return jsonResp({ error: "Invalid pack_id or quantity" }, 400);
+    const body = await req.json();
+    const { inventory_id } = body;
+    let { pack_id } = body;
+    let isFreeOpen = false;
+
+    // If opening from inventory, resolve pack_id and skip coins
+    if (inventory_id) {
+      const { data: inv, error: invErr } = await admin
+        .from("user_pack_inventory")
+        .select("*")
+        .eq("id", inventory_id)
+        .eq("user_id", userId)
+        .single();
+      if (invErr || !inv) return jsonResp({ error: "Inventory item not found" }, 404);
+      pack_id = inv.pack_id;
+      isFreeOpen = true;
+    }
+
+    if (!pack_id) {
+      return jsonResp({ error: "pack_id or inventory_id required" }, 400);
     }
 
     // Fetch pack
@@ -87,9 +103,8 @@ Deno.serve(async (req) => {
       .single();
     if (packErr || !pack) return jsonResp({ error: "Pack not found" }, 404);
 
-    const totalCost = quantity === 10 && pack.ten_box_cost
-      ? pack.ten_box_cost
-      : pack.cost * quantity;
+    // Always open exactly 1 card per call
+    const totalCost = isFreeOpen ? 0 : pack.cost;
 
     // Fetch user profile
     const { data: profile, error: profErr } = await admin
@@ -98,7 +113,8 @@ Deno.serve(async (req) => {
       .eq("user_id", userId)
       .single();
     if (profErr || !profile) return jsonResp({ error: "Profile not found" }, 404);
-    if (profile.coins < totalCost) {
+
+    if (!isFreeOpen && profile.coins < totalCost) {
       return jsonResp({ error: "Not enough coins", required: totalCost, current: profile.coins }, 400);
     }
 
@@ -107,53 +123,48 @@ Deno.serve(async (req) => {
       .from("pack_odds")
       .select("*")
       .eq("pack_type", pack.pack_type);
-    if (!odds || odds.length === 0) {
-      return jsonResp({ error: "No odds configured for this pack type" }, 500);
-    }
 
-    // Check if we have pack_players for slot resolution
+    // Fetch pack_players
     const { data: allPackPlayers } = await admin
       .from("pack_players")
       .select("slot_number, player_card_id")
       .eq("pack_id", pack_id);
 
     const hasPackPlayers = allPackPlayers && allPackPlayers.length > 0;
+    const hasOdds = odds && odds.length > 0;
 
-    // Build slot map
-    const slotMap: Record<string, string[]> = {};
-    if (hasPackPlayers) {
+    let pulledCardId: string | null = null;
+
+    if (hasOdds && hasPackPlayers) {
+      // Normal flow: use odds to pick a slot, then pick from that slot's players
+      const slotMap: Record<string, string[]> = {};
       for (const pp of allPackPlayers!) {
         const key = String(pp.slot_number);
         if (!slotMap[key]) slotMap[key] = [];
         slotMap[key].push(pp.player_card_id);
       }
-    }
 
-    // For text-based slots, fetch player cards sorted by rating desc
-    let rankedCards: any[] = [];
-    if (!hasPackPlayers) {
-      const { data: cards } = await admin
+      const slot = pickSlotByPercentage(odds);
+      if (slot) {
+        const candidates = slotMap[slot] || slotMap["1"] || [];
+        if (candidates.length > 0) {
+          pulledCardId = candidates[Math.floor(Math.random() * candidates.length)];
+        }
+      }
+    } else if (hasPackPlayers) {
+      // No odds configured — uniform random from all pack_players
+      const idx = Math.floor(Math.random() * allPackPlayers!.length);
+      pulledCardId = allPackPlayers![idx].player_card_id;
+    } else if (hasOdds) {
+      // Text-based legacy fallback (no pack_players)
+      const { data: rankedCards } = await admin
         .from("player_cards")
         .select("id, name, rating")
         .order("rating", { ascending: false })
         .limit(100);
-      rankedCards = cards || [];
-    }
 
-    // Roll for each pack in quantity
-    const pulledCardIds: string[] = [];
-
-    for (let i = 0; i < quantity; i++) {
       const slot = pickSlotByPercentage(odds);
-      if (!slot) continue;
-
-      if (hasPackPlayers) {
-        const candidates = slotMap[slot] || slotMap["1"] || [];
-        if (candidates.length > 0) {
-          pulledCardIds.push(candidates[Math.floor(Math.random() * candidates.length)]);
-        }
-      } else {
-        // Text-based fallback (legacy)
+      if (slot && rankedCards && rankedCards.length > 0) {
         const SLOT_RANK_MAP: Record<string, number> = {
           "Top Rated Player": 0,
           "2nd Rated Player": 1,
@@ -163,53 +174,58 @@ Deno.serve(async (req) => {
           "Player of Choice": -1,
         };
         const rankIndex = SLOT_RANK_MAP[slot];
-        if (rankIndex === undefined) continue;
         if (rankIndex === -1) {
           const top = rankedCards.slice(0, Math.min(10, rankedCards.length));
-          if (top.length > 0) pulledCardIds.push(top[Math.floor(Math.random() * top.length)].id);
-        } else if (rankIndex < rankedCards.length) {
-          pulledCardIds.push(rankedCards[rankIndex].id);
-        } else if (rankedCards.length > 0) {
-          pulledCardIds.push(rankedCards[Math.floor(Math.random() * rankedCards.length)].id);
+          pulledCardId = top[Math.floor(Math.random() * top.length)].id;
+        } else if (rankIndex !== undefined && rankIndex < rankedCards.length) {
+          pulledCardId = rankedCards[rankIndex].id;
+        } else {
+          pulledCardId = rankedCards[Math.floor(Math.random() * rankedCards.length)].id;
         }
       }
     }
 
-    if (pulledCardIds.length === 0) {
-      return jsonResp({ error: "Failed to pull any cards. Check pack_players or player_cards data." }, 500);
+    if (!pulledCardId) {
+      return jsonResp({ error: "Failed to pull a card. Check pack_players or player_cards data." }, 500);
     }
 
-    // Deduct coins
-    await admin
-      .from("profiles")
-      .update({ coins: profile.coins - totalCost })
-      .eq("id", profile.id);
+    // Deduct coins (if not free)
+    if (!isFreeOpen) {
+      await admin
+        .from("profiles")
+        .update({ coins: profile.coins - totalCost })
+        .eq("id", profile.id);
+    }
 
     // Insert into user_collections
-    const collectionRows = pulledCardIds.map((cardId) => ({
+    await admin.from("user_collections").insert({
       user_id: userId,
-      player_card_id: cardId,
-    }));
-    await admin.from("user_collections").insert(collectionRows);
+      player_card_id: pulledCardId,
+    });
 
     // Log purchase
     await admin.from("pack_purchases").insert({
       user_id: userId,
       pack_id,
-      quantity,
+      quantity: 1,
       coins_spent: totalCost,
-      cards_pulled: pulledCardIds,
+      cards_pulled: [pulledCardId],
     });
+
+    // Delete inventory item if this was a free open
+    if (isFreeOpen && inventory_id) {
+      await admin.from("user_pack_inventory").delete().eq("id", inventory_id);
+    }
 
     // Fetch full card data for response
     const { data: cards } = await admin
       .from("player_cards")
       .select("*, gem_tiers(*)")
-      .in("id", pulledCardIds);
+      .in("id", [pulledCardId]);
 
     return jsonResp({
       cards: cards || [],
-      coins_remaining: profile.coins - totalCost,
+      coins_remaining: isFreeOpen ? profile.coins : profile.coins - totalCost,
       coins_spent: totalCost,
     });
   } catch (e) {
