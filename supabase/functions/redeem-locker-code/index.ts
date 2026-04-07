@@ -61,6 +61,8 @@ Deno.serve(async (req) => {
     const rewardType = lockerCode.reward_type;
     const rewardValue = lockerCode.reward_value as any;
     let rewardDescription = "";
+    let inventoryId: string | null = null;
+    let packId: string | null = null;
 
     if (rewardType === "coins") {
       const amount = rewardValue.amount ?? 100;
@@ -80,25 +82,30 @@ Deno.serve(async (req) => {
         rewardDescription = `Card: ${card?.name ?? "Unknown"}`;
       }
     } else if (rewardType === "pack") {
-      const packId = rewardValue.pack_id;
-      rewardDescription = `Pack unlocked`;
-      // For packs, we just record the redemption — the user can claim it from the pack market
-      // Or directly add cards from the pack's player list
+      packId = rewardValue.pack_id;
       if (packId) {
-        const { data: packPlayers } = await supabaseAdmin.from("pack_players").select("player_card_id").eq("pack_id", packId);
-        if (packPlayers && packPlayers.length > 0) {
-          await supabaseAdmin.from("user_collections").insert(
-            packPlayers.map((pp: any) => ({ user_id: user.id, player_card_id: pp.player_card_id }))
-          );
-          rewardDescription = `Pack with ${packPlayers.length} cards`;
-        }
+        // Insert into user_pack_inventory instead of dumping cards directly
+        const { data: inv } = await supabaseAdmin
+          .from("user_pack_inventory")
+          .insert({ user_id: user.id, pack_id: packId, source: "locker_code" })
+          .select("id")
+          .single();
+        inventoryId = inv?.id ?? null;
+        const { data: packData } = await supabaseAdmin.from("packs").select("name").eq("id", packId).single();
+        rewardDescription = `Pack: ${packData?.name ?? "Unknown"}`;
       }
     }
 
     // Record redemption
     await supabaseAdmin.from("locker_code_redemptions").insert({ user_id: user.id, locker_code_id: lockerCode.id });
 
-    return new Response(JSON.stringify({ success: true, reward_type: rewardType, reward_description: rewardDescription }), {
+    return new Response(JSON.stringify({
+      success: true,
+      reward_type: rewardType,
+      reward_description: rewardDescription,
+      pack_id: packId,
+      inventory_id: inventoryId,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

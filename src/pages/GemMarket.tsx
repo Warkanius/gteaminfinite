@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Lock, Gem, Check } from "lucide-react";
+import { PackReveal } from "@/components/packs/PackReveal";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,9 @@ export default function GemMarket() {
   const [confirmCard, setConfirmCard] = useState<PlayerCard | null>(null);
   const [confirmTier, setConfirmTier] = useState<GemTier | null>(null);
 
+  // Card reveal state
+  const [revealCard, setRevealCard] = useState<any | null>(null);
+
   useEffect(() => {
     if (user) fetchAll();
   }, [user]);
@@ -71,7 +75,6 @@ export default function GemMarket() {
       if (!grouped[card.gem_tier_id]) grouped[card.gem_tier_id] = [];
       grouped[card.gem_tier_id].push(card);
     }
-    // Sort each tier's cards by rating desc
     for (const key in grouped) {
       grouped[key].sort((a, b) => b.rating - a.rating);
     }
@@ -105,9 +108,10 @@ export default function GemMarket() {
       if (error || data?.error) {
         toast({ title: "Purchase Failed", description: data?.error || error?.message, variant: "destructive" });
       } else {
-        toast({ title: "Card Acquired!", description: `${confirmCard.name} added to your collection` });
         setGems(data.remaining_gems);
         setOwnedCardIds((prev) => new Set([...prev, confirmCard.id]));
+        // Show reveal animation with the purchased card
+        setRevealCard(data.card);
       }
     } catch {
       toast({ title: "Error", description: "Something went wrong", variant: "destructive" });
@@ -251,6 +255,15 @@ export default function GemMarket() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Card Reveal Overlay */}
+      {revealCard && (
+        <PackReveal
+          cards={[revealCard]}
+          onOpenAnother={() => setRevealCard(null)}
+          onClose={() => setRevealCard(null)}
+        />
+      )}
     </div>
   );
 }
