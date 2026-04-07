@@ -1,19 +1,23 @@
 import { cn } from "@/lib/utils";
 import { STAT_LABELS, type StatRollResult } from "@/lib/gameEngine";
+import { ActivationBanner } from "@/components/game/ActivationBanner";
+import type { BadgeActivation } from "@/lib/badgeEngine";
+import type { TraitActivation } from "@/lib/traitEngine";
 
 interface StatResultProps {
   userResult: StatRollResult;
   cpuResult: StatRollResult;
+  activations?: (BadgeActivation | TraitActivation)[];
 }
 
-export function StatResult({ userResult, cpuResult }: StatResultProps) {
+export function StatResult({ userResult, cpuResult, activations = [] }: StatResultProps) {
   const userWins = userResult.points > cpuResult.points;
   const tie = userResult.points === cpuResult.points;
   const isScoringRound = userResult.pointMultiplier > 0;
 
   return (
     <div className={cn(
-      "rounded-lg border p-3 text-center space-y-1",
+      "rounded-lg border p-3 text-center space-y-2",
       !isScoringRound ? "border-border bg-muted/10" :
       userWins ? "border-gem-emerald/50 bg-gem-emerald/5" :
       tie ? "border-border bg-muted/20" :
@@ -41,6 +45,10 @@ export function StatResult({ userResult, cpuResult }: StatResultProps) {
           {cpuResult.isDoubles && <span className="text-destructive font-bold text-[10px]">DOUBLES 3x!</span>}
         </div>
       </div>
+
+      {activations.length > 0 && (
+        <ActivationBanner activations={activations} compact />
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PlayerCard } from "@/components/cards/PlayerCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ActivationLogEntry } from "@/components/game/ActivationBanner";
 import {
   SCORING_STATS, STAT_LABELS, type StatKey,
   rollDice, getRunDiceCount, getDefenseStat, isInsideStat,
@@ -35,6 +36,7 @@ type Possession = "player" | "cpu";
 interface LogEntry {
   msg: string;
   type: "score-player" | "score-cpu" | "miss" | "rebound" | "info" | "badge";
+  activation?: (BadgeActivation | TraitActivation);
 }
 
 export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, onGameComplete }: Props) {
@@ -144,8 +146,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
 
   const logBadgeActivations = (activations: (BadgeActivation | TraitActivation)[]) => {
     for (const ba of activations) {
-      const name = 'badgeName' in ba ? ba.abbreviation : ba.abbreviation;
-      addLog({ msg: `🏅 ${name} (${ba.tier}) — ${ba.effect}`, type: "badge" });
+      addLog({ msg: `${ba.abbreviation} (${ba.tier}) — ${ba.effect}`, type: "badge", activation: ba });
     }
   };
 
@@ -455,18 +456,21 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
         <h4 className="font-display text-sm mb-2">Play-by-Play</h4>
         <div className="space-y-1.5 max-h-48 overflow-y-auto">
           {logs.map((log, i) => (
-            <div
-              key={i}
-              className={`text-xs p-2 rounded-md border-l-4 ${
-                log.type === "score-player" ? "bg-primary/10 border-primary" :
-                log.type === "score-cpu" ? "bg-destructive/10 border-destructive" :
-                log.type === "rebound" ? "bg-accent/20 border-accent" :
-                log.type === "badge" ? "bg-secondary/30 border-secondary" :
-                "bg-muted border-muted-foreground"
-              }`}
-            >
-              {log.msg}
-            </div>
+            log.type === "badge" && log.activation ? (
+              <ActivationLogEntry key={i} activation={log.activation} />
+            ) : (
+              <div
+                key={i}
+                className={`text-xs p-2 rounded-md border-l-4 ${
+                  log.type === "score-player" ? "bg-primary/10 border-primary" :
+                  log.type === "score-cpu" ? "bg-destructive/10 border-destructive" :
+                  log.type === "rebound" ? "bg-accent/20 border-accent" :
+                  "bg-muted border-muted-foreground"
+                }`}
+              >
+                {log.msg}
+              </div>
+            )
           ))}
           {logs.length === 0 && <p className="text-xs text-muted-foreground">Tip the ball to start!</p>}
         </div>
