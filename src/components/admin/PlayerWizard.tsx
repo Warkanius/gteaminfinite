@@ -44,6 +44,7 @@ interface WizardResult {
   badges: { badge_id: string; tier: string }[];
   traits: { trait_id: string; tier: string; target_stat: string | null }[];
   positions: [string, string | null];
+  gemTierId: string;
   summary: string;
 }
 
@@ -213,7 +214,14 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
       })
       .filter(Boolean) as { badge_id: string; tier: string }[];
 
-    return { stats: gen.stats, badges: mappedBadges, traits: [] as { trait_id: string; tier: string; target_stat: string | null }[], positions: gen.positions, summary: gen.summary };
+    return {
+      stats: gen.stats,
+      badges: mappedBadges,
+      traits: [] as { trait_id: string; tier: string; target_stat: string | null }[],
+      positions: gen.positions,
+      gemTierId,
+      summary: gen.summary,
+    };
   }
 
   function handleNext() {

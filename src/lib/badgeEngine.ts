@@ -42,6 +42,37 @@ export interface BadgeActivation {
   effect: string; // human-readable description of what happened
 }
 
+const BADGE_STAT_MAP: Record<string, StatKey> = {
+  "3pt": "stat_3pt",
+  "stat_3pt": "stat_3pt",
+  "mid": "stat_mid",
+  "stat_mid": "stat_mid",
+  "fin": "stat_fin",
+  "stat_fin": "stat_fin",
+  "dnk": "stat_dnk",
+  "stat_dnk": "stat_dnk",
+  "ast": "stat_ast",
+  "stat_ast": "stat_ast",
+  "stl": "stat_stl",
+  "stat_stl": "stat_stl",
+  "reb": "stat_reb",
+  "stat_reb": "stat_reb",
+  "blk": "stat_blk",
+  "stat_blk": "stat_blk",
+  "int": "stat_int",
+  "stat_int": "stat_int",
+};
+
+function normalizeBadgeStatToken(token: string): StatKey | null {
+  const normalized = token.trim().toLowerCase().replace(/\s+/g, "");
+  return BADGE_STAT_MAP[normalized] ?? null;
+}
+
+function badgeAffectsStat(affectedStat: string | null, stat: StatKey): boolean {
+  if (!affectedStat) return false;
+  return affectedStat.split(",").some((token) => normalizeBadgeStatToken(token) === stat);
+}
+
 // ─── Tier-scaled values ───
 
 /** Number of rerolls granted per tier */
@@ -108,7 +139,7 @@ function versatileSlots(tier: BadgeTier): number {
 /** Get badges that match a specific stat and effect type */
 function findBadges(badges: CardBadge[], stat: StatKey, effectType: string): CardBadge[] {
   return badges.filter(
-    (b) => b.effect_type === effectType && b.affected_stat === stat,
+    (b) => b.effect_type === effectType && badgeAffectsStat(b.affected_stat, stat),
   );
 }
 
@@ -179,7 +210,7 @@ export function applyFloorGeneralBoost(
 
   // Floor General has affected_stat = null (boosts all stats) or specific stat
   const boostBadges = teammateBadges.filter(
-    (b) => b.effect_type === "boost" && (b.affected_stat === null || b.affected_stat === stat),
+    (b) => b.effect_type === "boost" && (b.affected_stat === null || badgeAffectsStat(b.affected_stat, stat)),
   );
 
   if (boostBadges.length === 0) return { adjustedStat: adjusted, activations };
