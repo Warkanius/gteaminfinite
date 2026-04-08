@@ -33,6 +33,16 @@ interface GameBoardProps {
   gameContext: GameContext;
 }
 
+function resolveGameplayStars(card: GameCard | undefined, gemStars?: number | null): number {
+  if (!card) return 0;
+  if (gemStars != null) return Math.max(1, gemStars);
+
+  const roundedRating = Math.round(Number(card.rating) || 0);
+  if (roundedRating > 0) return roundedRating;
+
+  return STATS.some((stat) => (card[stat] ?? 0) > 0) ? 1 : 0;
+}
+
 export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplete, difficultyStars, gameContext }: GameBoardProps) {
   const [playerIdx, setPlayerIdx] = useState(0);
   const [statIdx, setStatIdx] = useState(0);
@@ -86,8 +96,8 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
 
   const userGem = gemTierMap[userCard?.gem_tier_id ?? ""];
   const cpuGem = gemTierMap[cpuCard?.gem_tier_id ?? ""];
-  const userStars = userGem?.stars ?? 0;
-  const cpuStars = cpuGem?.stars ?? 0;
+  const userStars = resolveGameplayStars(userCard, userGem?.stars);
+  const cpuStars = resolveGameplayStars(cpuCard, cpuGem?.stars);
   const userDiceCount = getDiceCount(userStars);
   const cpuDiceCount = getDiceCount(cpuStars);
   // For display, use the max dice count (both sides roll same visual)
