@@ -291,20 +291,20 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
       </div>
 
       {/* Cards face-off */}
-      <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
-        <div className="flex flex-col items-center gap-2">
-          <PlayerCard card={userCard} gemTier={userGem} />
-          <span className="text-sm font-medium">{STAT_LABELS[currentStat]}: {userCard[currentStat]}</span>
-          <span className="text-xs text-muted-foreground">{userStars}★ ({userDiceCount}d)</span>
+      <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto">
+        <div className="flex flex-col items-center gap-1.5">
+          <PlayerCard card={userCard} gemTier={userGem} className="w-full max-w-[140px] aspect-[3/4]" />
+          <span className="text-xs font-medium">{STAT_LABELS[currentStat]}: {"★".repeat(userCard[currentStat])}</span>
+          <span className="text-[10px] text-muted-foreground">{userStars}★ overall ({userDiceCount}d)</span>
         </div>
-        <div className="flex flex-col items-center gap-2">
-          <PlayerCard card={cpuCard} gemTier={cpuGem} />
+        <div className="flex flex-col items-center gap-1.5">
+          <PlayerCard card={cpuCard} gemTier={cpuGem} className="w-full max-w-[140px] aspect-[3/4]" />
           {phase === "result" ? (
-            <span className="text-sm font-medium">{STAT_LABELS[currentStat]}: {cpuCard[currentStat]}</span>
+            <span className="text-xs font-medium">{STAT_LABELS[currentStat]}: {"★".repeat(cpuCard[currentStat])}</span>
           ) : (
-            <span className="text-sm text-muted-foreground">???</span>
+            <span className="text-xs text-muted-foreground">???</span>
           )}
-          <span className="text-xs text-muted-foreground">{cpuStars}★ ({cpuDiceCount}d)</span>
+          <span className="text-[10px] text-muted-foreground">{cpuStars}★ overall ({cpuDiceCount}d)</span>
         </div>
       </div>
 
