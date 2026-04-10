@@ -214,10 +214,11 @@ export function resolveStatRoll(
   const diceCount = dice.length as 1 | 2;
   const diceTotal = dice.reduce((a, b) => a + b, 0);
   const isDoubles = diceCount === 2 && dice[0] === dice[1];
-  const baseModifier = getStarModifier(stars);
-  // 5+ star doubles = base modifier + 0.5 bonus
-  const modifier = (stars >= 5 && isDoubles) ? baseModifier + 0.5 : baseModifier;
-  let rollResult = Math.round(diceTotal * modifier * (statValue / 6));
+  // Use the individual stat value as the star modifier (stats ARE stars, 0-12 scale)
+  const baseModifier = getStarModifier(statValue);
+  // 5+ stat doubles = base modifier + 0.5 bonus
+  const modifier = (statValue >= 5 && isDoubles) ? baseModifier + 0.5 : baseModifier;
+  let rollResult = Math.round(diceTotal * modifier);
 
   // Apply difficulty scaling (user cards only — caller decides when to pass difficultyStars)
   if (difficultyStars != null) {
