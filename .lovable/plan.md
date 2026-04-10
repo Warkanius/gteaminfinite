@@ -1,42 +1,51 @@
 
 
-# Show Badge & Trait Activations During Gameplay
+# Rewrite Dice Engine to Match Tabletop Mechanics
 
-## Current State
-- **5v5 (`GameBoard.tsx`)**: Activations are collected and shown after each stat roll as tiny `Badge` chips — but they're small, unstyled, and use a generic emoji. No distinction between badges vs traits, or between tiers.
-- **Runs (`RunGameBoard.tsx`)**: Activations are logged into the play-by-play log as plain text lines with a 🏅 prefix. No visual flair.
+## How It Works (Tabletop Rules)
 
-Both modes already collect all activation data — the issue is purely **presentation**.
+The stat's star value determines both dice count and multiplier in a repeating pattern:
 
-## Plan
+```text
+Stars  Dice  Modifier  Doubles Bonus
+  0      —     —        —
+  1     1d6   ×0.5      —
+  2     1d6   ×1        —
+  3     1d6   ×1.5      —
+  4     2d6   ×1        —
+  5     2d6   ×1.5      ×2 if doubles
+  6     3d6   ×1        —
+  7     3d6   ×1.5      ×2 if ≥2 dice match
+  8     4d6   ×1        —
+  9     4d6   ×1.5      ×2 if ≥2 dice match
+ 10     5d6   ×1        —
+ 11     5d6   ×1.5      ×2 if ≥2 dice match
+ 12     6d6   ×1        —
+```
 
-### 1. Create `ActivationBanner` component
-A new reusable component (`src/components/game/ActivationBanner.tsx`) that renders a list of badge/trait activations with visual distinction:
+**Pattern**: Every even star adds a die. Odd stars (3+) get ×1.5. Star 1 is the exception (×0.5). Doubles/matching bonus kicks in at 5+ stars.
 
-- **Badge activations**: Shield icon, tier-colored background (Base=gray, Gold=amber, HOF=magenta, Diamond=cyan, Actolytrene=deep purple)
-- **Trait activations**: Zap/lightning icon, same tier color scheme
-- Each activation shows: abbreviation, tier label, and effect text
-- Animate in with a subtle slide-up + fade entrance
-- Compact layout for 430px mobile viewport
+**Overall rating** is no longer used for dice count or roll modifiers — it only matters for difficulty scaling in Domination.
 
-### 2. Update `StatResult.tsx`
-- Accept an `activations` prop
-- Render `ActivationBanner` below the dice math, inside the result card — so badge/trait effects appear contextually with the roll they affected
+## Changes
 
-### 3. Update `GameBoard.tsx` (5v5)
-- Pass `lastBadgeActivations` to `StatResult` instead of rendering separate `Badge` chips below it
-- Remove the existing plain badge chip rendering
+### `src/lib/gameEngine.ts`
+- Replace `getDiceCount(stars)` with `getStatDiceCount(statValue)` that returns 1–6 dice based on the table above
+- Replace `getStarModifier(stars)` with `getStatModifier(statValue)` returning 0.5, 1, or 1.5
+- Add `hasMatchingDice(dice)` helper for the ≥2-match bonus at 5+ stars
+- Update `resolveStatRoll` to use the stat value for dice count and modifier (not overall stars)
+- Update `rollDice` to accept counts up to 6
+- Update `StatRollResult.diceCount` type from `1 | 2` to `number`
 
-### 4. Update `RunGameBoard.tsx` (Runs)
-- Keep activations in the play-by-play log but enhance the badge log entries with tier-colored left borders and icons matching the `ActivationBanner` style
-- Add a brief toast-style popup when activations fire during a possession, so players see them before they scroll away in the log
+### `src/components/game/GameBoard.tsx`
+- Remove `getDiceCount` import and usage for determining dice count from overall stars
+- Dice count per stat roll is now derived from the individual stat value being rolled
+- Each stat potentially rolls a different number of dice
 
-## Files Changed
+### `src/components/game/DiceInput.tsx` & `DiceRoll.tsx`
+- Support variable dice counts (1–6) instead of fixed 1 or 2
+- Update manual dice input to show the correct number of dice fields per stat
 
-| File | Change |
-|------|--------|
-| `src/components/game/ActivationBanner.tsx` | New component — tier-colored activation display |
-| `src/components/game/StatResult.tsx` | Accept + render activations prop |
-| `src/components/game/GameBoard.tsx` | Pass activations to StatResult, remove old chips |
-| `src/components/game/RunGameBoard.tsx` | Enhanced badge log styling + popup on activation |
+### `src/components/game/RunGameBoard.tsx`
+- Update Runs mode similarly if it shares the same dice logic (will verify and align)
 
