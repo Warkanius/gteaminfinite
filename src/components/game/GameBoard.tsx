@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 
 import { Dice5 } from "lucide-react";
 import {
-  STATS, STAT_LABELS, getDiceCount, resolveStatRoll, buildCardResult,
+  STATS, STAT_LABELS, getStatDiceCount, resolveStatRoll, buildCardResult,
   rollDice, type StatRollResult, type CardGameResult, type StatKey,
 } from "@/lib/gameEngine";
 import {
@@ -98,10 +98,12 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
   const cpuGem = gemTierMap[cpuCard?.gem_tier_id ?? ""];
   const userStars = resolveGameplayStars(userCard, userGem?.stars);
   const cpuStars = resolveGameplayStars(cpuCard, cpuGem?.stars);
-  const userDiceCount = getDiceCount(userStars);
-  const cpuDiceCount = getDiceCount(cpuStars);
-  // For display, use the max dice count (both sides roll same visual)
-  const maxDiceCount = Math.max(userDiceCount, cpuDiceCount) as 1 | 2;
+  // Dice count is now derived from individual stat value, not overall stars
+  const userStatValue = userCard?.[currentStat] ?? 0;
+  const cpuStatValue = cpuCard?.[currentStat] ?? 0;
+  const userDiceCount = getStatDiceCount(userStatValue);
+  const cpuDiceCount = getStatDiceCount(cpuStatValue);
+  const maxDiceCount = Math.max(userDiceCount, cpuDiceCount);
 
   const handleDiceSubmit = useCallback((userDice: number[], cpuDice: number[]) => {
     const allActivations: (BadgeActivation | TraitActivation)[] = [];
@@ -295,7 +297,7 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
         <div className="flex flex-col items-center gap-1.5">
           <PlayerCard card={userCard} gemTier={userGem} className="w-full max-w-[140px] aspect-[3/4]" />
           <span className="text-xs font-medium">{STAT_LABELS[currentStat]}: {"★".repeat(userCard[currentStat])}</span>
-          <span className="text-[10px] text-muted-foreground">{userStars}★ overall ({userDiceCount}d)</span>
+          <span className="text-[10px] text-muted-foreground">{userStatValue}★ stat → {userDiceCount}d6</span>
         </div>
         <div className="flex flex-col items-center gap-1.5">
           <PlayerCard card={cpuCard} gemTier={cpuGem} className="w-full max-w-[140px] aspect-[3/4]" />
@@ -304,7 +306,7 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
           ) : (
             <span className="text-xs text-muted-foreground">???</span>
           )}
-          <span className="text-[10px] text-muted-foreground">{cpuStars}★ overall ({cpuDiceCount}d)</span>
+          <span className="text-[10px] text-muted-foreground">{cpuStatValue}★ stat → {cpuDiceCount}d6</span>
         </div>
       </div>
 

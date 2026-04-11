@@ -14,7 +14,7 @@ export const STAT_LABELS: Record<StatKey, string> = {
 
 export const SCORING_STATS: StatKey[] = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_int"];
 
-/** Maps star rating to roll multiplier (supports scalebreakers up to 12) */
+/** Maps star rating to roll multiplier (legacy — kept for backward compat) */
 export function getStarModifier(stars: number): number {
   const map: Record<number, number> = {
     0: 0, 1: 0.5, 2: 1, 3: 1.5, 4: 2, 5: 2.5,
@@ -23,9 +23,47 @@ export function getStarModifier(stars: number): number {
   return map[stars] ?? 0;
 }
 
-/** 2 dice if stars >= 4, else 1 */
+/** Legacy dice count from overall stars — kept for backward compat */
 export function getDiceCount(stars: number): 1 | 2 {
   return stars >= 4 ? 2 : 1;
+}
+
+// ─── Tabletop Dice Mechanics ───
+// Pattern: 0=no roll, 1=1d6×0.5, 2=1d6×1, 3=1d6×1.5, 4=2d6×1, 5=2d6×1.5(+doubles),
+// 6=3d6×1, 7=3d6×1.5(+match), 8=4d6×1, 9=4d6×1.5(+match), 10=5d6×1, 11=5d6×1.5(+match), 12=6d6×1
+
+/** Dice count derived from individual stat value (tabletop rules) */
+export function getStatDiceCount(statValue: number): number {
+  if (statValue <= 0) return 0;
+  if (statValue <= 3) return 1;  // 1-3 stars → 1d6
+  if (statValue <= 5) return 2;  // 4-5 stars → 2d6
+  if (statValue <= 7) return 3;  // 6-7 stars → 3d6
+  if (statValue <= 9) return 4;  // 8-9 stars → 4d6
+  if (statValue <= 11) return 5; // 10-11 stars → 5d6
+  return 6;                       // 12 stars → 6d6
+}
+
+/** Roll modifier derived from individual stat value (tabletop rules) */
+export function getStatModifier(statValue: number): number {
+  if (statValue <= 0) return 0;
+  if (statValue === 1) return 0.5;
+  // Even stars = ×1, odd stars (3+) = ×1.5
+  return statValue % 2 === 0 ? 1 : 1.5;
+}
+
+/** Check if at least 2 dice in the array share the same value */
+export function hasMatchingDice(dice: number[]): boolean {
+  const counts: Record<number, number> = {};
+  for (const d of dice) {
+    counts[d] = (counts[d] || 0) + 1;
+    if (counts[d] >= 2) return true;
+  }
+  return false;
+}
+
+/** Whether matching-dice bonus applies (5+ stars) */
+export function hasMatchBonus(statValue: number, dice: number[]): boolean {
+  return statValue >= 5 && hasMatchingDice(dice);
 }
 
 // ─── Runs Mode helpers (0–120 numerical scale) ───
@@ -172,8 +210,8 @@ export interface DiceResult {
   isDoubles: boolean;
 }
 
-/** Roll dice (auto mode) */
-export function rollDice(count: 1 | 2): DiceResult {
+/** Roll dice (auto mode) — supports 1-6 dice */
+export function rollDice(count: number): DiceResult {
   const dice = Array.from({ length: count }, () => Math.floor(Math.random() * 6) + 1);
   const isDoubles = count === 2 && dice[0] === dice[1];
   return { dice, diceTotal: dice.reduce((a, b) => a + b, 0), isDoubles };
@@ -183,14 +221,15 @@ export interface StatRollResult {
   stat: StatKey;
   statValue: number;       // card's base stat value (for display)
   stars: number;
-  diceCount: 1 | 2;
+  diceCount: number;
   dice: number[];
   diceTotal: number;
   isDoubles: boolean;
-  modifier: number;         // star modifier used
-  rollResult: number;       // diceTotal * modifier (or 3x on doubles for 5-star)
+  modifier: number;         // stat modifier used
+  rollResult: number;       // diceTotal * modifier (×2 on matching dice for 5+ stars)
   pointMultiplier: number;  // 3, 2, 1, or 0
   points: number;           // rollResult * pointMultiplier
+  matchBonus: boolean;      // whether matching dice bonus was applied
 }
 
 /**
@@ -203,7 +242,7 @@ export function getDifficultyModifier(playerStars: number, difficultyStars: numb
   return 1 + diff * 0.1;
 }
 
-/** Calculate a single stat roll result given dice values */
+/** Calculate a single stat roll result given dice values (tabletop rules) */
 export function resolveStatRoll(
   stat: StatKey,
   statValue: number,
@@ -211,14 +250,19 @@ export function resolveStatRoll(
   dice: number[],
   difficultyStars?: number,
 ): StatRollResult {
-  const diceCount = dice.length as 1 | 2;
+  const diceCount = dice.length;
   const diceTotal = dice.reduce((a, b) => a + b, 0);
   const isDoubles = diceCount === 2 && dice[0] === dice[1];
-  // Use the individual stat value as the star modifier (stats ARE stars, 0-12 scale)
-  const baseModifier = getStarModifier(statValue);
-  // 5+ stat doubles = base modifier + 0.5 bonus
-  const modifier = (statValue >= 5 && isDoubles) ? baseModifier + 0.5 : baseModifier;
+  
+  // Tabletop modifier from the individual stat value
+  const modifier = getStatModifier(statValue);
   let rollResult = Math.round(diceTotal * modifier);
+  
+  // Matching dice bonus: ×2 for 5+ star stats
+  const matchBonus = hasMatchBonus(statValue, dice);
+  if (matchBonus) {
+    rollResult *= 2;
+  }
 
   // Apply difficulty scaling (user cards only — caller decides when to pass difficultyStars)
   if (difficultyStars != null) {
@@ -231,7 +275,7 @@ export function resolveStatRoll(
 
   return {
     stat, statValue, stars, diceCount, dice, diceTotal,
-    isDoubles, modifier, rollResult, pointMultiplier, points,
+    isDoubles, modifier, rollResult, pointMultiplier, points, matchBonus,
   };
 }
 
