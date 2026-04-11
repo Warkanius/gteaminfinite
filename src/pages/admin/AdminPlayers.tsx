@@ -465,6 +465,15 @@ export default function AdminPlayers() {
                 </Select>
                 <p className="text-xs text-muted-foreground">Determines card color and base rating scaling for the generator.</p>
               </div>
+              <div className="space-y-1">
+                <Label>Gem Name</Label>
+                <Input
+                  value={(form as any).gem_name ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, gem_name: e.target.value || null }))}
+                  placeholder="e.g. Fire Opal, Blood Ruby"
+                />
+                <p className="text-xs text-muted-foreground">Used to auto-infer card colors. See Card Appearance preview below.</p>
+              </div>
             </div>
             {/* Social Handle */}
             <div className="space-y-1">
