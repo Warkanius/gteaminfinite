@@ -179,7 +179,7 @@ export function resolveRunStatRoll(
   runRating: number,
   dice: number[],
 ): StatRollResult {
-  const diceCount = dice.length as 1 | 2;
+  const diceCount = dice.length;
   const diceTotal = dice.reduce((a, b) => a + b, 0);
   const isDoubles = diceCount === 2 && dice[0] === dice[1];
   const baseModifier = getRunModifier(runRating);
@@ -192,7 +192,7 @@ export function resolveRunStatRoll(
 
   return {
     stat, statValue, stars, diceCount, dice, diceTotal,
-    isDoubles, modifier, rollResult, pointMultiplier, points,
+    isDoubles, modifier, rollResult, pointMultiplier, points, matchBonus: false,
   };
 }
 
