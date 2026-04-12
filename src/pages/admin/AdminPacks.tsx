@@ -103,9 +103,15 @@ export default function AdminPacks() {
   });
 
   const { data: packOdds = [] } = useQuery({
-    queryKey: ["pack-odds", detailPack?.pack_type],
+    queryKey: ["pack-odds", detailPack?.id],
     enabled: !!detailPack,
-    queryFn: async () => { const { data } = await supabase.from("pack_odds").select("*").eq("pack_type", detailPack!.pack_type); return data ?? []; },
+    queryFn: async () => {
+      // Try pack-specific odds first, fall back to pack_type-based
+      const { data: byPackId } = await supabase.from("pack_odds").select("*").eq("pack_id", detailPack!.id);
+      if (byPackId && byPackId.length > 0) return byPackId;
+      const { data: byType } = await supabase.from("pack_odds").select("*").eq("pack_type", detailPack!.pack_type).is("pack_id", null);
+      return byType ?? [];
+    },
   });
 
   const saveMut = useMutation({
@@ -159,11 +165,12 @@ export default function AdminPacks() {
     mutationFn: async () => {
       const { error } = await supabase.from("pack_odds").insert({
         pack_type: detailPack!.pack_type,
+        pack_id: detailPack!.id,
         result_slot: oddsForm.result_slot,
         percentage: oddsForm.percentage,
         dice_roll: "0",
         description: oddsForm.description || null,
-      });
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["pack-odds"] }); setOddsForm({ result_slot: "", percentage: 0, description: "" }); toast.success("Added"); },
@@ -190,16 +197,18 @@ export default function AdminPacks() {
       if (!dist || !detailPack) return;
       const n = packPlayers.length;
       if (n === 0) { toast.error("Add players first before applying a template."); return; }
-      await supabase.from("pack_odds").delete().eq("pack_type", detailPack.pack_type);
+      // Delete pack-specific odds first, then legacy type-based
+      await supabase.from("pack_odds").delete().eq("pack_id", detailPack.id);
       const slots = dist.fn(n);
       const rows = slots.map((s) => ({
         pack_type: detailPack.pack_type,
+        pack_id: detailPack.id,
         result_slot: s.result_slot,
         percentage: s.percentage,
         dice_roll: "0",
         description: s.description,
       }));
-      const { error } = await supabase.from("pack_odds").insert(rows);
+      const { error } = await supabase.from("pack_odds").insert(rows as any);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["pack-odds"] }); toast.success("Template applied"); },
@@ -217,7 +226,7 @@ export default function AdminPacks() {
     { key: "ten_box_cost", label: "10-Box Cost", render: (r) => r.ten_box_cost != null ? String(r.ten_box_cost) : "—" },
   ];
 
-  const isFixedType = detailPack?.pack_type === "reward" || detailPack?.pack_type === "starter";
+  const isFixedType = false; // All packs now support odds editing
 
   return (
     <div className="space-y-6">
