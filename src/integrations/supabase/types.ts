@@ -390,6 +390,48 @@ export type Database = {
         }
         Relationships: []
       }
+      gem_market_listings: {
+        Row: {
+          created_at: string
+          gem_tier_id: string
+          gem_value: number
+          id: string
+          player_card_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          gem_tier_id: string
+          gem_value?: number
+          id?: string
+          player_card_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          gem_tier_id?: string
+          gem_value?: number
+          id?: string
+          player_card_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gem_market_listings_gem_tier_id_fkey"
+            columns: ["gem_tier_id"]
+            isOneToOne: false
+            referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gem_market_listings_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: true
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gem_task_completions: {
         Row: {
           completed_at: string
@@ -579,6 +621,7 @@ export type Database = {
           description: string | null
           dice_roll: string | null
           id: string
+          pack_id: string | null
           pack_type: string
           percentage: number
           result_slot: string
@@ -587,6 +630,7 @@ export type Database = {
           description?: string | null
           dice_roll?: string | null
           id?: string
+          pack_id?: string | null
           pack_type: string
           percentage?: number
           result_slot: string
@@ -595,11 +639,20 @@ export type Database = {
           description?: string | null
           dice_roll?: string | null
           id?: string
+          pack_id?: string | null
           pack_type?: string
           percentage?: number
           result_slot?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pack_odds_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "packs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pack_players: {
         Row: {
