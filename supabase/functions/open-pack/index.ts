@@ -118,11 +118,23 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "Not enough coins", required: totalCost, current: profile.coins }, 400);
     }
 
-    // Fetch odds for this pack type
-    const { data: odds } = await admin
+    // Fetch odds: try pack-specific first, then fall back to pack_type-based
+    let odds: any[] = [];
+    const { data: packSpecificOdds } = await admin
       .from("pack_odds")
       .select("*")
-      .eq("pack_type", pack.pack_type);
+      .eq("pack_id", pack_id);
+    
+    if (packSpecificOdds && packSpecificOdds.length > 0) {
+      odds = packSpecificOdds;
+    } else {
+      const { data: typeOdds } = await admin
+        .from("pack_odds")
+        .select("*")
+        .eq("pack_type", pack.pack_type)
+        .is("pack_id", null);
+      odds = typeOdds || [];
+    }
 
     // Fetch pack_players
     const { data: allPackPlayers } = await admin
@@ -131,12 +143,11 @@ Deno.serve(async (req) => {
       .eq("pack_id", pack_id);
 
     const hasPackPlayers = allPackPlayers && allPackPlayers.length > 0;
-    const hasOdds = odds && odds.length > 0;
+    const hasOdds = odds.length > 0;
 
     let pulledCardId: string | null = null;
 
     if (hasOdds && hasPackPlayers) {
-      // Normal flow: use odds to pick a slot, then pick from that slot's players
       const slotMap: Record<string, string[]> = {};
       for (const pp of allPackPlayers!) {
         const key = String(pp.slot_number);
@@ -152,11 +163,10 @@ Deno.serve(async (req) => {
         }
       }
     } else if (hasPackPlayers) {
-      // No odds configured — uniform random from all pack_players
       const idx = Math.floor(Math.random() * allPackPlayers!.length);
       pulledCardId = allPackPlayers![idx].player_card_id;
     } else if (hasOdds) {
-      // Text-based legacy fallback (no pack_players)
+      // Text-based legacy fallback
       const { data: rankedCards } = await admin
         .from("player_cards")
         .select("id, name, rating")

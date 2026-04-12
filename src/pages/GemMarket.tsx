@@ -27,13 +27,15 @@ interface GemTier {
   stars: number;
 }
 
-interface PlayerCard {
+interface MarketCard {
   id: string;
+  player_card_id: string;
+  gem_tier_id: string;
+  gem_value: number;
   name: string;
   rating: number;
   position1: string | null;
   position2: string | null;
-  gem_tier_id: string | null;
   gem_name: string | null;
 }
 
@@ -41,15 +43,13 @@ export default function GemMarket() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [tiers, setTiers] = useState<GemTier[]>([]);
-  const [cardsByTier, setCardsByTier] = useState<Record<string, PlayerCard[]>>({});
+  const [cardsByTier, setCardsByTier] = useState<Record<string, MarketCard[]>>({});
   const [ownedCardIds, setOwnedCardIds] = useState<Set<string>>(new Set());
   const [gems, setGems] = useState(0);
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
-  const [confirmCard, setConfirmCard] = useState<PlayerCard | null>(null);
+  const [confirmCard, setConfirmCard] = useState<MarketCard | null>(null);
   const [confirmTier, setConfirmTier] = useState<GemTier | null>(null);
-
-  // Card reveal state
   const [revealCard, setRevealCard] = useState<any | null>(null);
 
   useEffect(() => {
@@ -58,22 +58,34 @@ export default function GemMarket() {
 
   async function fetchAll() {
     setLoading(true);
-    const [tiersRes, cardsRes, collRes, profileRes] = await Promise.all([
+    const [tiersRes, listingsRes, collRes, profileRes] = await Promise.all([
       supabase.from("gem_tiers").select("*").order("sort_order"),
-      supabase.from("player_cards").select("id, name, rating, position1, position2, gem_tier_id, gem_name").not("gem_tier_id", "is", null),
+      supabase.from("gem_market_listings").select("*, player_cards(id, name, rating, position1, position2, gem_name)") as any,
       supabase.from("user_collections").select("player_card_id").eq("user_id", user!.id),
       supabase.from("profiles").select("gems").eq("user_id", user!.id).single(),
     ]);
 
     setTiers(tiersRes.data || []);
     setGems(profileRes.data?.gems ?? 0);
-    setOwnedCardIds(new Set((collRes.data || []).map((c) => c.player_card_id)));
+    setOwnedCardIds(new Set((collRes.data || []).map((c: any) => c.player_card_id)));
 
-    const grouped: Record<string, PlayerCard[]> = {};
-    for (const card of cardsRes.data || []) {
-      if (!card.gem_tier_id) continue;
-      if (!grouped[card.gem_tier_id]) grouped[card.gem_tier_id] = [];
-      grouped[card.gem_tier_id].push(card);
+    const grouped: Record<string, MarketCard[]> = {};
+    for (const listing of (listingsRes.data || []) as any[]) {
+      const pc = listing.player_cards;
+      if (!pc || !listing.gem_tier_id) continue;
+      const card: MarketCard = {
+        id: listing.id,
+        player_card_id: pc.id,
+        gem_tier_id: listing.gem_tier_id,
+        gem_value: listing.gem_value,
+        name: pc.name,
+        rating: pc.rating,
+        position1: pc.position1,
+        position2: pc.position2,
+        gem_name: pc.gem_name,
+      };
+      if (!grouped[listing.gem_tier_id]) grouped[listing.gem_tier_id] = [];
+      grouped[listing.gem_tier_id].push(card);
     }
     for (const key in grouped) {
       grouped[key].sort((a, b) => b.rating - a.rating);
@@ -87,14 +99,14 @@ export default function GemMarket() {
     const prevTier = tiers[tierIndex - 1];
     const prevCards = cardsByTier[prevTier.id] || [];
     if (prevCards.length === 0) return true;
-    const ownedInPrev = prevCards.filter((c) => ownedCardIds.has(c.id)).length;
+    const ownedInPrev = prevCards.filter((c) => ownedCardIds.has(c.player_card_id)).length;
     return ownedInPrev >= Math.ceil(prevCards.length / 2);
   }
 
   function getTierProgress(tierIndex: number): { owned: number; total: number; required: number } {
     const tier = tiers[tierIndex];
     const cards = cardsByTier[tier.id] || [];
-    const owned = cards.filter((c) => ownedCardIds.has(c.id)).length;
+    const owned = cards.filter((c) => ownedCardIds.has(c.player_card_id)).length;
     return { owned, total: cards.length, required: Math.ceil(cards.length / 2) };
   }
 
@@ -103,14 +115,13 @@ export default function GemMarket() {
     setBuying(true);
     try {
       const { data, error } = await supabase.functions.invoke("buy-gem-card", {
-        body: { player_card_id: confirmCard.id },
+        body: { player_card_id: confirmCard.player_card_id },
       });
       if (error || data?.error) {
         toast({ title: "Purchase Failed", description: data?.error || error?.message, variant: "destructive" });
       } else {
         setGems(data.remaining_gems);
-        setOwnedCardIds((prev) => new Set([...prev, confirmCard.id]));
-        // Show reveal animation with the purchased card
+        setOwnedCardIds((prev) => new Set([...prev, confirmCard.player_card_id]));
         setRevealCard(data.card);
       }
     } catch {
@@ -196,7 +207,8 @@ export default function GemMarket() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {cards.map((card) => {
-                  const isOwned = ownedCardIds.has(card.id);
+                  const isOwned = ownedCardIds.has(card.player_card_id);
+                  const price = card.gem_value || tier.gem_value;
                   return (
                     <Card
                       key={card.id}
@@ -220,13 +232,13 @@ export default function GemMarket() {
                         <Button
                           size="sm"
                           className="w-full"
-                          disabled={isOwned || gems < tier.gem_value}
+                          disabled={isOwned || gems < price}
                           onClick={() => {
                             setConfirmCard(card);
                             setConfirmTier(tier);
                           }}
                         >
-                          {isOwned ? "Owned" : `${tier.gem_value} Gems`}
+                          {isOwned ? "Owned" : `${price} Gems`}
                         </Button>
                       </CardContent>
                     </Card>
@@ -244,7 +256,7 @@ export default function GemMarket() {
             <DialogTitle className="font-display">Confirm Purchase</DialogTitle>
             <DialogDescription>
               Buy <strong>{confirmCard?.name}</strong>{confirmCard?.gem_name ? ` (${confirmCard.gem_name})` : ""} for{" "}
-              <strong>{confirmTier?.gem_value} gems</strong>?
+              <strong>{confirmCard?.gem_value || confirmTier?.gem_value} gems</strong>?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -256,7 +268,6 @@ export default function GemMarket() {
         </DialogContent>
       </Dialog>
 
-      {/* Card Reveal Overlay */}
       {revealCard && (
         <PackReveal
           cards={[revealCard]}

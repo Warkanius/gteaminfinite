@@ -9,10 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 import { X, Plus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import type { Tables } from "@/integrations/supabase/types";
-
-type PlayerCard = Tables<"player_cards">;
-type GemTier = Tables<"gem_tiers">;
 
 const RECOMMENDED_MAX = 10;
 
@@ -33,47 +29,67 @@ export default function AdminGemMarket() {
   const { data: players = [] } = useQuery({
     queryKey: ["admin-players"],
     queryFn: async () => {
-      const { data } = await supabase.from("player_cards").select("*").order("name");
+      const { data } = await supabase.from("player_cards").select("id, name, rating, gem_name").order("name");
       return data ?? [];
     },
   });
 
-  const playersByTier = (tierId: string) =>
-    players.filter((p) => p.gem_tier_id === tierId);
+  // Fetch gem market listings
+  const { data: listings = [] } = useQuery({
+    queryKey: ["gem-market-listings"],
+    queryFn: async () => {
+      const { data } = await supabase.from("gem_market_listings").select("*");
+      return (data ?? []) as any[];
+    },
+  });
 
-  const unassignedPlayers = players.filter(
-    (p) => !p.gem_tier_id
-  );
+  const listingsByTier = (tierId: string) => {
+    const tierListings = listings.filter((l: any) => l.gem_tier_id === tierId);
+    return tierListings.map((l: any) => {
+      const player = players.find((p) => p.id === l.player_card_id);
+      return { ...l, player };
+    });
+  };
+
+  const listedPlayerIds = new Set(listings.map((l: any) => l.player_card_id));
+  const unassignedPlayers = players.filter((p) => !listedPlayerIds.has(p.id));
 
   const assignMut = useMutation({
     mutationFn: async ({ playerId, tierId, gemName }: { playerId: string; tierId: string; gemName: string }) => {
-      const { error } = await supabase
-        .from("player_cards")
-        .update({ gem_tier_id: tierId, gem_name: gemName || null })
-        .eq("id", playerId);
-      if (error) throw error;
+      // Get gem_value from tier
+      const tier = tiers.find((t) => t.id === tierId);
+      const gemValue = tier?.gem_value ?? 0;
+      
+      // Insert into gem_market_listings
+      const { error: listingErr } = await supabase
+        .from("gem_market_listings")
+        .insert({ player_card_id: playerId, gem_tier_id: tierId, gem_value: gemValue } as any);
+      if (listingErr) throw listingErr;
+
+      // Also update the player card's gem_name for visual purposes
+      if (gemName) {
+        await supabase.from("player_cards").update({ gem_name: gemName }).eq("id", playerId);
+      }
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["gem-market-listings"] });
       qc.invalidateQueries({ queryKey: ["admin-players"] });
       setAddingTierId(null);
       setSelectedPlayerId("");
       setGemNameInput("");
-      toast.success("Player added to tier");
+      toast.success("Player added to market tier");
     },
     onError: (e) => toast.error(e.message),
   });
 
   const removeMut = useMutation({
-    mutationFn: async (playerId: string) => {
-      const { error } = await supabase
-        .from("player_cards")
-        .update({ gem_tier_id: null, gem_name: null })
-        .eq("id", playerId);
+    mutationFn: async (listingId: string) => {
+      const { error } = await supabase.from("gem_market_listings").delete().eq("id", listingId);
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-players"] });
-      toast.success("Player removed from tier");
+      qc.invalidateQueries({ queryKey: ["gem-market-listings"] });
+      toast.success("Player removed from market");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -84,14 +100,14 @@ export default function AdminGemMarket() {
         <CardHeader>
           <CardTitle>Gem Market Manager</CardTitle>
           <CardDescription>
-            Manage which players appear in each gem tier. Recommended max {RECOMMENDED_MAX} players per tier.
+            Manage which players appear in the Gem Market. This is separate from the player's Gem Tier (used for stats/visuals). Max {RECOMMENDED_MAX} per tier recommended.
           </CardDescription>
         </CardHeader>
       </Card>
 
       {tiers.map((tier) => {
-        const tierPlayers = playersByTier(tier.id);
-        const isOver = tierPlayers.length > RECOMMENDED_MAX;
+        const tierListings = listingsByTier(tier.id);
+        const isOver = tierListings.length > RECOMMENDED_MAX;
         const isAdding = addingTierId === tier.id;
 
         return (
@@ -107,11 +123,14 @@ export default function AdminGemMarket() {
                     {"⭐".repeat(tier.stars)} {tier.name}
                   </CardTitle>
                   <Badge variant={isOver ? "destructive" : "secondary"} className="text-xs">
-                    {tierPlayers.length}/{RECOMMENDED_MAX}
+                    {tierListings.length}/{RECOMMENDED_MAX}
                   </Badge>
                   {isOver && (
                     <AlertTriangle className="h-4 w-4 text-destructive" />
                   )}
+                  <Badge variant="outline" className="text-xs ml-1">
+                    {tier.gem_value} gems
+                  </Badge>
                 </div>
                 <Button
                   variant="outline"
@@ -166,28 +185,28 @@ export default function AdminGemMarket() {
                 </div>
               )}
 
-              {tierPlayers.length === 0 ? (
+              {tierListings.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">No players in this tier.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {tierPlayers.map((p) => (
+                  {tierListings.map((entry: any) => (
                     <div
-                      key={p.id}
+                      key={entry.id}
                       className="flex items-center justify-between p-2 rounded-md border bg-card"
                     >
                       <div className="min-w-0">
-                        <span className="font-medium text-sm truncate block">{p.name}</span>
-                        {p.gem_name && (
-                          <span className="text-xs text-muted-foreground italic">{p.gem_name}</span>
+                        <span className="font-medium text-sm truncate block">{entry.player?.name ?? "Unknown"}</span>
+                        {entry.player?.gem_name && (
+                          <span className="text-xs text-muted-foreground italic">{entry.player.gem_name}</span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="outline" className="text-xs">{p.rating} OVR</Badge>
+                        <Badge variant="outline" className="text-xs">{entry.player?.rating ?? "?"} OVR</Badge>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeMut.mutate(p.id)}
+                          onClick={() => removeMut.mutate(entry.id)}
                           disabled={removeMut.isPending}
                         >
                           <X className="h-3.5 w-3.5" />

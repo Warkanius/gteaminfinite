@@ -41,24 +41,24 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch the card with its gem tier
+    // Check if card is listed in gem market
+    const { data: listing, error: listingErr } = await admin
+      .from("gem_market_listings")
+      .select("id, gem_tier_id, gem_value")
+      .eq("player_card_id", player_card_id)
+      .single();
+
+    if (listingErr || !listing) return jsonResp({ error: "Card is not available in Gem Market" }, 404);
+    if (listing.gem_value <= 0) return jsonResp({ error: "Card not purchasable" }, 400);
+
+    // Fetch the card data for response
     const { data: card, error: cardErr } = await admin
       .from("player_cards")
-      .select("id, name, rating, position1, position2, gem_tier_id, gem_name, card_color_primary, card_color_secondary, card_glow_color, card_animation")
+      .select("id, name, rating, position1, position2, gem_name, card_color_primary, card_color_secondary, card_glow_color, card_animation")
       .eq("id", player_card_id)
       .single();
 
     if (cardErr || !card) return jsonResp({ error: "Card not found" }, 404);
-    if (!card.gem_tier_id) return jsonResp({ error: "Card is not available in Gem Market" }, 400);
-
-    // Fetch the card's gem tier
-    const { data: tier } = await admin
-      .from("gem_tiers")
-      .select("*")
-      .eq("id", card.gem_tier_id)
-      .single();
-
-    if (!tier || tier.gem_value <= 0) return jsonResp({ error: "Card not purchasable" }, 400);
 
     // Check if user already owns this card
     const { count: owned } = await admin
@@ -76,32 +76,36 @@ Deno.serve(async (req) => {
       .order("sort_order", { ascending: true });
 
     if (allTiers && allTiers.length > 0) {
-      const currentTierIndex = allTiers.findIndex((t) => t.id === tier.id);
+      const currentTierIndex = allTiers.findIndex((t) => t.id === listing.gem_tier_id);
       if (currentTierIndex > 0) {
         const prevTier = allTiers[currentTierIndex - 1];
 
-        // Count total cards in prev tier
+        // Count total market listings in prev tier
         const { count: totalPrev } = await admin
-          .from("player_cards")
+          .from("gem_market_listings")
           .select("id", { count: "exact", head: true })
           .eq("gem_tier_id", prevTier.id);
 
-        // Count user's owned cards in prev tier
-        const { data: ownedPrevCards } = await admin
-          .from("user_collections")
+        // Get prev tier listing player_card_ids
+        const { data: prevListings } = await admin
+          .from("gem_market_listings")
           .select("player_card_id")
-          .eq("user_id", user.id);
-
-        const ownedIds = new Set((ownedPrevCards || []).map((c) => c.player_card_id));
-
-        const { data: prevTierCards } = await admin
-          .from("player_cards")
-          .select("id")
           .eq("gem_tier_id", prevTier.id);
 
-        const ownedInPrev = (prevTierCards || []).filter((c) => ownedIds.has(c.id)).length;
-        const required = Math.ceil((totalPrev || 0) / 2);
+        const prevCardIds = (prevListings || []).map((l) => l.player_card_id);
 
+        // Count user's owned cards among prev tier listings
+        let ownedInPrev = 0;
+        if (prevCardIds.length > 0) {
+          const { data: ownedCards } = await admin
+            .from("user_collections")
+            .select("player_card_id")
+            .eq("user_id", user.id)
+            .in("player_card_id", prevCardIds);
+          ownedInPrev = (ownedCards || []).length;
+        }
+
+        const required = Math.ceil((totalPrev || 0) / 2);
         if (ownedInPrev < required) {
           return jsonResp({
             error: `You need to own at least ${required} cards from the previous tier to unlock this tier`,
@@ -118,14 +122,14 @@ Deno.serve(async (req) => {
       .single();
 
     if (!profile) return jsonResp({ error: "Profile not found" }, 404);
-    if (profile.gems < tier.gem_value) {
+    if (profile.gems < listing.gem_value) {
       return jsonResp({ error: "Not enough gems" }, 400);
     }
 
     // Deduct gems
     const { error: updateErr } = await admin
       .from("profiles")
-      .update({ gems: profile.gems - tier.gem_value })
+      .update({ gems: profile.gems - listing.gem_value })
       .eq("id", profile.id);
 
     if (updateErr) return jsonResp({ error: "Failed to deduct gems" }, 500);
@@ -143,7 +147,7 @@ Deno.serve(async (req) => {
 
     return jsonResp({
       card,
-      remaining_gems: profile.gems - tier.gem_value,
+      remaining_gems: profile.gems - listing.gem_value,
     });
   } catch (e) {
     return jsonResp({ error: e.message }, 500);

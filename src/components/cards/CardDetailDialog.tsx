@@ -232,9 +232,12 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
           const prog = progressMap[step.id];
           const completed = prog?.completed ?? false;
           const claimed = (prog as any)?.claimed ?? false;
-          const currentValue = prog?.current_value ?? 0;
-          const pct = Math.min(100, Math.round((currentValue / step.challenge_target) * 100));
           const canClaim = completed && !claimed && !!(step as any).evolves_to_card_id;
+
+          // Check if this is a compound challenge
+          const compounds = (step.compound_challenges as any[] | null) ?? [];
+          const isCompound = compounds.length > 0;
+          const compoundProgress: Record<string, number> = (prog as any)?.compound_progress ?? {};
 
           return (
             <div key={step.id} className={`flex items-start gap-2 p-2 rounded-lg transition-colors ${completed ? "bg-primary/10" : idx === 0 || progressMap[evoSteps[idx - 1]?.id]?.completed ? "bg-muted/50" : "bg-muted/20 opacity-60"}`}>
@@ -266,10 +269,36 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
                 {completed && claimed && (
                   <span className="text-[10px] text-primary font-medium">Claimed ✓</span>
                 )}
-                {!completed && (
+                {!completed && isCompound && (
+                  <div className="space-y-1">
+                    {compounds.map((req: any, i: number) => {
+                      const current = compoundProgress[String(i)] ?? 0;
+                      const target = req.target ?? 1;
+                      const met = current >= target;
+                      const pctReq = Math.min(100, Math.round((current / target) * 100));
+                      return (
+                        <div key={i} className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            {met ? (
+                              <CheckCircle className="h-3 w-3 text-primary shrink-0" />
+                            ) : (
+                              <Circle className="h-3 w-3 text-muted-foreground shrink-0" />
+                            )}
+                            <span className={met ? "text-primary" : "text-muted-foreground"}>{req.description}</span>
+                          </div>
+                          <div className="flex items-center gap-2 ml-4">
+                            <Progress value={pctReq} className="h-1 flex-1" />
+                            <span className="text-[10px] font-mono text-muted-foreground">{current}/{target}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {!completed && !isCompound && (
                   <div className="flex items-center gap-2">
-                    <Progress value={pct} className="h-1.5 flex-1" />
-                    <span className="text-[10px] font-mono text-muted-foreground">{currentValue}/{step.challenge_target}</span>
+                    <Progress value={Math.min(100, Math.round(((prog?.current_value ?? 0) / step.challenge_target) * 100))} className="h-1.5 flex-1" />
+                    <span className="text-[10px] font-mono text-muted-foreground">{prog?.current_value ?? 0}/{step.challenge_target}</span>
                   </div>
                 )}
                 {Object.keys(step.stat_boosts ?? {}).length > 0 && (

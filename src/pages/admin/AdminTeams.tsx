@@ -133,7 +133,11 @@ export default function AdminTeams() {
     { key: "opponent_name", label: "Opponent" },
     { key: "difficulty_stars", label: "Stars" },
     { key: "coin_reward", label: "Coins" },
-    { key: "pack_reward", label: "Pack Reward", render: (r) => r.pack_reward ?? "—" },
+    { key: "pack_reward", label: "Pack Reward", render: (r) => {
+      if (!r.pack_reward) return "—";
+      const p = packs.find(pk => pk.id === r.pack_reward);
+      return p ? p.name : r.pack_reward;
+    }},
   ];
 
   const runCols: Column<Run>[] = [
@@ -322,7 +326,7 @@ export default function AdminTeams() {
                   <SelectContent>
                     <SelectItem value="none">No Pack</SelectItem>
                     {packs.map(p => (
-                      <SelectItem key={p.id} value={p.pack_type || p.name}>{p.name}</SelectItem>
+                      <SelectItem key={p.id} value={p.id}>{p.name} ({p.pack_type})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
