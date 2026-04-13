@@ -13,10 +13,6 @@ function jsonResp(body: unknown, status = 200) {
   });
 }
 
-/**
- * Weighted random selection using cumulative percentages.
- * Falls back to legacy dice-roll parsing if no percentage data exists.
- */
 function pickSlotByPercentage(odds: any[]): string | null {
   const hasPercentages = odds.some((o) => (o.percentage ?? 0) > 0);
 
@@ -74,9 +70,37 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    const { inventory_id } = body;
+    const { inventory_id, confirm_choice_card_id } = body;
     let { pack_id } = body;
     let isFreeOpen = false;
+
+    // If confirming a player's choice selection
+    if (confirm_choice_card_id && pack_id) {
+      // Validate the card is in the pack's player pool
+      const { data: packPlayers } = await admin
+        .from("pack_players")
+        .select("player_card_id")
+        .eq("pack_id", pack_id);
+
+      const validIds = (packPlayers || []).map((p: any) => p.player_card_id);
+      if (!validIds.includes(confirm_choice_card_id)) {
+        return jsonResp({ error: "Invalid card selection" }, 400);
+      }
+
+      // Insert into user_collections
+      await admin.from("user_collections").insert({
+        user_id: userId,
+        player_card_id: confirm_choice_card_id,
+      });
+
+      // Fetch card data
+      const { data: cards } = await admin
+        .from("player_cards")
+        .select("*, gem_tiers(*)")
+        .in("id", [confirm_choice_card_id]);
+
+      return jsonResp({ cards: cards || [], player_choice_confirmed: true });
+    }
 
     // If opening from inventory, resolve pack_id and skip coins
     if (inventory_id) {
@@ -103,7 +127,6 @@ Deno.serve(async (req) => {
       .single();
     if (packErr || !pack) return jsonResp({ error: "Pack not found" }, 404);
 
-    // Always open exactly 1 card per call
     const totalCost = isFreeOpen ? 0 : pack.cost;
 
     // Fetch user profile
@@ -118,7 +141,7 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "Not enough coins", required: totalCost, current: profile.coins }, 400);
     }
 
-    // Fetch odds: try pack-specific first, then fall back to pack_type-based
+    // Fetch odds
     let odds: any[] = [];
     const { data: packSpecificOdds } = await admin
       .from("pack_odds")
@@ -146,6 +169,8 @@ Deno.serve(async (req) => {
     const hasOdds = odds.length > 0;
 
     let pulledCardId: string | null = null;
+    let isPlayerChoice = false;
+    let eligibleCards: any[] = [];
 
     if (hasOdds && hasPackPlayers) {
       const slotMap: Record<string, string[]> = {};
@@ -156,6 +181,37 @@ Deno.serve(async (req) => {
       }
 
       const slot = pickSlotByPercentage(odds);
+
+      // Handle player_choice slot
+      if (slot === "player_choice") {
+        isPlayerChoice = true;
+        // Deduct coins first
+        if (!isFreeOpen) {
+          await admin
+            .from("profiles")
+            .update({ coins: profile.coins - totalCost })
+            .eq("id", profile.id);
+        }
+        if (isFreeOpen && inventory_id) {
+          await admin.from("user_pack_inventory").delete().eq("id", inventory_id);
+        }
+
+        // Return eligible cards for user to pick from
+        const cardIds = allPackPlayers!.map(p => p.player_card_id);
+        const { data: cards } = await admin
+          .from("player_cards")
+          .select("*, gem_tiers(*)")
+          .in("id", cardIds);
+
+        return jsonResp({
+          player_choice: true,
+          eligible_cards: cards || [],
+          pack_id,
+          coins_remaining: isFreeOpen ? profile.coins : profile.coins - totalCost,
+          coins_spent: totalCost,
+        });
+      }
+
       if (slot) {
         const candidates = slotMap[slot] || slotMap["1"] || [];
         if (candidates.length > 0) {
@@ -166,7 +222,6 @@ Deno.serve(async (req) => {
       const idx = Math.floor(Math.random() * allPackPlayers!.length);
       pulledCardId = allPackPlayers![idx].player_card_id;
     } else if (hasOdds) {
-      // Text-based legacy fallback
       const { data: rankedCards } = await admin
         .from("player_cards")
         .select("id, name, rating")
