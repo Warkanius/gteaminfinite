@@ -296,17 +296,17 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
       <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto">
         <div className="flex flex-col items-center gap-1.5">
           <PlayerCard card={userCard} gemTier={userGem} className="w-full max-w-[140px] aspect-[3/4]" />
-          <span className="text-xs font-medium">{STAT_LABELS[currentStat]}: {"★".repeat(userCard[currentStat])}</span>
-          <span className="text-[10px] text-muted-foreground">{userStatValue}★ stat → {userDiceCount}d6</span>
+          <span className="text-sm font-semibold">{STAT_LABELS[currentStat]}: {"★".repeat(userCard[currentStat])}</span>
+          <span className="text-xs text-muted-foreground">{userStatValue}★ → {userDiceCount}d6</span>
         </div>
         <div className="flex flex-col items-center gap-1.5">
           <PlayerCard card={cpuCard} gemTier={cpuGem} className="w-full max-w-[140px] aspect-[3/4]" />
           {phase === "result" ? (
-            <span className="text-xs font-medium">{STAT_LABELS[currentStat]}: {"★".repeat(cpuCard[currentStat])}</span>
+            <span className="text-sm font-semibold">{STAT_LABELS[currentStat]}: {"★".repeat(cpuCard[currentStat])}</span>
           ) : (
-            <span className="text-xs text-muted-foreground">???</span>
+            <span className="text-sm text-muted-foreground">???</span>
           )}
-          <span className="text-[10px] text-muted-foreground">{cpuStatValue}★ stat → {cpuDiceCount}d6</span>
+          <span className="text-xs text-muted-foreground">{cpuStatValue}★ → {cpuDiceCount}d6</span>
         </div>
       </div>
 

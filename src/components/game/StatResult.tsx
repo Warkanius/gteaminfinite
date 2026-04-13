@@ -27,22 +27,30 @@ export function StatResult({ userResult, cpuResult, activations = [] }: StatResu
         {STAT_LABELS[userResult.stat]}
         {!isScoringRound && <span className="text-muted-foreground ml-1">(tracked)</span>}
       </p>
-      <div className="flex justify-center gap-6 text-xs">
-        <div>
-          <p className="text-muted-foreground">You</p>
+      <div className="flex justify-center gap-6 text-sm">
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground text-xs">You</p>
           <p className="font-mono">
             [{userResult.dice.join("+")}] × {userResult.modifier}x = {userResult.rollResult}
-            {isScoringRound && <span className="text-primary"> × {userResult.pointMultiplier} = <span className="font-bold">{userResult.points}pts</span></span>}
           </p>
-          {userResult.isDoubles && <span className="text-primary font-bold text-[10px]">DOUBLES 3x!</span>}
+          {isScoringRound && (
+            <p className="text-primary font-semibold">
+              {userResult.rollResult} × {userResult.pointMultiplier} = {userResult.points} pts
+            </p>
+          )}
+          {userResult.isDoubles && <span className="text-primary font-bold text-xs">DOUBLES 3x!</span>}
         </div>
-        <div>
-          <p className="text-muted-foreground">CPU</p>
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground text-xs">CPU</p>
           <p className="font-mono">
             [{cpuResult.dice.join("+")}] × {cpuResult.modifier}x = {cpuResult.rollResult}
-            {isScoringRound && <span className="text-primary"> × {cpuResult.pointMultiplier} = <span className="font-bold">{cpuResult.points}pts</span></span>}
           </p>
-          {cpuResult.isDoubles && <span className="text-destructive font-bold text-[10px]">DOUBLES 3x!</span>}
+          {isScoringRound && (
+            <p className="text-destructive font-semibold">
+              {cpuResult.rollResult} × {cpuResult.pointMultiplier} = {cpuResult.points} pts
+            </p>
+          )}
+          {cpuResult.isDoubles && <span className="text-destructive font-bold text-xs">DOUBLES 3x!</span>}
         </div>
       </div>
 
