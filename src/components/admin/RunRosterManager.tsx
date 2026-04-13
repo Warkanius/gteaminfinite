@@ -9,7 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { Search, Users, Loader2, Upload, Check, X, Wand2, Plus, RefreshCw, Pencil } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Search, Users, Loader2, Upload, Check, X, Wand2, Plus, Pencil, ChevronDown, Trash2 } from "lucide-react";
 import { PlayerQuickEdit } from "@/components/admin/PlayerQuickEdit";
 import { toast } from "sonner";
 import { RUN_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
@@ -60,6 +61,7 @@ export function RunRosterManager({ runId }: Props) {
   const [pendingPlayers, setPendingPlayers] = useState<PendingPlayer[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [displayLimit, setDisplayLimit] = useState(50);
+  const [addPlayersOpen, setAddPlayersOpen] = useState(false);
 
   // Quick add state
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -195,18 +197,6 @@ export function RunRosterManager({ runId }: Props) {
     toast.success(`${newPlayers.length} player(s) added to review.`);
   }
 
-  function handleToggle(cardId: string, checked: boolean) {
-    if (checked) {
-      addToPending([cardId]);
-    } else {
-      if (pendingPlayers.some((p) => p.id === cardId)) {
-        setPendingPlayers((prev) => prev.filter((p) => p.id !== cardId));
-      } else {
-        removeFromRoster.mutate(cardId);
-      }
-    }
-  }
-
   function updatePendingStat(playerId: string, key: string, value: number) {
     setPendingPlayers((prev) =>
       prev.map((p) => (p.id === playerId ? { ...p, [key]: Math.max(0, Math.min(200, value)) } : p))
@@ -284,7 +274,6 @@ export function RunRosterManager({ runId }: Props) {
       const template = RUN_TEMPLATES.find(t => t.name === templateName);
       if (!template) throw new Error("Template not found");
 
-      // Clear existing
       await supabase.from("run_players").delete().eq("run_id", runId);
 
       const cards = [];
@@ -314,7 +303,6 @@ export function RunRosterManager({ runId }: Props) {
         }).select("id, name, rating, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int").single();
         if (error) throw error;
 
-        // Insert badges
         if (gen.badges.length > 0) {
           const badgeRows = gen.badges
             .map(rb => {
@@ -327,7 +315,6 @@ export function RunRosterManager({ runId }: Props) {
           }
         }
 
-        // Insert run_players entry
         await supabase.from("run_players").insert({
           run_id: runId,
           player_card_id: card.id,
@@ -420,25 +407,27 @@ export function RunRosterManager({ runId }: Props) {
 
   const pendingIds = useMemo(() => new Set(pendingPlayers.map((p) => p.id)), [pendingPlayers]);
 
-  const filtered = useMemo(() => {
-    if (!debouncedSearch) return allPlayers;
+  // Roster players with card details
+  const rosterPlayers = useMemo(() => {
+    return rosterEntries.map((entry) => {
+      const card = allPlayers.find((p) => p.id === entry.player_card_id);
+      return { ...entry, card };
+    }).filter((r) => r.card);
+  }, [rosterEntries, allPlayers]);
+
+  // Available players = not in roster and not pending
+  const availablePlayers = useMemo(() => {
+    if (!debouncedSearch) return allPlayers.filter((p) => !rosterCardIds.has(p.id) && !pendingIds.has(p.id));
     const q = debouncedSearch.toLowerCase();
     return allPlayers.filter(
       (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.position1 ?? "").toLowerCase().includes(q) ||
-        (p.gem_name ?? "").toLowerCase().includes(q)
+        !rosterCardIds.has(p.id) &&
+        !pendingIds.has(p.id) &&
+        (p.name.toLowerCase().includes(q) ||
+          (p.position1 ?? "").toLowerCase().includes(q) ||
+          (p.gem_name ?? "").toLowerCase().includes(q))
     );
-  }, [debouncedSearch, allPlayers]);
-
-  const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      const aIn = rosterCardIds.has(a.id) ? 0 : pendingIds.has(a.id) ? 1 : 2;
-      const bIn = rosterCardIds.has(b.id) ? 0 : pendingIds.has(b.id) ? 1 : 2;
-      if (aIn !== bIn) return aIn - bIn;
-      return a.name.localeCompare(b.name);
-    });
-  }, [filtered, rosterCardIds, pendingIds]);
+  }, [debouncedSearch, allPlayers, rosterCardIds, pendingIds]);
 
   const isLoading = rosterLoading || playersLoading;
 
@@ -452,55 +441,78 @@ export function RunRosterManager({ runId }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Autofill & Quick Add Toolbar */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <Select onValueChange={(tpl) => autofillRoster.mutate(tpl)}>
-          <SelectTrigger className="w-auto gap-2">
-            <Wand2 className="h-4 w-4" />
-            <SelectValue placeholder="Autofill Template…" />
-          </SelectTrigger>
-          <SelectContent>
-            {RUN_TEMPLATES.map(t => (
-              <SelectItem key={t.name} value={t.name}>
-                <span className="font-medium">{t.name}</span>
-                <span className="text-xs text-muted-foreground ml-2">— {t.description}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={() => setQuickAddOpen(!quickAddOpen)}>
-          <Plus className="h-4 w-4 mr-1" /> Quick Add
-        </Button>
+      {/* ── SECTION 1: Current Roster ── */}
+      <div className="border rounded-lg bg-muted/20 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" />
+            Current Roster
+            <Badge variant="secondary" className="text-xs ml-1">{rosterCardIds.size}</Badge>
+          </h3>
+          {rosterCardIds.size > 0 && (
+            <Button variant="ghost" size="sm" className="text-destructive text-xs h-7" onClick={() => clearRoster.mutate()} disabled={clearRoster.isPending}>
+              <Trash2 className="h-3 w-3 mr-1" /> Clear All
+            </Button>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
+          </div>
+        ) : rosterPlayers.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            No players in roster yet. Use the tools below to add players.
+          </div>
+        ) : (
+          <ScrollArea className="max-h-[320px]">
+            <div className="divide-y divide-border/30">
+              {rosterPlayers.map(({ id, player_card_id, run_rating, card }) => (
+                <div
+                  key={id}
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="font-medium text-sm truncate hover:underline hover:text-primary transition-colors text-left"
+                        onClick={() => setQuickEditPlayerId(player_card_id)}
+                        title="Click to edit player"
+                      >
+                        {card!.name}
+                      </button>
+                      <button
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => setQuickEditPlayerId(player_card_id)}
+                        title="Edit player"
+                      >
+                        <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                      </button>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{card!.rating}★</Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex gap-2 mt-0.5">
+                      {card!.position1 && <span>{card!.position1}{card!.position2 ? ` / ${card!.position2}` : ""}</span>}
+                      {card!.gem_name && <span>· {card!.gem_name}</span>}
+                      <span className="text-muted-foreground/60">Run: {run_rating}</span>
+                    </div>
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                    onClick={() => removeFromRoster.mutate(player_card_id)}
+                    title="Remove from roster"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
       </div>
 
-      {/* Quick Add Panel */}
-      {quickAddOpen && (
-        <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Add by Archetype</h4>
-          <div className="flex gap-2 items-end">
-            <div className="flex-1 space-y-1">
-              <Label className="text-xs">Archetype</Label>
-              <Select value={quickAddArchetype} onValueChange={setQuickAddArchetype}>
-                <SelectTrigger><SelectValue placeholder="Pick archetype…" /></SelectTrigger>
-                <SelectContent>
-                  {ARCHETYPE_LIST.map(a => (
-                    <SelectItem key={a.name} value={a.name.toLowerCase()}>{a.name} ({a.positions.filter(Boolean).join("/")})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-24 space-y-1">
-              <Label className="text-xs">{quickAddStars}★</Label>
-              <Slider min={1} max={5} step={1} value={[quickAddStars]} onValueChange={([v]) => setQuickAddStars(v)} />
-            </div>
-            <Button size="sm" disabled={!quickAddArchetype || quickAddMutation.isPending} onClick={() => quickAddMutation.mutate({ archetype: quickAddArchetype, stars: quickAddStars })}>
-              {quickAddMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Pending Review Section */}
+      {/* ── Pending Review Section ── */}
       {pendingPlayers.length > 0 && (
         <div className="border-2 border-primary/50 rounded-lg bg-primary/5 p-3 space-y-3">
           <div className="flex items-center justify-between">
@@ -546,6 +558,7 @@ export function RunRosterManager({ runId }: Props) {
                       >
                         {p.name}
                       </button>
+                      <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary cursor-pointer shrink-0" onClick={() => setQuickEditPlayerId(p.id)} />
                       <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">{p.rating}★</Badge>
                     </div>
                     <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 flex-wrap">
@@ -578,119 +591,166 @@ export function RunRosterManager({ runId }: Props) {
         </div>
       )}
 
-      {/* Mass Import Section */}
-      <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-          <Upload className="h-3.5 w-3.5" /> Mass Import from Team
-        </h4>
-        <div className="flex gap-2">
-          <Select value={importTeamId || "pick"} onValueChange={(v) => setImportTeamId(v === "pick" ? "" : v)}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Select a team..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pick" disabled>Select a team…</SelectItem>
-              {teams.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            disabled={!importTeamId}
-            onClick={() => {
-              const ids = teamPlayersForImport.map((p) => p.id);
-              addToPending(ids);
-            }}
-          >
-            Import to Review
-          </Button>
-        </div>
-        {importTeamId && (
-          <p className="text-xs text-muted-foreground">
-            {teamPlayersForImport.length} players · {teamPlayersForImport.filter((p) => rosterCardIds.has(p.id)).length} already in roster
-          </p>
-        )}
-      </div>
-
-      {/* Roster Stats */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Users className="h-4 w-4" />
-          <span className="font-medium text-foreground">{rosterCardIds.size}</span> in roster
-          {pendingPlayers.length > 0 && (
-            <span className="text-primary font-medium">· {pendingPlayers.length} pending review</span>
-          )}
-        </div>
-        {rosterCardIds.size > 0 && (
-          <Button variant="ghost" size="sm" className="text-destructive text-xs" onClick={() => clearRoster.mutate()} disabled={clearRoster.isPending}>
-            Clear All
-          </Button>
-        )}
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search players by name, position, gem…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-      </div>
-
-      {/* Player List */}
-      <ScrollArea className="h-[340px] border rounded-md">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
+      {/* ── SECTION 2: Add Players (Collapsible) ── */}
+      <Collapsible open={addPlayersOpen} onOpenChange={setAddPlayersOpen}>
+        <CollapsibleTrigger asChild>
+          <button className="w-full flex items-center justify-between px-4 py-3 border rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors">
+            <span className="text-sm font-semibold uppercase tracking-wider text-foreground flex items-center gap-2">
+              <Plus className="h-4 w-4 text-primary" />
+              Add Players
+            </span>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${addPlayersOpen ? "rotate-180" : ""}`} />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-3 pt-3">
+          {/* Autofill & Quick Add Toolbar */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <Select onValueChange={(tpl) => autofillRoster.mutate(tpl)}>
+              <SelectTrigger className="w-auto gap-2">
+                <Wand2 className="h-4 w-4" />
+                <SelectValue placeholder="Autofill Template…" />
+              </SelectTrigger>
+              <SelectContent>
+                {RUN_TEMPLATES.map(t => (
+                  <SelectItem key={t.name} value={t.name}>
+                    <span className="font-medium">{t.name}</span>
+                    <span className="text-xs text-muted-foreground ml-2">— {t.description}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => setQuickAddOpen(!quickAddOpen)}>
+              <Plus className="h-4 w-4 mr-1" /> Quick Add
+            </Button>
           </div>
-        ) : sorted.length === 0 ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">No players found.</div>
-        ) : (
-          <div className="divide-y divide-border">
-            {sorted.slice(0, displayLimit).map((player) => {
-              const inRoster = rosterCardIds.has(player.id);
-              const inPending = pendingIds.has(player.id);
-              return (
-                <label
-                  key={player.id}
-                  className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors ${
-                    inRoster ? "bg-primary/5" : inPending ? "bg-yellow-500/5" : ""
-                  }`}
-                >
-                  <Checkbox
-                    checked={inRoster || inPending}
-                    onCheckedChange={(checked) => handleToggle(player.id, !!checked)}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="font-medium text-sm truncate hover:underline hover:text-primary transition-colors"
-                        onClick={(e) => { e.preventDefault(); setQuickEditPlayerId(player.id); }}
-                        title="Click to edit player"
-                      >
-                        {player.name}
-                      </button>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{player.rating}★</Badge>
-                      {inRoster && <Badge className="text-[9px] px-1 py-0 bg-primary/20 text-primary border-primary/30">Roster</Badge>}
-                      {inPending && <Badge className="text-[9px] px-1 py-0 bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Pending</Badge>}
-                    </div>
-                    <div className="text-xs text-muted-foreground flex gap-2">
-                      {player.position1 && <span>{player.position1}{player.position2 ? ` / ${player.position2}` : ""}</span>}
-                      {player.gem_name && <span>· {player.gem_name}</span>}
-                    </div>
-                  </div>
-                </label>
-              );
-            })}
-            {sorted.length > displayLimit && (
-              <div className="px-3 py-3 text-center">
-                <p className="text-xs text-muted-foreground mb-2">Showing {displayLimit} of {sorted.length} players</p>
-                <Button variant="outline" size="sm" onClick={() => setDisplayLimit((l) => l + 50)}>
-                  Show More
+
+          {/* Quick Add Panel */}
+          {quickAddOpen && (
+            <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Add by Archetype</h4>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Archetype</Label>
+                  <Select value={quickAddArchetype} onValueChange={setQuickAddArchetype}>
+                    <SelectTrigger><SelectValue placeholder="Pick archetype…" /></SelectTrigger>
+                    <SelectContent>
+                      {ARCHETYPE_LIST.map(a => (
+                        <SelectItem key={a.name} value={a.name.toLowerCase()}>{a.name} ({a.positions.filter(Boolean).join("/")})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-24 space-y-1">
+                  <Label className="text-xs">{quickAddStars}★</Label>
+                  <Slider min={1} max={5} step={1} value={[quickAddStars]} onValueChange={([v]) => setQuickAddStars(v)} />
+                </div>
+                <Button size="sm" disabled={!quickAddArchetype || quickAddMutation.isPending} onClick={() => quickAddMutation.mutate({ archetype: quickAddArchetype, stars: quickAddStars })}>
+                  {quickAddMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* Mass Import Section */}
+          <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Upload className="h-3.5 w-3.5" /> Mass Import from Team
+            </h4>
+            <div className="flex gap-2">
+              <Select value={importTeamId || "pick"} onValueChange={(v) => setImportTeamId(v === "pick" ? "" : v)}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Select a team..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pick" disabled>Select a team…</SelectItem>
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                disabled={!importTeamId}
+                onClick={() => {
+                  const ids = teamPlayersForImport.map((p) => p.id);
+                  addToPending(ids);
+                }}
+              >
+                Import to Review
+              </Button>
+            </div>
+            {importTeamId && (
+              <p className="text-xs text-muted-foreground">
+                {teamPlayersForImport.length} players · {teamPlayersForImport.filter((p) => rosterCardIds.has(p.id)).length} already in roster
+              </p>
             )}
           </div>
-        )}
-      </ScrollArea>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search available players by name, position, gem…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+
+          {/* Available Player List */}
+          <ScrollArea className="h-[280px] border rounded-md">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
+              </div>
+            ) : availablePlayers.length === 0 ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                {debouncedSearch ? "No matching players found." : "All players are already in the roster."}
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {availablePlayers.slice(0, displayLimit).map((player) => (
+                  <div
+                    key={player.id}
+                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 transition-colors group"
+                  >
+                    <Checkbox
+                      checked={false}
+                      onCheckedChange={() => addToPending([player.id])}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="font-medium text-sm truncate hover:underline hover:text-primary transition-colors text-left"
+                          onClick={() => setQuickEditPlayerId(player.id)}
+                          title="Click to edit player"
+                        >
+                          {player.name}
+                        </button>
+                        <button
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => setQuickEditPlayerId(player.id)}
+                          title="Edit player"
+                        >
+                          <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                        </button>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{player.rating}★</Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground flex gap-2">
+                        {player.position1 && <span>{player.position1}{player.position2 ? ` / ${player.position2}` : ""}</span>}
+                        {player.gem_name && <span>· {player.gem_name}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {availablePlayers.length > displayLimit && (
+                  <div className="px-3 py-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-2">Showing {displayLimit} of {availablePlayers.length} players</p>
+                    <Button variant="outline" size="sm" onClick={() => setDisplayLimit((l) => l + 50)}>
+                      Show More
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </ScrollArea>
+        </CollapsibleContent>
+      </Collapsible>
 
       <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} />
     </div>
