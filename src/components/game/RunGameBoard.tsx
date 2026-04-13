@@ -134,7 +134,42 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
             const newCoins = profile.coins + (reachedMilestone.coin_reward || 0);
             const newGems = profile.gems + (reachedMilestone.gem_reward || 0);
             await supabase.from("profiles").update({ coins: newCoins, gems: newGems }).eq("user_id", user.id);
-            toast({ title: "Milestone Reached!", description: `You earned ${reachedMilestone.coin_reward || 0} Coins and ${reachedMilestone.gem_reward || 0} Gems!` });
+
+            const rewardParts: string[] = [];
+            if (reachedMilestone.coin_reward) rewardParts.push(`${reachedMilestone.coin_reward} Coins`);
+            if (reachedMilestone.gem_reward) rewardParts.push(`${reachedMilestone.gem_reward} Gems`);
+
+            // Handle pack reward
+            if (reachedMilestone.pack_reward) {
+              let packId = reachedMilestone.pack_reward;
+
+              // If "random_standard", pick a random standard pack
+              if (packId === "random_standard") {
+                const { data: standardPacks } = await supabase
+                  .from("packs")
+                  .select("id, name")
+                  .eq("pack_type", "standard");
+                if (standardPacks && standardPacks.length > 0) {
+                  const picked = standardPacks[Math.floor(Math.random() * standardPacks.length)];
+                  packId = picked.id;
+                  rewardParts.push(`📦 ${picked.name}`);
+                }
+              } else {
+                const { data: packInfo } = await supabase.from("packs").select("name").eq("id", packId).single();
+                rewardParts.push(`📦 ${packInfo?.name ?? "Pack"}`);
+              }
+
+              // Add pack to user inventory
+              if (packId && packId !== "random_standard") {
+                await supabase.from("user_pack_inventory").insert({
+                  user_id: user.id,
+                  pack_id: packId,
+                  source: "run_milestone",
+                });
+              }
+            }
+
+            toast({ title: "🏆 Milestone Reached!", description: rewardParts.join(" + ") || "Milestone completed!" });
           }
         }
       }
