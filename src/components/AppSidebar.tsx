@@ -18,6 +18,7 @@ import {
   Gift,
   Newspaper,
   Download,
+  FolderOpen,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
@@ -63,6 +64,7 @@ const adminItems = [
   { title: "Auction House", url: "/admin/auction", icon: ShoppingCart },
   { title: "Starter Packs", url: "/admin/starter-packs", icon: Gift },
   { title: "Social Feed", url: "/admin/social-feed", icon: Newspaper },
+  { title: "Collections", url: "/admin/collections", icon: FolderOpen },
 ];
 
 export function AppSidebar() {

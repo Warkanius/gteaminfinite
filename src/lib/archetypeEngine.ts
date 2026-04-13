@@ -31,6 +31,7 @@ interface Archetype {
 // ── Archetypes ───────────────────────────────────────────
 
 const ARCHETYPES: Archetype[] = [
+  // ── Original 13 ──
   {
     name: "Sharpshooter",
     keywords: ["sharpshooter", "shooter", "sniper", "lights out shooter", "catch and shoot"],
@@ -47,7 +48,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     name: "Playmaker",
-    keywords: ["playmaker", "floor general", "point god", "facilitator", "passer"],
+    keywords: ["playmaker", "point god", "facilitator", "passer"],
     weights: { stat_3pt: 0.6, stat_mid: 0.65, stat_fin: 0.55, stat_dnk: 0.3, stat_ast: 1, stat_stl: 0.5, stat_reb: 0.2, stat_blk: 0.15, stat_int: 0.9 },
     positions: ["PG", "SG"],
     focusStats: ["stat_ast", "stat_int"],
@@ -96,7 +97,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     name: "Combo Guard",
-    keywords: ["combo guard", "scoring guard", "microwave", "microwave scorer", "instant offense"],
+    keywords: ["combo guard", "scoring guard"],
     weights: { stat_3pt: 0.75, stat_mid: 0.8, stat_fin: 0.75, stat_dnk: 0.5, stat_ast: 0.7, stat_stl: 0.5, stat_reb: 0.25, stat_blk: 0.15, stat_int: 0.7 },
     positions: ["PG", "SG"],
     focusStats: ["stat_3pt", "stat_mid", "stat_ast"],
@@ -122,6 +123,106 @@ const ARCHETYPES: Archetype[] = [
     positions: ["C", "PF"],
     focusStats: ["stat_dnk", "stat_fin", "stat_reb", "stat_blk"],
   },
+
+  // ── New Composite Archetypes ──
+  {
+    name: "Streetballer",
+    keywords: ["streetballer", "street baller", "playground legend", "and1"],
+    weights: { stat_3pt: 0.5, stat_mid: 0.6, stat_fin: 0.9, stat_dnk: 0.75, stat_ast: 0.85, stat_stl: 0.6, stat_reb: 0.2, stat_blk: 0.15, stat_int: 0.8 },
+    positions: ["PG", "SG"],
+    focusStats: ["stat_fin", "stat_ast", "stat_int"],
+  },
+  {
+    name: "Ankle Breaker",
+    keywords: ["ankle breaker", "crossover king", "handles"],
+    weights: { stat_3pt: 0.55, stat_mid: 0.65, stat_fin: 0.85, stat_dnk: 0.5, stat_ast: 0.8, stat_stl: 0.65, stat_reb: 0.15, stat_blk: 0.1, stat_int: 0.9 },
+    positions: ["PG", "SG"],
+    focusStats: ["stat_fin", "stat_ast", "stat_stl"],
+  },
+  {
+    name: "Showtime",
+    keywords: ["showtime", "highlight reel", "above the rim"],
+    weights: { stat_3pt: 0.4, stat_mid: 0.5, stat_fin: 0.85, stat_dnk: 1, stat_ast: 0.8, stat_stl: 0.45, stat_reb: 0.35, stat_blk: 0.25, stat_int: 0.7 },
+    positions: ["PG", "SF"],
+    focusStats: ["stat_dnk", "stat_fin", "stat_ast"],
+  },
+  {
+    name: "Tower",
+    keywords: ["tower", "twin tower", "dominant big"],
+    weights: { stat_3pt: 0.15, stat_mid: 0.5, stat_fin: 0.75, stat_dnk: 0.8, stat_ast: 0.25, stat_stl: 0.25, stat_reb: 0.9, stat_blk: 0.95, stat_int: 0.4 },
+    positions: ["C", "PF"],
+    focusStats: ["stat_blk", "stat_reb", "stat_fin"],
+  },
+  {
+    name: "Enforcer",
+    keywords: ["enforcer", "intimidator", "physical defender"],
+    weights: { stat_3pt: 0.1, stat_mid: 0.25, stat_fin: 0.7, stat_dnk: 0.85, stat_ast: 0.15, stat_stl: 0.5, stat_reb: 0.85, stat_blk: 0.9, stat_int: 0.45 },
+    positions: ["C", "PF"],
+    focusStats: ["stat_blk", "stat_reb", "stat_dnk"],
+  },
+  {
+    name: "Brick Wall",
+    keywords: ["brick wall", "immovable", "anchor"],
+    weights: { stat_3pt: 0.05, stat_mid: 0.15, stat_fin: 0.4, stat_dnk: 0.5, stat_ast: 0.15, stat_stl: 0.45, stat_reb: 1, stat_blk: 0.9, stat_int: 0.35 },
+    positions: ["C", "PF"],
+    focusStats: ["stat_reb", "stat_blk"],
+  },
+  {
+    name: "Sniper Elite",
+    keywords: ["sniper elite", "pure sniper", "deep range"],
+    weights: { stat_3pt: 1, stat_mid: 0.9, stat_fin: 0.2, stat_dnk: 0.1, stat_ast: 0.4, stat_stl: 0.3, stat_reb: 0.1, stat_blk: 0.05, stat_int: 0.55 },
+    positions: ["SG", "SF"],
+    focusStats: ["stat_3pt", "stat_mid"],
+  },
+  {
+    name: "Floor General",
+    keywords: ["floor general", "general", "commander"],
+    weights: { stat_3pt: 0.55, stat_mid: 0.6, stat_fin: 0.5, stat_dnk: 0.25, stat_ast: 1, stat_stl: 0.65, stat_reb: 0.3, stat_blk: 0.2, stat_int: 1 },
+    positions: ["PG", "SG"],
+    focusStats: ["stat_ast", "stat_int", "stat_stl"],
+  },
+  {
+    name: "Hustle Player",
+    keywords: ["hustle player", "energy guy", "motor", "glue guy"],
+    weights: { stat_3pt: 0.2, stat_mid: 0.3, stat_fin: 0.45, stat_dnk: 0.4, stat_ast: 0.3, stat_stl: 0.85, stat_reb: 0.8, stat_blk: 0.5, stat_int: 0.75 },
+    positions: ["SF", "PF"],
+    focusStats: ["stat_stl", "stat_reb", "stat_int"],
+  },
+  {
+    name: "Finesse Scorer",
+    keywords: ["finesse scorer", "finesse", "touch artist", "crafty scorer"],
+    weights: { stat_3pt: 0.15, stat_mid: 0.9, stat_fin: 0.95, stat_dnk: 0.35, stat_ast: 0.45, stat_stl: 0.35, stat_reb: 0.25, stat_blk: 0.15, stat_int: 0.6 },
+    positions: ["SG", "SF"],
+    focusStats: ["stat_fin", "stat_mid"],
+  },
+  {
+    name: "Microwave",
+    keywords: ["microwave", "microwave scorer", "instant offense", "spark plug"],
+    weights: { stat_3pt: 0.8, stat_mid: 0.85, stat_fin: 0.8, stat_dnk: 0.55, stat_ast: 0.5, stat_stl: 0.4, stat_reb: 0.2, stat_blk: 0.1, stat_int: 0.55 },
+    positions: ["SG", "PG"],
+    focusStats: ["stat_3pt", "stat_mid", "stat_fin"],
+  },
+  {
+    name: "Clutch Scorer",
+    keywords: ["clutch scorer", "clutch", "closer", "mr fourth quarter"],
+    weights: { stat_3pt: 0.6, stat_mid: 0.9, stat_fin: 0.85, stat_dnk: 0.5, stat_ast: 0.45, stat_stl: 0.4, stat_reb: 0.3, stat_blk: 0.2, stat_int: 0.7 },
+    positions: ["SG", "SF"],
+    focusStats: ["stat_mid", "stat_fin", "stat_int"],
+  },
+  {
+    name: "Speedster",
+    keywords: ["speedster", "blur", "fast break", "transition"],
+    weights: { stat_3pt: 0.35, stat_mid: 0.4, stat_fin: 0.8, stat_dnk: 0.6, stat_ast: 0.55, stat_stl: 0.85, stat_reb: 0.2, stat_blk: 0.15, stat_int: 0.8 },
+    positions: ["PG", "SG"],
+    focusStats: ["stat_stl", "stat_fin", "stat_int"],
+  },
+  {
+    name: "Gauntlet Boss",
+    keywords: ["gauntlet boss", "boss", "final boss", "elite all-around"],
+    weights: { stat_3pt: 0.85, stat_mid: 0.85, stat_fin: 0.85, stat_dnk: 0.8, stat_ast: 0.8, stat_stl: 0.8, stat_reb: 0.75, stat_blk: 0.75, stat_int: 0.85 },
+    positions: ["SF", "PF"],
+    focusStats: ["stat_3pt", "stat_mid", "stat_fin", "stat_ast"],
+  },
 ];
 
 // ── Modifiers ────────────────────────────────────────────
@@ -135,7 +236,7 @@ interface ModifierConfig {
   badgeCountMult: number;
   badgeTierBoost: number;
   varianceMult: number;
-  statSpreadMult: number; // <1 = tighter, >1 = wider
+  statSpreadMult: number;
 }
 
 const STAT_KEYS: (keyof StatProfile)[] = [
@@ -195,7 +296,6 @@ const MODIFIERS: Modifier[] = [
     keywords: ["balanced", "complete", "well-rounded", "well rounded"],
     apply: (w, config) => {
       config.statSpreadMult = 0.5;
-      // Pull all weights toward average
       const avg = STAT_KEYS.reduce((s, k) => s + w[k], 0) / STAT_KEYS.length;
       for (const k of STAT_KEYS) {
         w[k] = w[k] * 0.4 + avg * 0.6;
@@ -207,11 +307,8 @@ const MODIFIERS: Modifier[] = [
 // ── Tier Scaling (0-6 star scale) ────────────────────────
 
 interface TierRange {
-  /** Minimum stat value (0-6 scale) */
   min: number;
-  /** Maximum stat value (0-6 scale) */
   max: number;
-  /** Badge count range — hard-capped at 5 unless Mr. Versatile adds slots */
   badgeCount: [number, number];
   badgeTiers: string[];
 }
@@ -278,16 +375,35 @@ export interface WizardProfile {
   modifiers: string[];
   strengthStats: (keyof StatProfile)[];
   weakStats: (keyof StatProfile)[];
-  /** If provided, uses this player's stats as the base weight profile */
   inspiredByStats?: Record<string, number> | null;
+  /** Optional secondary archetype for blending */
+  secondaryArchetype?: string;
+  /** Blend ratio 0-1 (0 = 100% primary, 1 = 100% secondary). Default 0.3 */
+  blendRatio?: number;
+}
+
+/**
+ * Combine two archetype weight profiles by blending.
+ * ratio = 0 means 100% primary, ratio = 1 means 100% secondary.
+ */
+export function combineArchetypes(primaryName: string, secondaryName: string, ratio: number = 0.3): StatProfile {
+  const primary = ARCHETYPES.find(a => a.name.toLowerCase() === primaryName.toLowerCase()) ?? ARCHETYPES[0];
+  const secondary = ARCHETYPES.find(a => a.name.toLowerCase() === secondaryName.toLowerCase()) ?? ARCHETYPES[0];
+  const r = clamp(ratio, 0, 1);
+  const result: any = {};
+  for (const k of STAT_KEYS) {
+    result[k] = primary.weights[k] * (1 - r) + secondary.weights[k] * r;
+  }
+  return result as StatProfile;
 }
 
 export function generateFromProfile(
   profile: WizardProfile,
   starRating: number,
   availableBadges: { id: string; abbreviation: string; affected_stat: string | null; effect_type: string }[],
+  tierOverride?: number,
 ): GeneratedPlayer {
-  const stars = clamp(starRating, 1, 5);
+  const stars = clamp(tierOverride ?? starRating, 1, 5);
   const tier = TIER_RANGES[stars];
 
   // 1. Find archetype by name
@@ -300,9 +416,14 @@ export function generateFromProfile(
   }
 
   // 2. Start with archetype weights (or normalize from an existing player's stats)
-  const weights: StatProfile = profile.inspiredByStats
-    ? normalizeStatsToWeights(profile.inspiredByStats)
-    : { ...bestArchetype.weights };
+  let weights: StatProfile;
+  if (profile.inspiredByStats) {
+    weights = normalizeStatsToWeights(profile.inspiredByStats);
+  } else if (profile.secondaryArchetype) {
+    weights = combineArchetypes(profile.archetype, profile.secondaryArchetype, profile.blendRatio ?? 0.3);
+  } else {
+    weights = { ...bestArchetype.weights };
+  }
 
   const config: ModifierConfig = {
     badgeCountMult: 1,
@@ -355,7 +476,6 @@ export function generateFromProfile(
     if (b.affected_stat && bestArchetype.focusStats.includes(b.affected_stat)) {
       score += 1;
     }
-    // Boost badges matching strength stats
     if (b.affected_stat && profile.strengthStats.includes(b.affected_stat as keyof StatProfile)) {
       score += 0.5;
     }
@@ -377,7 +497,8 @@ export function generateFromProfile(
 
   // 8. Summary
   const modDesc = appliedMods.length > 0 ? `, ${appliedMods.join(", ")}` : "";
-  const summary = `${bestArchetype.name}${modDesc} (${stars}★)`;
+  const secondaryDesc = profile.secondaryArchetype ? ` + ${profile.secondaryArchetype}` : "";
+  const summary = `${bestArchetype.name}${secondaryDesc}${modDesc} (${stars}★)`;
 
   return { stats, badges, positions, summary };
 }
@@ -403,7 +524,6 @@ export function generatePlayer(
   const stars = clamp(starRating, 1, 5);
   const tier = TIER_RANGES[stars];
 
-  // 1. Find best matching archetype
   let bestArchetype = ARCHETYPES[0];
   let bestScore = -1;
   for (const arch of ARCHETYPES) {
@@ -415,7 +535,6 @@ export function generatePlayer(
     }
   }
 
-  // 2. Copy weights and apply modifiers
   const weights: StatProfile = { ...bestArchetype.weights };
   const config: ModifierConfig = {
     badgeCountMult: 1,
@@ -435,7 +554,6 @@ export function generatePlayer(
     }
   }
 
-  // 3. Generate stats from weights (0-6 star scale)
   const range = tier.max - tier.min;
   const stats: Record<string, number> = {};
   for (const k of STAT_KEYS) {
@@ -444,7 +562,6 @@ export function generatePlayer(
     stats[k] = clamp(Math.round(base + variance), 0, 6);
   }
 
-  // 4. Generate badges (max 5 without Mr. Versatile)
   const MAX_BADGES = 5;
   const badgeCountRange = tier.badgeCount;
   let numBadges = rand(badgeCountRange[0], badgeCountRange[1]);
@@ -469,10 +586,8 @@ export function generatePlayer(
     return { abbreviation: b.abbreviation, tier: availableTiers[tierIdx] };
   });
 
-  // 5. Positions
   const positions: [string, string | null] = [bestArchetype.positions[0], bestArchetype.positions[1]];
 
-  // 6. Summary
   const modDesc = appliedMods.length > 0 ? `, ${appliedMods.join(", ")}` : "";
   const summary = `${bestArchetype.name}${modDesc} (${stars}★)`;
 

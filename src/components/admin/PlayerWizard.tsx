@@ -67,6 +67,8 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
   const [inspireSearch, setInspireSearch] = useState("");
   const [inspireSource, setInspireSource] = useState<{ type: "legend"; profile: LegendProfile } | { type: "player"; player: PlayerCard } | null>(null);
   const [selectedArchetype, setSelectedArchetype] = useState<string>("");
+  const [secondaryArchetype, setSecondaryArchetype] = useState<string>("");
+  const [blendRatio, setBlendRatio] = useState(30);
   const [selectedModifiers, setSelectedModifiers] = useState<string[]>([]);
   const [strengthStats, setStrengthStats] = useState<string[]>([]);
   const [weakStats, setWeakStats] = useState<string[]>([]);
@@ -85,6 +87,8 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
     setInspireSearch("");
     setInspireSource(null);
     setSelectedArchetype("");
+    setSecondaryArchetype("");
+    setBlendRatio(30);
     setSelectedModifiers([]);
     setStrengthStats([]);
     setWeakStats([]);
@@ -199,6 +203,8 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
       strengthStats: strengthStats as any,
       weakStats: weakStats as any,
       inspiredByStats,
+      secondaryArchetype: secondaryArchetype || undefined,
+      blendRatio: secondaryArchetype ? blendRatio / 100 : undefined,
     };
 
     const gen = generateFromProfile(
@@ -406,6 +412,28 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Secondary Archetype (Optional Blend)</Label>
+              <Select value={secondaryArchetype || "none"} onValueChange={(v) => setSecondaryArchetype(v === "none" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {ARCHETYPE_LIST.filter(a => a.name.toLowerCase() !== selectedArchetype).map(arch => (
+                    <SelectItem key={arch.name} value={arch.name.toLowerCase()}>{arch.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {secondaryArchetype && (
+                <div className="space-y-1 pt-1">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Primary {100 - blendRatio}%</span>
+                    <span>Secondary {blendRatio}%</span>
+                  </div>
+                  <Slider min={10} max={50} step={5} value={[blendRatio]} onValueChange={([v]) => setBlendRatio(v)} />
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

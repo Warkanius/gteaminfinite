@@ -7,8 +7,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Search, Users, Loader2, Upload, Check, X } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
+import { Search, Users, Loader2, Upload, Check, X, Wand2, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { RUN_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
+import { generateFromProfile, ARCHETYPE_LIST, type WizardProfile } from "@/lib/archetypeEngine";
 
 interface Props {
   runId: string;
@@ -21,12 +25,10 @@ const STAT_LABELS: Record<string, string> = {
   stat_stl: "STL", stat_blk: "BLK", stat_ast: "AST", stat_reb: "REB", stat_int: "INT",
 };
 
-/** Convert star rating (0-6) to a randomized numerical value (0-120).
- *  Base = stars * 20, then add random variance of ±15, clamped to [0, 120]. */
 function randomizeFromStar(stars: number): number {
   const base = stars * 20;
   if (base === 0) return 0;
-  const variance = Math.floor(Math.random() * 31) - 15; // -15 to +15
+  const variance = Math.floor(Math.random() * 31) - 15;
   return Math.max(0, Math.min(120, base + variance));
 }
 
@@ -38,7 +40,6 @@ interface PendingPlayer {
   position2: string | null;
   gem_name: string | null;
   badges: { name: string; tier: string }[];
-  // Converted stats the admin can edit
   run_rating: number;
   run_stat_3pt: number;
   run_stat_mid: number;
@@ -59,13 +60,16 @@ export function RunRosterManager({ runId }: Props) {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [displayLimit, setDisplayLimit] = useState(50);
 
-  // Debounce search
+  // Quick add state
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddArchetype, setQuickAddArchetype] = useState("");
+  const [quickAddStars, setQuickAddStars] = useState(3);
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset display limit when search changes
   useEffect(() => {
     setDisplayLimit(50);
   }, [debouncedSearch]);
@@ -85,7 +89,6 @@ export function RunRosterManager({ runId }: Props) {
 
   const rosterCardIds = useMemo(() => new Set(rosterEntries.map((r) => r.player_card_id)), [rosterEntries]);
 
-  // All player cards
   const { data: allPlayers = [], isLoading: playersLoading } = useQuery({
     queryKey: ["admin-all-players-lite"],
     queryFn: async () => {
@@ -98,8 +101,7 @@ export function RunRosterManager({ runId }: Props) {
     },
   });
 
-  // All badges for players (fetch once)
-  const { data: allBadges = [] } = useQuery({
+  const { data: allBadgesData = [] } = useQuery({
     queryKey: ["admin-all-player-badges"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -110,17 +112,34 @@ export function RunRosterManager({ runId }: Props) {
     },
   });
 
+  const { data: badgesForGen = [] } = useQuery({
+    queryKey: ["admin-badges-for-gen"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("badges").select("id, abbreviation, affected_stat, effect_type");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: gemTiers = [] } = useQuery({
+    queryKey: ["admin-gem-tiers-for-gen"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("gem_tiers").select("id, stars, name").order("stars");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const badgesByPlayer = useMemo(() => {
     const map = new Map<string, { name: string; tier: string }[]>();
-    for (const b of allBadges) {
+    for (const b of allBadgesData) {
       const list = map.get(b.player_card_id) || [];
       list.push({ name: (b as any).badges?.name ?? "?", tier: b.tier });
       map.set(b.player_card_id, list);
     }
     return map;
-  }, [allBadges]);
+  }, [allBadgesData]);
 
-  // Teams
   const { data: teams = [] } = useQuery({
     queryKey: ["admin-teams"],
     queryFn: async () => {
@@ -135,8 +154,6 @@ export function RunRosterManager({ runId }: Props) {
     return allPlayers.filter((p) => p.team_id === importTeamId);
   }, [importTeamId, allPlayers]);
 
-  // Convert a player card to a PendingPlayer
-  // If the card already has stored run ratings, use those; otherwise randomize from star ratings
   function toPending(p: typeof allPlayers[0]): PendingPlayer {
     const hasRunRatings = p.run_rating != null;
     return {
@@ -160,7 +177,6 @@ export function RunRosterManager({ runId }: Props) {
     };
   }
 
-  // Add players to pending review
   function addToPending(playerIds: string[]) {
     const existingPendingIds = new Set(pendingPlayers.map((p) => p.id));
     const newPlayers = playerIds
@@ -177,32 +193,26 @@ export function RunRosterManager({ runId }: Props) {
     toast.success(`${newPlayers.length} player(s) added to review.`);
   }
 
-  // Toggle single player in/out of pending or roster
   function handleToggle(cardId: string, checked: boolean) {
     if (checked) {
       addToPending([cardId]);
     } else {
-      // If in pending, remove from pending
       if (pendingPlayers.some((p) => p.id === cardId)) {
         setPendingPlayers((prev) => prev.filter((p) => p.id !== cardId));
       } else {
-        // Remove from roster
         removeFromRoster.mutate(cardId);
       }
     }
   }
 
-  // Update a pending player's stat
   function updatePendingStat(playerId: string, key: string, value: number) {
     setPendingPlayers((prev) =>
       prev.map((p) => (p.id === playerId ? { ...p, [key]: Math.max(0, Math.min(200, value)) } : p))
     );
   }
 
-  // Confirm all pending players → insert into run_players
   const confirmPending = useMutation({
     mutationFn: async () => {
-      // 1. Insert into run_players for this specific run
       const rows = pendingPlayers.map((p) => ({
         run_id: runId,
         player_card_id: p.id,
@@ -220,7 +230,6 @@ export function RunRosterManager({ runId }: Props) {
       const { error } = await supabase.from("run_players").insert(rows);
       if (error) throw error;
 
-      // 2. Also persist run ratings to the player_cards table (general database)
       for (const p of pendingPlayers) {
         const { error: updateErr } = await supabase.from("player_cards").update({
           run_rating: Math.round(p.run_rating),
@@ -240,13 +249,12 @@ export function RunRosterManager({ runId }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["run-roster", runId] });
       qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
-      toast.success(`${pendingPlayers.length} player(s) confirmed. Run ratings saved to cards.`);
+      toast.success(`${pendingPlayers.length} player(s) confirmed.`);
       setPendingPlayers([]);
     },
     onError: (e) => toast.error(e.message),
   });
 
-  // Remove from roster
   const removeFromRoster = useMutation({
     mutationFn: async (cardId: string) => {
       const { error } = await supabase.from("run_players").delete().eq("run_id", runId).eq("player_card_id", cardId);
@@ -256,7 +264,6 @@ export function RunRosterManager({ runId }: Props) {
     onError: (e) => toast.error(e.message),
   });
 
-  // Clear entire roster
   const clearRoster = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("run_players").delete().eq("run_id", runId);
@@ -265,6 +272,146 @@ export function RunRosterManager({ runId }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["run-roster", runId] });
       toast.success("Roster cleared.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Autofill from template
+  const autofillRoster = useMutation({
+    mutationFn: async (templateName: string) => {
+      const template = RUN_TEMPLATES.find(t => t.name === templateName);
+      if (!template) throw new Error("Template not found");
+
+      // Clear existing
+      await supabase.from("run_players").delete().eq("run_id", runId);
+
+      const cards = [];
+      for (const slot of template.slots) {
+        const stars = slot.starRange[0] + Math.floor(Math.random() * (slot.starRange[1] - slot.starRange[0] + 1));
+        const tier = gemTiers.find(g => g.stars === stars) ?? gemTiers[0];
+
+        const profile: WizardProfile = {
+          archetype: slot.archetype.toLowerCase(),
+          modifiers: slot.modifiers ?? [],
+          strengthStats: [],
+          weakStats: [],
+          secondaryArchetype: slot.secondaryArchetype,
+          blendRatio: slot.blendRatio,
+        };
+
+        const gen = generateFromProfile(profile, stars, badgesForGen, stars);
+        const name = generateRandomName();
+
+        const { data: card, error } = await supabase.from("player_cards").insert({
+          name,
+          rating: stars,
+          gem_tier_id: tier?.id ?? null,
+          position1: gen.positions[0],
+          position2: gen.positions[1],
+          ...gen.stats,
+        }).select("id, name, rating, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int").single();
+        if (error) throw error;
+
+        // Insert badges
+        if (gen.badges.length > 0) {
+          const badgeRows = gen.badges
+            .map(rb => {
+              const badge = badgesForGen.find(b => b.abbreviation.toLowerCase() === rb.abbreviation.toLowerCase());
+              return badge ? { player_card_id: card.id, badge_id: badge.id, tier: rb.tier } : null;
+            })
+            .filter(Boolean);
+          if (badgeRows.length > 0) {
+            await supabase.from("player_card_badges").insert(badgeRows);
+          }
+        }
+
+        // Insert run_players entry
+        await supabase.from("run_players").insert({
+          run_id: runId,
+          player_card_id: card.id,
+          run_rating: randomizeFromStar(stars),
+          run_stat_3pt: randomizeFromStar(card.stat_3pt),
+          run_stat_mid: randomizeFromStar(card.stat_mid),
+          run_stat_fin: randomizeFromStar(card.stat_fin),
+          run_stat_dnk: randomizeFromStar(card.stat_dnk),
+          run_stat_stl: randomizeFromStar(card.stat_stl),
+          run_stat_blk: randomizeFromStar(card.stat_blk),
+          run_stat_ast: randomizeFromStar(card.stat_ast),
+          run_stat_reb: randomizeFromStar(card.stat_reb),
+          run_stat_int: randomizeFromStar(card.stat_int),
+        });
+
+        cards.push(card);
+      }
+
+      return cards;
+    },
+    onSuccess: (cards) => {
+      qc.invalidateQueries({ queryKey: ["run-roster", runId] });
+      qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
+      toast.success(`${cards.length} players generated for run`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Quick add single archetype
+  const quickAddMutation = useMutation({
+    mutationFn: async ({ archetype, stars }: { archetype: string; stars: number }) => {
+      const tier = gemTiers.find(g => g.stars === stars) ?? gemTiers[0];
+      const profile: WizardProfile = {
+        archetype: archetype.toLowerCase(),
+        modifiers: [],
+        strengthStats: [],
+        weakStats: [],
+      };
+
+      const gen = generateFromProfile(profile, stars, badgesForGen, stars);
+      const name = generateRandomName();
+
+      const { data: card, error } = await supabase.from("player_cards").insert({
+        name,
+        rating: stars,
+        gem_tier_id: tier?.id ?? null,
+        position1: gen.positions[0],
+        position2: gen.positions[1],
+        ...gen.stats,
+      }).select("id, name, rating, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int").single();
+      if (error) throw error;
+
+      if (gen.badges.length > 0) {
+        const badgeRows = gen.badges
+          .map(rb => {
+            const badge = badgesForGen.find(b => b.abbreviation.toLowerCase() === rb.abbreviation.toLowerCase());
+            return badge ? { player_card_id: card.id, badge_id: badge.id, tier: rb.tier } : null;
+          })
+          .filter(Boolean);
+        if (badgeRows.length > 0) {
+          await supabase.from("player_card_badges").insert(badgeRows);
+        }
+      }
+
+      await supabase.from("run_players").insert({
+        run_id: runId,
+        player_card_id: card.id,
+        run_rating: randomizeFromStar(stars),
+        run_stat_3pt: randomizeFromStar(card.stat_3pt),
+        run_stat_mid: randomizeFromStar(card.stat_mid),
+        run_stat_fin: randomizeFromStar(card.stat_fin),
+        run_stat_dnk: randomizeFromStar(card.stat_dnk),
+        run_stat_stl: randomizeFromStar(card.stat_stl),
+        run_stat_blk: randomizeFromStar(card.stat_blk),
+        run_stat_ast: randomizeFromStar(card.stat_ast),
+        run_stat_reb: randomizeFromStar(card.stat_reb),
+        run_stat_int: randomizeFromStar(card.stat_int),
+      });
+
+      return card;
+    },
+    onSuccess: (card) => {
+      qc.invalidateQueries({ queryKey: ["run-roster", runId] });
+      qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
+      toast.success(`Added ${card.name} to run roster`);
+      setQuickAddOpen(false);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -303,6 +450,54 @@ export function RunRosterManager({ runId }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Autofill & Quick Add Toolbar */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <Select onValueChange={(tpl) => autofillRoster.mutate(tpl)}>
+          <SelectTrigger className="w-auto gap-2">
+            <Wand2 className="h-4 w-4" />
+            <SelectValue placeholder="Autofill Template…" />
+          </SelectTrigger>
+          <SelectContent>
+            {RUN_TEMPLATES.map(t => (
+              <SelectItem key={t.name} value={t.name}>
+                <span className="font-medium">{t.name}</span>
+                <span className="text-xs text-muted-foreground ml-2">— {t.description}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant="outline" size="sm" onClick={() => setQuickAddOpen(!quickAddOpen)}>
+          <Plus className="h-4 w-4 mr-1" /> Quick Add
+        </Button>
+      </div>
+
+      {/* Quick Add Panel */}
+      {quickAddOpen && (
+        <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Add by Archetype</h4>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs">Archetype</Label>
+              <Select value={quickAddArchetype} onValueChange={setQuickAddArchetype}>
+                <SelectTrigger><SelectValue placeholder="Pick archetype…" /></SelectTrigger>
+                <SelectContent>
+                  {ARCHETYPE_LIST.map(a => (
+                    <SelectItem key={a.name} value={a.name.toLowerCase()}>{a.name} ({a.positions.filter(Boolean).join("/")})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-24 space-y-1">
+              <Label className="text-xs">{quickAddStars}★</Label>
+              <Slider min={1} max={5} step={1} value={[quickAddStars]} onValueChange={([v]) => setQuickAddStars(v)} />
+            </div>
+            <Button size="sm" disabled={!quickAddArchetype || quickAddMutation.isPending} onClick={() => quickAddMutation.mutate({ archetype: quickAddArchetype, stars: quickAddStars })}>
+              {quickAddMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Pending Review Section */}
       {pendingPlayers.length > 0 && (
         <div className="border-2 border-primary/50 rounded-lg bg-primary/5 p-3 space-y-3">
@@ -327,7 +522,6 @@ export function RunRosterManager({ runId }: Props) {
 
           <ScrollArea className="max-h-[400px]">
             <div className="space-y-1">
-              {/* Header */}
               <div className="grid grid-cols-[1fr_repeat(6,48px)_auto] gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sticky top-0 bg-primary/5 z-10">
                 <span>Player</span>
                 <span className="text-center">3PT</span>
