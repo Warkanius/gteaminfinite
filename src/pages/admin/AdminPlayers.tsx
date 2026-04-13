@@ -365,6 +365,7 @@ export default function AdminPlayers() {
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" onClick={() => openEdit(row)} title="Edit"><Pencil className="h-4 w-4" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => openWizardForEdit(row as PlayerCard)} title="Wizard"><Wand2 className="h-4 w-4 text-primary" /></Button>
+                <Button size="icon" variant="ghost" onClick={async () => { const data = await loadPlayerData(row as PlayerCard); setForm({ ...data, name: `${row.name} (Copy)`, id: undefined }); setEditId(null); setDialogOpen(true); }} title="Duplicate"><Copy className="h-4 w-4" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => createEvoForm(row as PlayerCard)} title="Create Evo Form"><GitBranch className="h-4 w-4 text-accent-foreground" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
