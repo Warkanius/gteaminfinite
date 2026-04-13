@@ -306,6 +306,7 @@ export default function AdminPlayers() {
     } else {
       setForm({
         ...emptyForm(),
+        name: result.name,
         ...result.stats,
         position1: result.positions[0],
         position2: result.positions[1],
