@@ -117,8 +117,9 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
         .eq("user_id", user.id)
         .maybeSingle();
 
+      const oldHighest = userRun?.highest_wins || 0;
       const currentWins = winner === "player" ? (userRun?.current_wins || 0) + 1 : 0;
-      const highestWins = Math.max(currentWins, userRun?.highest_wins || 0);
+      const highestWins = Math.max(currentWins, oldHighest);
 
       if (userRun) {
         await supabase.from("user_runs").update({ current_wins: currentWins, highest_wins: highestWins }).eq("id", userRun.id);
@@ -126,6 +127,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
         await supabase.from("user_runs").insert({ user_id: user.id, run_id: run.id, current_wins: currentWins, highest_wins: highestWins });
       }
 
+      // --- Per-Run Milestone rewards ---
       if (winner === "player" && run.milestones && Array.isArray(run.milestones)) {
         const reachedMilestone = run.milestones.find((m: any) => m.wins_required === currentWins);
         if (reachedMilestone) {
@@ -139,37 +141,78 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
             if (reachedMilestone.coin_reward) rewardParts.push(`${reachedMilestone.coin_reward} Coins`);
             if (reachedMilestone.gem_reward) rewardParts.push(`${reachedMilestone.gem_reward} Gems`);
 
-            // Handle pack reward
             if (reachedMilestone.pack_reward) {
-              let packId = reachedMilestone.pack_reward;
-
-              // If "random_standard", pick a random standard pack
-              if (packId === "random_standard") {
-                const { data: standardPacks } = await supabase
-                  .from("packs")
-                  .select("id, name")
-                  .eq("pack_type", "standard");
-                if (standardPacks && standardPacks.length > 0) {
-                  const picked = standardPacks[Math.floor(Math.random() * standardPacks.length)];
-                  packId = picked.id;
-                  rewardParts.push(`📦 ${picked.name}`);
-                }
-              } else {
-                const { data: packInfo } = await supabase.from("packs").select("name").eq("id", packId).single();
-                rewardParts.push(`📦 ${packInfo?.name ?? "Pack"}`);
-              }
-
-              // Add pack to user inventory
-              if (packId && packId !== "random_standard") {
-                await supabase.from("user_pack_inventory").insert({
-                  user_id: user.id,
-                  pack_id: packId,
-                  source: "run_milestone",
-                });
-              }
+              await grantPackReward(user.id, reachedMilestone.pack_reward, rewardParts, "run_milestone");
             }
 
             toast({ title: "🏆 Milestone Reached!", description: rewardParts.join(" + ") || "Milestone completed!" });
+          }
+        }
+      }
+
+      // --- Global Rank Reward Ladder ---
+      if (winner === "player" && highestWins > oldHighest) {
+        // Find all rank rewards between old highest and new highest
+        const { data: rankRewards } = await supabase
+          .from("run_rank_rewards")
+          .select("*")
+          .gt("wins_required", oldHighest)
+          .lte("wins_required", highestWins)
+          .order("sort_order");
+
+        if (rankRewards && rankRewards.length > 0) {
+          // Check which ranks already claimed
+          const rankNames = rankRewards.map(r => r.rank_name);
+          const { data: existingClaims } = await supabase
+            .from("user_rank_claims")
+            .select("rank_name")
+            .eq("user_id", user.id)
+            .in("rank_name", rankNames);
+
+          const claimedSet = new Set((existingClaims ?? []).map(c => c.rank_name));
+          const unclaimedRewards = rankRewards.filter(r => !claimedSet.has(r.rank_name));
+
+          if (unclaimedRewards.length > 0) {
+            let totalCoins = 0;
+            let totalGems = 0;
+            const packParts: string[] = [];
+
+            for (const reward of unclaimedRewards) {
+              totalCoins += reward.coin_reward;
+              totalGems += reward.gem_reward;
+
+              if (reward.pack_reward) {
+                await grantPackReward(user.id, reward.pack_reward, packParts, "rank_reward");
+              }
+
+              // Record claim
+              await supabase.from("user_rank_claims").insert({
+                user_id: user.id,
+                rank_name: reward.rank_name,
+              });
+            }
+
+            // Grant coins/gems
+            if (totalCoins > 0 || totalGems > 0) {
+              const { data: profile } = await supabase.from("profiles").select("coins, gems").eq("user_id", user.id).single();
+              if (profile) {
+                await supabase.from("profiles").update({
+                  coins: profile.coins + totalCoins,
+                  gems: profile.gems + totalGems,
+                }).eq("user_id", user.id);
+              }
+            }
+
+            const highestRank = unclaimedRewards[unclaimedRewards.length - 1];
+            const rewardSummary: string[] = [];
+            if (totalCoins > 0) rewardSummary.push(`${totalCoins.toLocaleString()} Coins`);
+            if (totalGems > 0) rewardSummary.push(`${totalGems} Gems`);
+            rewardSummary.push(...packParts);
+
+            toast({
+              title: `🎖️ Rank Up: ${highestRank.rank_name}!`,
+              description: rewardSummary.join(" + ") || "New rank achieved!",
+            });
           }
         }
       }
