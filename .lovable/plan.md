@@ -1,80 +1,44 @@
 
 
-# Admin Collections, Expanded Archetypes, Auto-Create Reward Packs, and Autofill
+# Fix Card Grid Layout, Auction Prices & Pack Filter
 
-## Key Clarification: Two Pack Types
+## 1. Card Grid Layout Cleanup (LineupSelect + RunLineupSelect)
 
-- **Domination Reward Pack** — awarded for any Domination win. 5 slots (the 5 opposing players), no Player's Choice. Odds favor lower-rated players (higher-rated = rarer).
-- **RTTR (Road to the Ring) Pack** — awarded for the final 4 games of a Domination road. 6 slots: the 5 opposing players + 1 Player's Choice slot. Odds favor higher-rated players (higher-rated = more common), since these packs are harder to earn.
+**Problem**: Cards render at inconsistent sizes. `LineupSelect` uses `max-w-[140px]` with `mx-auto` in a responsive grid, but `RunLineupSelect` uses `flex-wrap gap-4` with `w-32 sm:w-36` inline — no grid, no uniform sizing.
 
-Both are auto-created from the Domination game's roster.
+**Fix**: Apply the same uniform grid layout to both:
+- **LineupSelect.tsx** (line 161): Already has a proper grid with `max-w-[140px]`. Looks correct. Will verify the aspect ratio wrapper is applied.
+- **RunLineupSelect.tsx** (line 242): Replace the `flex flex-wrap gap-4` collection grid with the same `grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3` layout and wrap each card in `max-w-[140px] w-full mx-auto` — identical to `LineupSelect`.
+- Also fix the selected lineup row (line 173) and CPU lineup row (line 204): use consistent `w-[120px] sm:w-[140px]` sizing instead of `w-32 sm:w-36` which creates uneven widths.
 
-## Changes
+## 2. Auction House Prices Too Low
 
-### 1. Admin Collection Editor
-- New page `AdminCollections.tsx`: search users, view/add/remove cards from `user_collections`
-- DB migration: admin RLS policies on `user_collections` for full CRUD by admins
-- Route + sidebar nav link
+**Problem**: The only standard pack costs 5,000 coins. The current auction config has `min_price: 200, max_price: 5000`. Prices based on `market_value` with 0.8x–1.3x variance can land as low as 200 coins — far below what players pay for packs.
 
-### 2. Auto-Create Reward Packs (AdminTeams)
-Two buttons per Domination game:
-- **"Create Reward Pack"** — 5 slots, odds inversely proportional to rating (best player ~8%, worst ~32%)
-- **"Create RTTR Pack"** — 6 slots, odds proportional to rating (best player ~25%, worst ~8%), plus a `player_choice` slot (~17%)
+**Fix**: Update `refresh-auction/index.ts`:
+- Raise `DEFAULT_CONFIG.min_price` to `1000` and `max_price` to `10000`.
+- Adjust the price variance to `0.9x–1.5x` of `market_value` (instead of 0.8x–1.3x), so prices cluster higher.
+- Snipe prices should still be discounted but capped at a higher floor (e.g., `500` instead of `50`).
 
-Both create a `packs` record, `pack_odds` rows, and `pack_players` entries, then link as `pack_reward` on the game.
+## 3. Only Standard Packs in Auction
 
-### 3. open-pack: Player's Choice Handling
-When `result_slot = "player_choice"` is hit, return `{ player_choice: true, eligible_cards: [...] }` instead of a pulled card. Frontend shows a pick UI; user confirms with a second call.
+**Problem**: The current filter uses `.gt("cost", 0)` which catches reward packs with artificially high costs (e.g., "Shutoku I" at 9999 coins, "Hidden Gem" at 99999). These are reward packs, not standard packs.
 
-### 4. Expanded Composite Archetypes
-Add ~15 new archetypes to `archetypeEngine.ts` inspired by the templates:
+**Fix**: Change the pack query in `refresh-auction/index.ts` from:
+```
+.from("packs").select("id").gt("cost", 0)
+```
+to:
+```
+.from("packs").select("id").eq("pack_type", "standard")
+```
 
-- **Streetballer** — Playmaker + Slasher hybrid, flashy handles and finishing
-- **Ankle Breaker** — Combo Guard with elite dribble + finishing emphasis
-- **Showtime** — Athletic Playmaker, dunks + assists
-- **Tower** — Rim Protector + Post Scorer, dominant paint presence
-- **Enforcer** — Paint Beast + Lockdown, physical and intimidating
-- **Brick Wall** — Glass Cleaner + Lockdown, minimal offense, max defense/rebounding
-- **Sniper Elite** — Extreme Sharpshooter, near-zero interior game
-- **Floor General** — Playmaker + high defensive IQ
-- **Hustle Player** — High steal/rebound/INT, low scoring
-- **Finesse Scorer** — Mid-range + finishing artist, no 3PT
-- **Microwave** — Combo Guard variant, high variance instant offense
-- **Clutch Scorer** — Consistent mid-range + finishing
-- **Speedster** — High steal/INT/finishing, low size-based stats
-- **Gauntlet Boss** — All-around elite, high floor on every stat
+This ensures only cards from standard packs appear in the auction house.
 
-Also add `combineArchetypes(primary, secondary, ratio)` function that blends two archetype weight profiles.
+## Files Changed
 
-### 5. Tier-Aware Generation
-Add `tierOverride` param to `generateFromProfile` so autofill can explicitly set star rating (1-5) per generated player, ensuring the difficulty level matches the template.
-
-### 6. Template Definitions (`src/lib/teamTemplates.ts`)
-15 team templates (5 players each) and 10 run templates (3 players each). Each slot defines: archetype, optional secondary archetype + blend ratio, star range. Includes a randomized name generator with basketball-themed name pools.
-
-### 7. Autofill & Per-Player Tools (AdminTeams + RunRosterManager)
-- **Autofill** button with template dropdown — generates full roster
-- **Quick Add** dropdown — pick any archetype (basic + composite), generates 1 player
-- **Change Archetype** — regenerate a player's stats in-place with a new archetype
-- **Swap** — replace a roster slot with an existing player via PlayerCombobox
-- Star tier slider per slot to control difficulty
-
-### 8. PlayerWizard Integration
-- Add all composite archetypes to the archetype dropdown
-- Add optional "Secondary Archetype" dropdown + blend ratio slider
-
-## Files
-
-| File | What |
-|------|------|
-| `src/lib/archetypeEngine.ts` | Add ~15 composite archetypes, `combineArchetypes()`, `tierOverride` |
-| `src/lib/teamTemplates.ts` | New: 15 team + 10 run templates, name generator |
-| `src/pages/admin/AdminCollections.tsx` | New: admin collection editor |
-| `src/pages/admin/AdminTeams.tsx` | Autofill, auto-create reward/RTTR packs, quick-add, swap |
-| `src/components/admin/RunRosterManager.tsx` | Autofill, quick-add, swap, change archetype |
-| `src/components/admin/PlayerWizard.tsx` | Composite archetypes + secondary blend |
-| `supabase/functions/open-pack/index.ts` | Handle `player_choice` slot |
-| `src/App.tsx` | Route for AdminCollections |
-| `src/components/AppSidebar.tsx` | Nav link |
-| DB migration | Admin RLS on `user_collections` |
+| File | Change |
+|------|--------|
+| `src/components/game/RunLineupSelect.tsx` | Uniform grid layout for collection cards, consistent card widths |
+| `supabase/functions/refresh-auction/index.ts` | Filter by `pack_type = 'standard'`, raise min/max prices, adjust variance |
 
