@@ -16,6 +16,7 @@ import { Pencil, Trash2, Plus, Users, Wand2, Package, Zap } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { RunRosterManager } from "@/components/admin/RunRosterManager";
+import { MilestoneEditor, type Milestone } from "@/components/admin/MilestoneEditor";
 import { TEAM_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
 import { generateFromProfile, ARCHETYPE_LIST, type WizardProfile } from "@/lib/archetypeEngine";
 
@@ -646,33 +647,11 @@ export default function AdminTeams() {
             </p>
           )}
 
-          <div className="space-y-2">
-            <Label>Milestone Rewards (JSON)</Label>
-            <textarea 
-              className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
-              value={typeof runForm.milestones === 'string' ? runForm.milestones : JSON.stringify(runForm.milestones, null, 2)}
-              onChange={(e) => {
-                setRunForm(f => ({...f, milestones: e.target.value}));
-              }}
-              onBlur={(e) => {
-                try {
-                  const parsed = JSON.parse(e.target.value);
-                  setRunForm(f => ({...f, milestones: parsed}));
-                } catch {
-                  // Ignore
-                }
-              }}
-              placeholder='[
-  {
-    "wins_required": 3,
-    "coin_reward": 500,
-    "gem_reward": 50,
-    "pack_reward": "basic"
-  }
-]'
-            />
-            <p className="text-xs text-muted-foreground">Define scaling rewards as an array of objects.</p>
-          </div>
+          <MilestoneEditor
+            milestones={Array.isArray(runForm.milestones) ? runForm.milestones as Milestone[] : []}
+            onChange={(ms) => setRunForm(f => ({ ...f, milestones: ms }))}
+            packs={packs}
+          />
         </div>
       </FormDialog>
 
