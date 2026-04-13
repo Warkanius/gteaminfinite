@@ -642,7 +642,7 @@ export function RunRosterManager({ runId }: Props) {
                 </div>
                 <div className="w-24 space-y-1">
                   <Label className="text-xs">{quickAddStars}★</Label>
-                  <Slider min={1} max={5} step={1} value={[quickAddStars]} onValueChange={([v]) => setQuickAddStars(v)} />
+                  <Slider min={0} max={6} step={1} value={[quickAddStars]} onValueChange={([v]) => setQuickAddStars(v)} />
                 </div>
                 <Button size="sm" disabled={!quickAddArchetype || quickAddMutation.isPending} onClick={() => quickAddMutation.mutate({ archetype: quickAddArchetype, stars: quickAddStars })}>
                   {quickAddMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
