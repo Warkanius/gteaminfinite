@@ -12,14 +12,65 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Users } from "lucide-react";
+import { Pencil, Trash2, Plus, Users, Wand2, Package, Zap } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { RunRosterManager } from "@/components/admin/RunRosterManager";
+import { TEAM_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
+import { generateFromProfile, ARCHETYPE_LIST, type WizardProfile } from "@/lib/archetypeEngine";
 
 type Team = Tables<"teams">;
 type DomGame = Tables<"domination_games">;
 type Run = Tables<"runs">;
+
+/** Generate a player card from a template slot */
+async function createPlayerFromSlot(
+  slot: TemplateSlot,
+  allBadges: { id: string; abbreviation: string; affected_stat: string | null; effect_type: string }[],
+  gemTiers: { id: string; stars: number }[],
+) {
+  const stars = slot.starRange[0] + Math.floor(Math.random() * (slot.starRange[1] - slot.starRange[0] + 1));
+  const tier = gemTiers.find(g => g.stars === stars) ?? gemTiers[0];
+
+  const profile: WizardProfile = {
+    archetype: slot.archetype.toLowerCase(),
+    modifiers: slot.modifiers ?? [],
+    strengthStats: [],
+    weakStats: [],
+    secondaryArchetype: slot.secondaryArchetype,
+    blendRatio: slot.blendRatio,
+  };
+
+  const gen = generateFromProfile(profile, stars, allBadges, stars);
+  const name = generateRandomName();
+
+  // Insert player card
+  const { data: card, error } = await supabase.from("player_cards").insert({
+    name,
+    rating: stars,
+    gem_tier_id: tier.id,
+    position1: gen.positions[0],
+    position2: gen.positions[1],
+    ...gen.stats,
+  }).select("id, name, rating").single();
+
+  if (error) throw error;
+
+  // Insert badges
+  if (gen.badges.length > 0) {
+    const badgeRows = gen.badges
+      .map(rb => {
+        const badge = allBadges.find(b => b.abbreviation.toLowerCase() === rb.abbreviation.toLowerCase());
+        return badge ? { player_card_id: card.id, badge_id: badge.id, tier: rb.tier } : null;
+      })
+      .filter(Boolean);
+    if (badgeRows.length > 0) {
+      await supabase.from("player_card_badges").insert(badgeRows);
+    }
+  }
+
+  return card;
+}
 
 export default function AdminTeams() {
   const qc = useQueryClient();
@@ -29,6 +80,36 @@ export default function AdminTeams() {
     queryKey: ["admin-packs-lite"],
     queryFn: async () => {
       const { data, error } = await supabase.from("packs").select("id, name, pack_type").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch badges for autofill
+  const { data: allBadges = [] } = useQuery({
+    queryKey: ["admin-badges-for-gen"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("badges").select("id, abbreviation, affected_stat, effect_type");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch gem tiers for autofill
+  const { data: gemTiers = [] } = useQuery({
+    queryKey: ["admin-gem-tiers-for-gen"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("gem_tiers").select("id, stars, name").order("stars");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Domination game players
+  const { data: domGamePlayers = [] } = useQuery({
+    queryKey: ["admin-dom-game-players"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("domination_game_players").select("*, player_cards(id, name, rating)");
       if (error) throw error;
       return data;
     },
@@ -85,6 +166,145 @@ export default function AdminTeams() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Auto-create Reward Pack
+  const createRewardPack = useMutation({
+    mutationFn: async ({ gameId, isRTTR }: { gameId: string; isRTTR: boolean }) => {
+      const game = domGames.find(g => g.id === gameId);
+      if (!game) throw new Error("Game not found");
+
+      const players = domGamePlayers.filter(p => p.domination_game_id === gameId);
+      if (players.length === 0) throw new Error("No players assigned to this game");
+
+      // Sort by rating
+      const sorted = [...players].sort((a, b) => (b.player_cards?.rating ?? 0) - (a.player_cards?.rating ?? 0));
+
+      const packName = isRTTR ? `RTTR: ${game.opponent_name}` : `vs ${game.opponent_name} Reward`;
+      const { data: pack, error: packErr } = await supabase.from("packs").insert({
+        name: packName,
+        pack_type: isRTTR ? "rttr" : "domination_reward",
+        cost: 0,
+      }).select("id").single();
+      if (packErr) throw packErr;
+
+      // Create pack_players entries
+      const packPlayerRows = sorted.map((p, i) => ({
+        pack_id: pack.id,
+        player_card_id: p.player_card_id,
+        slot_number: i + 1,
+      }));
+      await supabase.from("pack_players").insert(packPlayerRows);
+
+      // Create odds
+      const numPlayers = sorted.length;
+      let oddsRows: any[];
+
+      if (isRTTR) {
+        // RTTR: Higher rated players MORE common, plus a player_choice slot
+        const totalPlayerPct = 83; // 83% for players, 17% for choice
+        const weights = sorted.map((_, i) => numPlayers - i); // 5,4,3,2,1 etc
+        const totalWeight = weights.reduce((s, w) => s + w, 0);
+        oddsRows = sorted.map((p, i) => ({
+          pack_id: pack.id,
+          pack_type: "rttr",
+          result_slot: String(i + 1),
+          percentage: Math.round((weights[i] / totalWeight) * totalPlayerPct),
+          description: p.player_cards?.name ?? `Slot ${i + 1}`,
+        }));
+        // Player's Choice slot
+        oddsRows.push({
+          pack_id: pack.id,
+          pack_type: "rttr",
+          result_slot: "player_choice",
+          percentage: 17,
+          description: "Player's Choice",
+        });
+      } else {
+        // Domination: Higher rated players RARER
+        const weights = sorted.map((_, i) => i + 1); // 1,2,3,4,5 etc
+        const totalWeight = weights.reduce((s, w) => s + w, 0);
+        oddsRows = sorted.map((p, i) => ({
+          pack_id: pack.id,
+          pack_type: "domination_reward",
+          result_slot: String(i + 1),
+          percentage: Math.round((weights[i] / totalWeight) * 100),
+          description: p.player_cards?.name ?? `Slot ${i + 1}`,
+        }));
+      }
+
+      await supabase.from("pack_odds").insert(oddsRows);
+
+      // Link pack to game
+      await supabase.from("domination_games").update({ pack_reward: pack.id }).eq("id", gameId);
+
+      return pack;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["admin-dom"] });
+      qc.invalidateQueries({ queryKey: ["admin-packs-lite"] });
+      toast.success(vars.isRTTR ? "RTTR Pack created" : "Reward Pack created");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Autofill domination roster
+  const autofillRoster = useMutation({
+    mutationFn: async ({ gameId, templateName }: { gameId: string; templateName: string }) => {
+      const template = TEAM_TEMPLATES.find(t => t.name === templateName);
+      if (!template) throw new Error("Template not found");
+
+      // Clear existing players
+      await supabase.from("domination_game_players").delete().eq("domination_game_id", gameId);
+
+      // Generate players
+      const cards = [];
+      for (let i = 0; i < template.slots.length; i++) {
+        const card = await createPlayerFromSlot(template.slots[i], allBadges, gemTiers);
+        cards.push(card);
+      }
+
+      // Link to domination game
+      const rows = cards.map((c, i) => ({
+        domination_game_id: gameId,
+        player_card_id: c.id,
+        slot: i + 1,
+      }));
+      const { error } = await supabase.from("domination_game_players").insert(rows);
+      if (error) throw error;
+
+      return cards;
+    },
+    onSuccess: (cards) => {
+      qc.invalidateQueries({ queryKey: ["admin-dom-game-players"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
+      toast.success(`${cards.length} players generated and added to roster`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Quick Add single archetype to domination game
+  const quickAddPlayer = useMutation({
+    mutationFn: async ({ gameId, archetype, stars }: { gameId: string; archetype: string; stars: number }) => {
+      const slot: TemplateSlot = { archetype, starRange: [stars, stars] };
+      const card = await createPlayerFromSlot(slot, allBadges, gemTiers);
+
+      const existingPlayers = domGamePlayers.filter(p => p.domination_game_id === gameId);
+      const nextSlot = existingPlayers.length + 1;
+
+      await supabase.from("domination_game_players").insert({
+        domination_game_id: gameId,
+        player_card_id: card.id,
+        slot: nextSlot,
+      });
+
+      return card;
+    },
+    onSuccess: (card) => {
+      qc.invalidateQueries({ queryKey: ["admin-dom-game-players"] });
+      toast.success(`Added ${card.name} to roster`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   // Runs
   const [runForm, setRunForm] = useState<{name: string; target_score: number; team_id: string | null; milestones: any[] | string}>({ name: "", target_score: 21, team_id: null, milestones: [] });
   const [runEditId, setRunEditId] = useState<string | null>(null);
@@ -101,7 +321,7 @@ export default function AdminTeams() {
       try {
         parsedMilestones = typeof runForm.milestones === 'string' ? JSON.parse(runForm.milestones) : runForm.milestones;
       } catch {
-        throw new Error("Milestones JSON is invalid. Please fix the JSON before saving.");
+        throw new Error("Milestones JSON is invalid.");
       }
       const payload = {
         name: runForm.name,
@@ -121,6 +341,11 @@ export default function AdminTeams() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-runs"] }); setRunDeleteId(null); toast.success("Deleted"); },
     onError: (e) => toast.error(e.message),
   });
+
+  // Quick add state for domination
+  const [quickAddGameId, setQuickAddGameId] = useState<string | null>(null);
+  const [quickAddArchetype, setQuickAddArchetype] = useState("");
+  const [quickAddStars, setQuickAddStars] = useState(3);
 
   const teamCols: Column<Team>[] = [
     { key: "name", label: "Name", sortable: true },
@@ -203,7 +428,34 @@ export default function AdminTeams() {
                           columns={domCols} 
                           searchKeys={["opponent_name"]} 
                           actions={(r) => (
-                            <div className="flex gap-1 justify-end">
+                            <div className="flex gap-1 justify-end flex-wrap">
+                              {/* Autofill dropdown */}
+                              <Select onValueChange={(tpl) => autofillRoster.mutate({ gameId: r.id, templateName: tpl })}>
+                                <SelectTrigger className="h-8 w-8 p-0 border-none" title="Autofill Roster">
+                                  <Wand2 className="h-4 w-4 text-primary" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TEAM_TEMPLATES.map(t => (
+                                    <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {/* Quick Add */}
+                              <Button size="icon" variant="ghost" className="h-8 w-8" title="Quick Add Player" onClick={() => {
+                                setQuickAddGameId(r.id);
+                                setQuickAddArchetype("");
+                                setQuickAddStars(r.difficulty_stars);
+                              }}>
+                                <Plus className="h-4 w-4 text-green-500" />
+                              </Button>
+                              {/* Create Reward Pack */}
+                              <Button size="icon" variant="ghost" className="h-8 w-8" title="Create Reward Pack" onClick={() => createRewardPack.mutate({ gameId: r.id, isRTTR: false })} disabled={createRewardPack.isPending}>
+                                <Package className="h-4 w-4 text-amber-500" />
+                              </Button>
+                              {/* Create RTTR Pack */}
+                              <Button size="icon" variant="ghost" className="h-8 w-8" title="Create RTTR Pack" onClick={() => createRewardPack.mutate({ gameId: r.id, isRTTR: true })} disabled={createRewardPack.isPending}>
+                                <Zap className="h-4 w-4 text-purple-500" />
+                              </Button>
                               <Button size="icon" variant="ghost" onClick={() => { 
                                 setDomForm({ 
                                   road_name: r.road_name, 
@@ -259,6 +511,41 @@ export default function AdminTeams() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Quick Add Dialog */}
+      <FormDialog
+        open={!!quickAddGameId}
+        onOpenChange={(o) => { if (!o) setQuickAddGameId(null); }}
+        title="Quick Add Player"
+        onSave={() => {
+          if (quickAddArchetype && quickAddGameId) {
+            quickAddPlayer.mutate({ gameId: quickAddGameId, archetype: quickAddArchetype, stars: quickAddStars });
+            setQuickAddGameId(null);
+          }
+        }}
+        saving={quickAddPlayer.isPending}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Archetype</Label>
+            <Select value={quickAddArchetype} onValueChange={setQuickAddArchetype}>
+              <SelectTrigger><SelectValue placeholder="Select archetype…" /></SelectTrigger>
+              <SelectContent>
+                {ARCHETYPE_LIST.map(a => (
+                  <SelectItem key={a.name} value={a.name.toLowerCase()}>{a.name} ({a.positions.filter(Boolean).join("/")})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <Label>Star Rating</Label>
+              <span className="font-bold">{quickAddStars}★</span>
+            </div>
+            <Slider min={1} max={5} step={1} value={[quickAddStars]} onValueChange={([v]) => setQuickAddStars(v)} />
+          </div>
+        </div>
+      </FormDialog>
 
       {/* Team dialog */}
       <FormDialog open={teamDialog} onOpenChange={setTeamDialog} title={teamEditId ? "Edit Team" : "Add Team"} onSave={() => teamSave.mutate()} saving={teamSave.isPending}>
@@ -372,7 +659,7 @@ export default function AdminTeams() {
                   const parsed = JSON.parse(e.target.value);
                   setRunForm(f => ({...f, milestones: parsed}));
                 } catch {
-                  // Ignore on blur if it's invalid
+                  // Ignore
                 }
               }}
               placeholder='[

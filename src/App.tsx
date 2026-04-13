@@ -37,6 +37,7 @@ const AdminSocialFeed = lazy(() => import("@/pages/admin/AdminSocialFeed"));
 const SocialFeed = lazy(() => import("@/pages/SocialFeed"));
 const FeedProfile = lazy(() => import("@/pages/FeedProfile"));
 const Install = lazy(() => import("@/pages/Install"));
+const AdminCollections = lazy(() => import("@/pages/admin/AdminCollections"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
@@ -99,6 +100,7 @@ const App = () => (
             <Route path="/feed" element={<ProtectedRoute><LazyLoad><SocialFeed /></LazyLoad></ProtectedRoute>} />
             <Route path="/feed/profile/:handle" element={<ProtectedRoute><LazyLoad><FeedProfile /></LazyLoad></ProtectedRoute>} />
             <Route path="/install" element={<ProtectedRoute><LazyLoad><Install /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/collections" element={<ProtectedRoute><LazyLoad><AdminCollections /></LazyLoad></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
