@@ -288,7 +288,7 @@ export default function AdminPlayers() {
     setWizardOpen(true);
   }
 
-  async function handleWizardAccept(result: { stats: Record<string, number>; badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[]; positions: [string, string | null]; gemTierId: string; summary: string }) {
+  async function handleWizardAccept(result: { name: string; stats: Record<string, number>; badges: { badge_id: string; tier: string }[]; traits: { trait_id: string; tier: string; target_stat: string | null }[]; positions: [string, string | null]; gemTierId: string; summary: string }) {
     if (wizardEditPlayer) {
       const playerData = await loadPlayerData(wizardEditPlayer);
       setForm({
@@ -306,6 +306,7 @@ export default function AdminPlayers() {
     } else {
       setForm({
         ...emptyForm(),
+        name: result.name,
         ...result.stats,
         position1: result.positions[0],
         position2: result.positions[1],

@@ -40,6 +40,7 @@ type BadgeRow = Tables<"badges">;
 type TraitRow = Tables<"signature_traits">;
 
 interface WizardResult {
+  name: string;
   stats: Record<string, number>;
   badges: { badge_id: string; tier: string }[];
   traits: { trait_id: string; tier: string; target_stat: string | null }[];
@@ -221,6 +222,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
       .filter(Boolean) as { badge_id: string; tier: string }[];
 
     return {
+      name,
       stats: gen.stats,
       badges: mappedBadges,
       traits: [] as { trait_id: string; tier: string; target_stat: string | null }[],
