@@ -203,6 +203,28 @@ export function RunRosterManager({ runId }: Props) {
     );
   }
 
+  function updatePendingStarRating(playerId: string, newStars: number) {
+    setPendingPlayers((prev) =>
+      prev.map((p) => {
+        if (p.id !== playerId) return p;
+        return {
+          ...p,
+          rating: newStars,
+          run_rating: randomizeFromStar(newStars),
+          run_stat_3pt: randomizeFromStar(newStars),
+          run_stat_mid: randomizeFromStar(newStars),
+          run_stat_fin: randomizeFromStar(newStars),
+          run_stat_dnk: randomizeFromStar(newStars),
+          run_stat_stl: randomizeFromStar(newStars),
+          run_stat_blk: randomizeFromStar(newStars),
+          run_stat_ast: randomizeFromStar(newStars),
+          run_stat_reb: randomizeFromStar(newStars),
+          run_stat_int: randomizeFromStar(newStars),
+        };
+      })
+    );
+  }
+
   const confirmPending = useMutation({
     mutationFn: async () => {
       const rows = pendingPlayers.map((p) => ({
