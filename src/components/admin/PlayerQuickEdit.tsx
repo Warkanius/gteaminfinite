@@ -5,6 +5,7 @@ import { FormDialog } from "@/components/admin/FormDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatInput } from "@/components/admin/StatInput";
+import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -143,12 +144,12 @@ export function PlayerQuickEdit({ playerId, onClose }: PlayerQuickEditProps) {
       if (playerRes.data) {
         setForm({
           name: playerRes.data.name,
-          rating: playerRes.data.rating,
+          rating: Number(playerRes.data.rating),
           position1: playerRes.data.position1 ?? "",
           position2: playerRes.data.position2 ?? "",
-          stat_3pt: playerRes.data.stat_3pt, stat_mid: playerRes.data.stat_mid, stat_fin: playerRes.data.stat_fin,
-          stat_dnk: playerRes.data.stat_dnk, stat_ast: playerRes.data.stat_ast, stat_stl: playerRes.data.stat_stl,
-          stat_reb: playerRes.data.stat_reb, stat_blk: playerRes.data.stat_blk, stat_int: playerRes.data.stat_int,
+          stat_3pt: Number(playerRes.data.stat_3pt), stat_mid: Number(playerRes.data.stat_mid), stat_fin: Number(playerRes.data.stat_fin),
+          stat_dnk: Number(playerRes.data.stat_dnk), stat_ast: Number(playerRes.data.stat_ast), stat_stl: Number(playerRes.data.stat_stl),
+          stat_reb: Number(playerRes.data.stat_reb), stat_blk: Number(playerRes.data.stat_blk), stat_int: Number(playerRes.data.stat_int),
         });
       }
       if (badgesRes.data) {
@@ -286,6 +287,21 @@ export function PlayerQuickEdit({ playerId, onClose }: PlayerQuickEditProps) {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Star Rating */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Overall Star Rating</Label>
+                <span className="font-bold text-sm">{form.rating}★</span>
+              </div>
+              <Slider
+                min={0}
+                max={6}
+                step={1}
+                value={[form.rating]}
+                onValueChange={([v]) => setForm(f => ({ ...f, rating: v }))}
+              />
             </div>
 
             {/* Stats */}

@@ -196,16 +196,23 @@ export default function AdminTeams() {
       const template = TEAM_TEMPLATES.find(t => t.name === templateName);
       if (!template) throw new Error("Template not found");
 
-      // Clear existing
-      await supabase.from("team_players").delete().eq("team_id", teamId);
+      // Only fill remaining slots
+      const existingRoster = teamPlayers.filter(tp => tp.team_id === teamId);
+      const existingCount = existingRoster.length;
+      const remainingSlots = template.slots.slice(existingCount);
+
+      if (remainingSlots.length === 0) {
+        toast.info("Roster is already full for this template.");
+        return [];
+      }
 
       const cards = [];
-      for (let i = 0; i < template.slots.length; i++) {
-        const card = await createPlayerFromSlot(template.slots[i], allBadges, gemTiers);
+      for (let i = 0; i < remainingSlots.length; i++) {
+        const card = await createPlayerFromSlot(remainingSlots[i], allBadges, gemTiers);
         cards.push(card);
       }
 
-      const rows = cards.map((c, i) => ({ team_id: teamId, player_card_id: c.id, slot: i + 1 }));
+      const rows = cards.map((c, i) => ({ team_id: teamId, player_card_id: c.id, slot: existingCount + i + 1 }));
       const { error } = await supabase.from("team_players").insert(rows);
       if (error) throw error;
       return cards;
@@ -213,7 +220,7 @@ export default function AdminTeams() {
     onSuccess: (cards) => {
       refetchTeamPlayers();
       qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
-      toast.success(`${cards.length} players generated`);
+      if (cards.length > 0) toast.success(`${cards.length} players generated`);
     },
     onError: (e) => toast.error(e.message),
   });

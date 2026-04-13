@@ -296,10 +296,17 @@ export function RunRosterManager({ runId }: Props) {
       const template = RUN_TEMPLATES.find(t => t.name === templateName);
       if (!template) throw new Error("Template not found");
 
-      await supabase.from("run_players").delete().eq("run_id", runId);
+      // Only fill remaining slots
+      const existingCount = rosterCardIds.size;
+      const remainingSlots = template.slots.slice(existingCount);
+
+      if (remainingSlots.length === 0) {
+        toast.info("Roster is already full for this template.");
+        return [];
+      }
 
       const cards = [];
-      for (const slot of template.slots) {
+      for (const slot of remainingSlots) {
         const stars = slot.starRange[0] + Math.floor(Math.random() * (slot.starRange[1] - slot.starRange[0] + 1));
         const tier = gemTiers.find(g => g.stars === stars) ?? gemTiers[0];
 
@@ -360,7 +367,7 @@ export function RunRosterManager({ runId }: Props) {
     onSuccess: (cards) => {
       qc.invalidateQueries({ queryKey: ["run-roster", runId] });
       qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
-      toast.success(`${cards.length} players generated for run`);
+      if (cards.length > 0) toast.success(`${cards.length} players generated for run`);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -542,7 +549,16 @@ export function RunRosterManager({ runId }: Props) {
               <Check className="h-4 w-4" /> Review Converted Ratings ({pendingPlayers.length})
             </h4>
             <div className="flex gap-2">
-              <Button size="sm" variant="ghost" className="text-destructive text-xs" onClick={() => setPendingPlayers([])}>
+              <Button size="sm" variant="ghost" className="text-destructive text-xs" onClick={async () => {
+                // Delete orphan player_cards that were auto-generated
+                const idsToDelete = pendingPlayers.map(p => p.id);
+                setPendingPlayers([]);
+                // Best-effort cleanup — delete cards that have no references elsewhere
+                for (const id of idsToDelete) {
+                  await supabase.from("player_cards").delete().eq("id", id).then(() => {});
+                }
+                qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
+              }}>
                 <X className="h-3 w-3 mr-1" /> Discard All
               </Button>
               <Button size="sm" onClick={() => confirmPending.mutate()} disabled={confirmPending.isPending}>
@@ -603,7 +619,13 @@ export function RunRosterManager({ runId }: Props) {
                         className="h-7 text-[11px] text-center font-mono px-1"
                       />
                     ))}
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setPendingPlayers((prev) => prev.filter((x) => x.id !== p.id))}>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={async () => {
+                      const removedId = p.id;
+                      setPendingPlayers((prev) => prev.filter((x) => x.id !== removedId));
+                      // Delete orphan card
+                      await supabase.from("player_cards").delete().eq("id", removedId);
+                      qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
+                    }}>
                       <X className="h-3 w-3 text-destructive" />
                     </Button>
                   </div>
