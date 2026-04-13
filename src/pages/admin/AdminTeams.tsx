@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Users, Wand2, Package, Zap, Copy } from "lucide-react";
+import { Pencil, Trash2, Plus, Users, Wand2, Package, Zap, Copy, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { RunRosterManager } from "@/components/admin/RunRosterManager";
@@ -20,6 +20,7 @@ import { MilestoneEditor, type Milestone } from "@/components/admin/MilestoneEdi
 import { RankRewardEditor } from "@/components/admin/RankRewardEditor";
 import { TEAM_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
 import { generateFromProfile, ARCHETYPE_LIST, type WizardProfile } from "@/lib/archetypeEngine";
+import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 
 type Team = Tables<"teams">;
 type DomGame = Tables<"domination_games">;
@@ -46,7 +47,6 @@ async function createPlayerFromSlot(
   const gen = generateFromProfile(profile, stars, allBadges, stars);
   const name = generateRandomName();
 
-  // Insert player card
   const { data: card, error } = await supabase.from("player_cards").insert({
     name,
     rating: stars,
@@ -58,7 +58,6 @@ async function createPlayerFromSlot(
 
   if (error) throw error;
 
-  // Insert badges
   if (gen.badges.length > 0) {
     const badgeRows = gen.badges
       .map(rb => {
@@ -107,6 +106,16 @@ export default function AdminTeams() {
     },
   });
 
+  // All players for search/add
+  const { data: allPlayersLite = [] } = useQuery({
+    queryKey: ["admin-all-players-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("player_cards").select("id, name, rating").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Domination game players
   const { data: domGamePlayers = [] } = useQuery({
     queryKey: ["admin-dom-game-players"],
@@ -117,11 +126,27 @@ export default function AdminTeams() {
     },
   });
 
+  // Team players (roster)
+  const { data: teamPlayers = [], refetch: refetchTeamPlayers } = useQuery({
+    queryKey: ["admin-team-players"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("team_players").select("*, player_cards(id, name, rating)").order("slot");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Teams
-  const [teamForm, setTeamForm] = useState({ name: "", category: "domination", unlock_cost: 0 });
+  const [teamForm, setTeamForm] = useState({ name: "", category: "domination" });
   const [teamEditId, setTeamEditId] = useState<string | null>(null);
   const [teamDialog, setTeamDialog] = useState(false);
   const [teamDeleteId, setTeamDeleteId] = useState<string | null>(null);
+
+  // Team roster quick-add state
+  const [teamQuickAddArchetype, setTeamQuickAddArchetype] = useState("");
+  const [teamQuickAddStars, setTeamQuickAddStars] = useState(3);
+  const [teamQuickAddOpen, setTeamQuickAddOpen] = useState(false);
+  const [teamSearchPlayerId, setTeamSearchPlayerId] = useState("");
 
   const { data: teams = [], isLoading: teamsLoading } = useQuery({
     queryKey: ["admin-teams"], queryFn: async () => { const { data, error } = await supabase.from("teams").select("*").order("name"); if (error) throw error; return data; },
@@ -129,16 +154,82 @@ export default function AdminTeams() {
 
   const teamSave = useMutation({
     mutationFn: async () => {
-      if (teamEditId) { const { error } = await supabase.from("teams").update(teamForm).eq("id", teamEditId); if (error) throw error; }
-      else { const { error } = await supabase.from("teams").insert(teamForm); if (error) throw error; }
+      const payload = { name: teamForm.name, category: teamForm.category };
+      if (teamEditId) { const { error } = await supabase.from("teams").update(payload).eq("id", teamEditId); if (error) throw error; }
+      else { const { data, error } = await supabase.from("teams").insert(payload).select("id").single(); if (error) throw error; setTeamEditId(data.id); }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-teams"] }); setTeamDialog(false); toast.success("Saved"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-teams"] }); toast.success("Saved"); },
     onError: (e) => toast.error(e.message),
   });
 
   const teamDelete = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from("teams").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-teams"] }); setTeamDeleteId(null); toast.success("Deleted"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // --- Team Roster Mutations ---
+  const addPlayerToTeam = useMutation({
+    mutationFn: async ({ teamId, playerCardId }: { teamId: string; playerCardId: string }) => {
+      const existing = teamPlayers.filter(tp => tp.team_id === teamId);
+      const nextSlot = existing.length + 1;
+      const { error } = await supabase.from("team_players").insert({ team_id: teamId, player_card_id: playerCardId, slot: nextSlot });
+      if (error) throw error;
+    },
+    onSuccess: () => { refetchTeamPlayers(); toast.success("Player added to team"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const removePlayerFromTeam = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("team_players").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { refetchTeamPlayers(); toast.success("Removed"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const autofillTeamRoster = useMutation({
+    mutationFn: async ({ teamId, templateName }: { teamId: string; templateName: string }) => {
+      const template = TEAM_TEMPLATES.find(t => t.name === templateName);
+      if (!template) throw new Error("Template not found");
+
+      // Clear existing
+      await supabase.from("team_players").delete().eq("team_id", teamId);
+
+      const cards = [];
+      for (let i = 0; i < template.slots.length; i++) {
+        const card = await createPlayerFromSlot(template.slots[i], allBadges, gemTiers);
+        cards.push(card);
+      }
+
+      const rows = cards.map((c, i) => ({ team_id: teamId, player_card_id: c.id, slot: i + 1 }));
+      const { error } = await supabase.from("team_players").insert(rows);
+      if (error) throw error;
+      return cards;
+    },
+    onSuccess: (cards) => {
+      refetchTeamPlayers();
+      qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
+      toast.success(`${cards.length} players generated`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const quickAddToTeam = useMutation({
+    mutationFn: async ({ teamId, archetype, stars }: { teamId: string; archetype: string; stars: number }) => {
+      const slot: TemplateSlot = { archetype, starRange: [stars, stars] };
+      const card = await createPlayerFromSlot(slot, allBadges, gemTiers);
+      const existing = teamPlayers.filter(tp => tp.team_id === teamId);
+      await supabase.from("team_players").insert({ team_id: teamId, player_card_id: card.id, slot: existing.length + 1 });
+      return card;
+    },
+    onSuccess: (card) => {
+      refetchTeamPlayers();
+      qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
+      setTeamQuickAddOpen(false);
+      toast.success(`Added ${card.name}`);
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -177,7 +268,6 @@ export default function AdminTeams() {
       const players = domGamePlayers.filter(p => p.domination_game_id === gameId);
       if (players.length === 0) throw new Error("No players assigned to this game");
 
-      // Sort by rating
       const sorted = [...players].sort((a, b) => (b.player_cards?.rating ?? 0) - (a.player_cards?.rating ?? 0));
 
       const packName = isRTTR ? `RTTR: ${game.opponent_name}` : `vs ${game.opponent_name} Reward`;
@@ -188,7 +278,6 @@ export default function AdminTeams() {
       }).select("id").single();
       if (packErr) throw packErr;
 
-      // Create pack_players entries
       const packPlayerRows = sorted.map((p, i) => ({
         pack_id: pack.id,
         player_card_id: p.player_card_id,
@@ -196,14 +285,12 @@ export default function AdminTeams() {
       }));
       await supabase.from("pack_players").insert(packPlayerRows);
 
-      // Create odds
       const numPlayers = sorted.length;
       let oddsRows: any[];
 
       if (isRTTR) {
-        // RTTR: Higher rated players MORE common, plus a player_choice slot
-        const totalPlayerPct = 83; // 83% for players, 17% for choice
-        const weights = sorted.map((_, i) => numPlayers - i); // 5,4,3,2,1 etc
+        const totalPlayerPct = 83;
+        const weights = sorted.map((_, i) => numPlayers - i);
         const totalWeight = weights.reduce((s, w) => s + w, 0);
         oddsRows = sorted.map((p, i) => ({
           pack_id: pack.id,
@@ -212,7 +299,6 @@ export default function AdminTeams() {
           percentage: Math.round((weights[i] / totalWeight) * totalPlayerPct),
           description: p.player_cards?.name ?? `Slot ${i + 1}`,
         }));
-        // Player's Choice slot
         oddsRows.push({
           pack_id: pack.id,
           pack_type: "rttr",
@@ -221,8 +307,7 @@ export default function AdminTeams() {
           description: "Player's Choice",
         });
       } else {
-        // Domination: Higher rated players RARER
-        const weights = sorted.map((_, i) => i + 1); // 1,2,3,4,5 etc
+        const weights = sorted.map((_, i) => i + 1);
         const totalWeight = weights.reduce((s, w) => s + w, 0);
         oddsRows = sorted.map((p, i) => ({
           pack_id: pack.id,
@@ -234,8 +319,6 @@ export default function AdminTeams() {
       }
 
       await supabase.from("pack_odds").insert(oddsRows);
-
-      // Link pack to game
       await supabase.from("domination_games").update({ pack_reward: pack.id }).eq("id", gameId);
 
       return pack;
@@ -254,17 +337,14 @@ export default function AdminTeams() {
       const template = TEAM_TEMPLATES.find(t => t.name === templateName);
       if (!template) throw new Error("Template not found");
 
-      // Clear existing players
       await supabase.from("domination_game_players").delete().eq("domination_game_id", gameId);
 
-      // Generate players
       const cards = [];
       for (let i = 0; i < template.slots.length; i++) {
         const card = await createPlayerFromSlot(template.slots[i], allBadges, gemTiers);
         cards.push(card);
       }
 
-      // Link to domination game
       const rows = cards.map((c, i) => ({
         domination_game_id: gameId,
         player_card_id: c.id,
@@ -279,6 +359,31 @@ export default function AdminTeams() {
       qc.invalidateQueries({ queryKey: ["admin-dom-game-players"] });
       qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
       toast.success(`${cards.length} players generated and added to roster`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Import team roster into domination game
+  const importTeamRoster = useMutation({
+    mutationFn: async ({ gameId, teamId }: { gameId: string; teamId: string }) => {
+      const roster = teamPlayers.filter(tp => tp.team_id === teamId);
+      if (roster.length === 0) throw new Error("Team has no players");
+
+      // Clear existing dom players
+      await supabase.from("domination_game_players").delete().eq("domination_game_id", gameId);
+
+      const rows = roster.map(tp => ({
+        domination_game_id: gameId,
+        player_card_id: tp.player_card_id,
+        slot: tp.slot,
+      }));
+      const { error } = await supabase.from("domination_game_players").insert(rows);
+      if (error) throw error;
+      return roster.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ["admin-dom-game-players"] });
+      toast.success(`Imported ${count} players from team roster`);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -352,7 +457,10 @@ export default function AdminTeams() {
   const teamCols: Column<Team>[] = [
     { key: "name", label: "Name", sortable: true },
     { key: "category", label: "Category", sortable: true },
-    { key: "unlock_cost", label: "Unlock Cost", sortable: true },
+    { key: "id", label: "Roster", render: (r) => {
+      const count = teamPlayers.filter(tp => tp.team_id === r.id).length;
+      return <span className="text-muted-foreground">{count} players</span>;
+    }},
   ];
 
   const domCols: Column<DomGame>[] = [
@@ -379,6 +487,25 @@ export default function AdminTeams() {
     acc[game.road_name].push(game);
     return acc;
   }, {} as Record<string, DomGame[]>);
+
+  // Current team roster for editing
+  const currentTeamRoster = teamEditId ? teamPlayers.filter(tp => tp.team_id === teamEditId) : [];
+
+  // Helper: when selecting a team in domination, auto-import its roster
+  const handleDomTeamSelect = async (teamName: string) => {
+    setDomForm(f => ({ ...f, opponent_name: teamName }));
+
+    // If editing an existing game and a matching team has players, offer to import
+    if (domEditId) {
+      const team = teams.find(t => t.name === teamName);
+      if (team) {
+        const roster = teamPlayers.filter(tp => tp.team_id === team.id);
+        if (roster.length > 0) {
+          importTeamRoster.mutate({ gameId: domEditId, teamId: team.id });
+        }
+      }
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -432,7 +559,6 @@ export default function AdminTeams() {
                           searchKeys={["opponent_name"]} 
                           actions={(r) => (
                             <div className="flex gap-1 justify-end flex-wrap">
-                              {/* Autofill dropdown */}
                               <Select onValueChange={(tpl) => autofillRoster.mutate({ gameId: r.id, templateName: tpl })}>
                                 <SelectTrigger className="h-8 w-8 p-0 border-none" title="Autofill Roster">
                                   <Wand2 className="h-4 w-4 text-primary" />
@@ -443,7 +569,6 @@ export default function AdminTeams() {
                                   ))}
                                 </SelectContent>
                               </Select>
-                              {/* Quick Add */}
                               <Button size="icon" variant="ghost" className="h-8 w-8" title="Quick Add Player" onClick={() => {
                                 setQuickAddGameId(r.id);
                                 setQuickAddArchetype("");
@@ -451,11 +576,9 @@ export default function AdminTeams() {
                               }}>
                                 <Plus className="h-4 w-4 text-green-500" />
                               </Button>
-                              {/* Create Reward Pack */}
                               <Button size="icon" variant="ghost" className="h-8 w-8" title="Create Reward Pack" onClick={() => createRewardPack.mutate({ gameId: r.id, isRTTR: false })} disabled={createRewardPack.isPending}>
                                 <Package className="h-4 w-4 text-amber-500" />
                               </Button>
-                              {/* Create RTTR Pack */}
                               <Button size="icon" variant="ghost" className="h-8 w-8" title="Create RTTR Pack" onClick={() => createRewardPack.mutate({ gameId: r.id, isRTTR: true })} disabled={createRewardPack.isPending}>
                                 <Zap className="h-4 w-4 text-purple-500" />
                               </Button>
@@ -492,11 +615,11 @@ export default function AdminTeams() {
           <Card>
             <CardHeader>
               <CardTitle>Opponent Teams</CardTitle>
-              <CardDescription>Manage CPU opponents and unlockable rosters.</CardDescription>
+              <CardDescription>Manage CPU opponents and their rosters.</CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable data={teams} columns={teamCols} isLoading={teamsLoading} searchKeys={["name"]} onAdd={() => { setTeamForm({ name: "", category: "domination", unlock_cost: 0 }); setTeamEditId(null); setTeamDialog(true); }} addLabel="Add Team"
-                actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTeamForm({ name: r.name, category: r.category, unlock_cost: r.unlock_cost }); setTeamEditId(r.id); setTeamDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setTeamForm({ name: `${r.name} (Copy)`, category: r.category, unlock_cost: r.unlock_cost }); setTeamEditId(null); setTeamDialog(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTeamDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+              <DataTable data={teams} columns={teamCols} isLoading={teamsLoading} searchKeys={["name"]} onAdd={() => { setTeamForm({ name: "", category: "domination" }); setTeamEditId(null); setTeamDialog(true); }} addLabel="Add Team"
+                actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTeamForm({ name: r.name, category: r.category }); setTeamEditId(r.id); setTeamDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setTeamForm({ name: `${r.name} (Copy)`, category: r.category }); setTeamEditId(null); setTeamDialog(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTeamDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -527,7 +650,7 @@ export default function AdminTeams() {
         </TabsContent>
       </Tabs>
 
-      {/* Quick Add Dialog */}
+      {/* Quick Add Dialog (domination) */}
       <FormDialog
         open={!!quickAddGameId}
         onOpenChange={(o) => { if (!o) setQuickAddGameId(null); }}
@@ -564,10 +687,112 @@ export default function AdminTeams() {
 
       {/* Team dialog */}
       <FormDialog open={teamDialog} onOpenChange={setTeamDialog} title={teamEditId ? "Edit Team" : "Add Team"} onSave={() => teamSave.mutate()} saving={teamSave.isPending}>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1"><Label>Name</Label><Input value={teamForm.name} onChange={(e) => setTeamForm((f) => ({ ...f, name: e.target.value }))} /></div>
-          <div className="space-y-1"><Label>Category</Label><Input value={teamForm.category} onChange={(e) => setTeamForm((f) => ({ ...f, category: e.target.value }))} /></div>
-          <div className="space-y-1"><Label>Unlock Cost</Label><Input type="number" value={teamForm.unlock_cost} onChange={(e) => setTeamForm((f) => ({ ...f, unlock_cost: Number(e.target.value) }))} /></div>
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1"><Label>Name</Label><Input value={teamForm.name} onChange={(e) => setTeamForm((f) => ({ ...f, name: e.target.value }))} /></div>
+            <div className="space-y-1"><Label>Category</Label><Input value={teamForm.category} onChange={(e) => setTeamForm((f) => ({ ...f, category: e.target.value }))} /></div>
+          </div>
+
+          {teamEditId ? (
+            <div className="space-y-4 p-4 border rounded-lg bg-card">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
+                  <Users className="h-3.5 w-3.5" /> Roster ({currentTeamRoster.length} players)
+                </h3>
+                <div className="flex gap-2">
+                  <Select onValueChange={(tpl) => autofillTeamRoster.mutate({ teamId: teamEditId, templateName: tpl })}>
+                    <SelectTrigger className="h-8 w-auto gap-1 px-2 text-xs" title="Autofill from Template">
+                      <Wand2 className="h-3.5 w-3.5 text-primary" />
+                      <span>Autofill</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TEAM_TEMPLATES.map(t => (
+                        <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setTeamQuickAddOpen(true); setTeamQuickAddArchetype(""); setTeamQuickAddStars(3); }}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Quick Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Current players */}
+              {currentTeamRoster.length > 0 ? (
+                <div className="space-y-1">
+                  {currentTeamRoster.map((tp) => (
+                    <div key={tp.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-sm">
+                      <span>{tp.player_cards?.name ?? "Unknown"} <span className="text-muted-foreground">({tp.player_cards?.rating ?? 0}★)</span></span>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => removePlayerFromTeam.mutate(tp.id)}>
+                        <X className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">No players yet. Use Autofill or Quick Add above.</p>
+              )}
+
+              {/* Search & Add existing player */}
+              <div className="space-y-1 pt-2 border-t">
+                <Label className="text-xs text-muted-foreground">Search & Add Existing Player</Label>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <PlayerCombobox
+                      players={allPlayersLite.filter(p => !currentTeamRoster.some(tp => tp.player_card_id === p.id)).map(p => ({ id: p.id, name: `${p.name} (${p.rating}★)` }))}
+                      value={teamSearchPlayerId}
+                      onValueChange={setTeamSearchPlayerId}
+                      placeholder="Search players…"
+                    />
+                  </div>
+                  <Button size="sm" className="h-10" disabled={!teamSearchPlayerId || addPlayerToTeam.isPending} onClick={() => {
+                    if (teamSearchPlayerId && teamEditId) {
+                      addPlayerToTeam.mutate({ teamId: teamEditId, playerCardId: teamSearchPlayerId });
+                      setTeamSearchPlayerId("");
+                    }
+                  }}>Add</Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground border rounded-md p-3 bg-muted/30">
+              💡 Save the team first, then edit it to manage the roster.
+            </p>
+          )}
+        </div>
+      </FormDialog>
+
+      {/* Team Quick Add Dialog */}
+      <FormDialog
+        open={teamQuickAddOpen}
+        onOpenChange={setTeamQuickAddOpen}
+        title="Quick Add Player to Team"
+        onSave={() => {
+          if (teamQuickAddArchetype && teamEditId) {
+            quickAddToTeam.mutate({ teamId: teamEditId, archetype: teamQuickAddArchetype, stars: teamQuickAddStars });
+          }
+        }}
+        saving={quickAddToTeam.isPending}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Archetype</Label>
+            <Select value={teamQuickAddArchetype} onValueChange={setTeamQuickAddArchetype}>
+              <SelectTrigger><SelectValue placeholder="Select archetype…" /></SelectTrigger>
+              <SelectContent>
+                {ARCHETYPE_LIST.map(a => (
+                  <SelectItem key={a.name} value={a.name.toLowerCase()}>{a.name} ({a.positions.filter(Boolean).join("/")})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <Label>Star Rating</Label>
+              <span className="font-bold">{teamQuickAddStars}★</span>
+            </div>
+            <Slider min={1} max={5} step={1} value={[teamQuickAddStars]} onValueChange={([v]) => setTeamQuickAddStars(v)} />
+          </div>
         </div>
       </FormDialog>
 
@@ -583,15 +808,33 @@ export default function AdminTeams() {
               </div>
               <div className="space-y-2">
                 <Label>Opponent Team</Label>
-                <Input 
-                  list="team-names" 
-                  value={domForm.opponent_name} 
-                  onChange={(e) => setDomForm((f) => ({ ...f, opponent_name: e.target.value }))} 
-                  placeholder="Type or select team..."
-                />
-                <datalist id="team-names">
-                  {teams.map(t => <option key={t.id} value={t.name} />)}
-                </datalist>
+                <Select
+                  value={domForm.opponent_name || "custom"}
+                  onValueChange={(val) => {
+                    if (val === "custom") {
+                      setDomForm(f => ({ ...f, opponent_name: "" }));
+                    } else {
+                      handleDomTeamSelect(val);
+                    }
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select team…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="custom">Custom name…</SelectItem>
+                    {teams.map(t => {
+                      const count = teamPlayers.filter(tp => tp.team_id === t.id).length;
+                      return <SelectItem key={t.id} value={t.name}>{t.name} ({count} players)</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+                {(!teams.some(t => t.name === domForm.opponent_name) || domForm.opponent_name === "") && (
+                  <Input 
+                    value={domForm.opponent_name} 
+                    onChange={(e) => setDomForm((f) => ({ ...f, opponent_name: e.target.value }))} 
+                    placeholder="Type custom name..."
+                    className="mt-1"
+                  />
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Game Order</Label>
@@ -669,7 +912,7 @@ export default function AdminTeams() {
         </div>
       </FormDialog>
 
-      <ConfirmDialog open={!!teamDeleteId} onOpenChange={(o) => !o && setTeamDeleteId(null)} title="Delete Team" description="This will permanently delete this team." onConfirm={() => teamDeleteId && teamDelete.mutate(teamDeleteId)} loading={teamDelete.isPending} />
+      <ConfirmDialog open={!!teamDeleteId} onOpenChange={(o) => !o && setTeamDeleteId(null)} title="Delete Team" description="This will permanently delete this team and its roster." onConfirm={() => teamDeleteId && teamDelete.mutate(teamDeleteId)} loading={teamDelete.isPending} />
       <ConfirmDialog open={!!domDeleteId} onOpenChange={(o) => !o && setDomDeleteId(null)} title="Delete Game" description="This will permanently delete this domination game." onConfirm={() => domDeleteId && domDelete.mutate(domDeleteId)} loading={domDelete.isPending} />
       <ConfirmDialog open={!!runDeleteId} onOpenChange={(o) => !o && setRunDeleteId(null)} title="Delete Run" description="This will permanently delete this run." onConfirm={() => runDeleteId && runDelete.mutate(runDeleteId)} loading={runDelete.isPending} />
     </div>

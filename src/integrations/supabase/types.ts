@@ -1377,6 +1377,45 @@ export type Database = {
           },
         ]
       }
+      team_players: {
+        Row: {
+          created_at: string
+          id: string
+          player_card_id: string
+          slot: number
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          player_card_id: string
+          slot?: number
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          player_card_id?: string
+          slot?: number
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_players_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_players_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           category: string
