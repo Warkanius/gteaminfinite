@@ -239,13 +239,13 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         {isCollectionLoading ? (
           <div className="flex h-32 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>
         ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {collection?.map((c: any) => {
               const card = c.player_cards;
               if (!card) return null;
               const isSelected = selectedIds.has(card.id);
               return (
-                <div key={card.id} className="relative max-w-[140px] w-full mx-auto transition-transform hover:-translate-y-1">
+                <div key={card.id} className="relative w-full transition-transform hover:-translate-y-1">
                   <div onClick={() => handleCardClick(card.id)} className="cursor-pointer">
                     <PlayerCard card={card} />
                   </div>
