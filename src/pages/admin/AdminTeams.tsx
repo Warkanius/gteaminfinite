@@ -13,6 +13,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2, Plus, Users, Wand2, Package, Zap, Copy, X } from "lucide-react";
+import { PlayerQuickEdit } from "@/components/admin/PlayerQuickEdit";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { RunRosterManager } from "@/components/admin/RunRosterManager";
@@ -147,6 +148,7 @@ export default function AdminTeams() {
   const [teamQuickAddStars, setTeamQuickAddStars] = useState(3);
   const [teamQuickAddOpen, setTeamQuickAddOpen] = useState(false);
   const [teamSearchPlayerId, setTeamSearchPlayerId] = useState("");
+  const [quickEditPlayerId, setQuickEditPlayerId] = useState<string | null>(null);
 
   const { data: teams = [], isLoading: teamsLoading } = useQuery({
     queryKey: ["admin-teams"], queryFn: async () => { const { data, error } = await supabase.from("teams").select("*").order("name"); if (error) throw error; return data; },
@@ -722,10 +724,21 @@ export default function AdminTeams() {
                 <div className="space-y-1">
                   {currentTeamRoster.map((tp) => (
                     <div key={tp.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-sm">
-                      <span>{tp.player_cards?.name ?? "Unknown"} <span className="text-muted-foreground">({tp.player_cards?.rating ?? 0}★)</span></span>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => removePlayerFromTeam.mutate(tp.id)}>
-                        <X className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
+                      <button
+                        className="text-left hover:underline hover:text-primary transition-colors"
+                        onClick={() => setQuickEditPlayerId(tp.player_card_id)}
+                        title="Click to edit player"
+                      >
+                        {tp.player_cards?.name ?? "Unknown"} <span className="text-muted-foreground">({tp.player_cards?.rating ?? 0}★)</span>
+                      </button>
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setQuickEditPlayerId(tp.player_card_id)} title="Edit Player">
+                          <Pencil className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => removePlayerFromTeam.mutate(tp.id)}>
+                          <X className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -915,6 +928,8 @@ export default function AdminTeams() {
       <ConfirmDialog open={!!teamDeleteId} onOpenChange={(o) => !o && setTeamDeleteId(null)} title="Delete Team" description="This will permanently delete this team and its roster." onConfirm={() => teamDeleteId && teamDelete.mutate(teamDeleteId)} loading={teamDelete.isPending} />
       <ConfirmDialog open={!!domDeleteId} onOpenChange={(o) => !o && setDomDeleteId(null)} title="Delete Game" description="This will permanently delete this domination game." onConfirm={() => domDeleteId && domDelete.mutate(domDeleteId)} loading={domDelete.isPending} />
       <ConfirmDialog open={!!runDeleteId} onOpenChange={(o) => !o && setRunDeleteId(null)} title="Delete Run" description="This will permanently delete this run." onConfirm={() => runDeleteId && runDelete.mutate(runDeleteId)} loading={runDelete.isPending} />
+
+      <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} />
     </div>
   );
 }
