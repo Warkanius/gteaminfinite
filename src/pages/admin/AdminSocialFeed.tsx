@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pencil, Trash2, Upload, X, Users } from "lucide-react";
+import { Pencil, Trash2, Upload, X, Users, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -305,6 +305,9 @@ export default function AdminSocialFeed() {
                 <Button size="icon" variant="ghost" onClick={() => { setForm(row); setEditId(row.id); setDialogOpen(true); }}>
                   <Pencil className="h-4 w-4" />
                 </Button>
+                <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setForm({ ...row, id: undefined as any, content: `${row.content}` }); setEditId(null); setDialogOpen(true); }}>
+                  <Copy className="h-4 w-4" />
+                </Button>
                 <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -344,6 +347,9 @@ export default function AdminSocialFeed() {
                 <div className="flex gap-1">
                   <Button size="icon" variant="ghost" onClick={() => { setCreatorForm(row); setCreatorEditId(row.id); setCreatorDialogOpen(true); }}>
                     <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setCreatorForm({ ...row, name: `${row.name} (Copy)`, handle: `${row.handle}_copy` }); setCreatorEditId(null); setCreatorDialogOpen(true); }}>
+                    <Copy className="h-4 w-4" />
                   </Button>
                   <Button size="icon" variant="ghost" onClick={() => setCreatorDeleteId(row.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
