@@ -170,9 +170,9 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
           </div>
         </div>
 
-        <div className="flex gap-4 min-h-[200px] mb-8 overflow-x-auto pb-4">
+      <div className="flex gap-3 min-h-[200px] mb-8 overflow-x-auto pb-4">
           {playerLineup.map((card: any, i) => (
-            <div key={card.id} className="w-32 sm:w-36 shrink-0 relative">
+            <div key={card.id} className="w-[120px] sm:w-[140px] shrink-0 relative">
               <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold z-10 shadow-lg border-2 border-background">
                 {i + 1}
               </div>
@@ -182,7 +182,7 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
             </div>
           ))}
           {Array.from({ length: 3 - playerLineup.length }).map((_, i) => (
-            <div key={`empty-${i}`} className="w-32 sm:w-36 shrink-0 h-44 sm:h-48 border-2 border-dashed border-border/50 rounded-lg flex items-center justify-center text-muted-foreground text-sm font-semibold opacity-50">
+            <div key={`empty-${i}`} className="w-[120px] sm:w-[140px] shrink-0 h-44 sm:h-48 border-2 border-dashed border-border/50 rounded-lg flex items-center justify-center text-muted-foreground text-sm font-semibold opacity-50">
               Empty Slot
             </div>
           ))}
@@ -201,9 +201,9 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         ) : (
           <div className="space-y-6 border-t border-border/50 pt-6">
             <h2 className="font-display text-2xl tracking-wider">CPU Lineup (4d6 Roll)</h2>
-            <div className="flex gap-4 min-h-[200px] overflow-x-auto pb-4">
+            <div className="flex gap-3 min-h-[200px] overflow-x-auto pb-4">
               {cpuLineup.map((card, idx) => (
-                <div key={`cpu-${idx}`} className="w-32 sm:w-36 shrink-0 relative">
+                <div key={`cpu-${idx}`} className="w-[120px] sm:w-[140px] shrink-0 relative">
                   <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center font-bold z-10 shadow-lg border-2 border-background">
                     {idx + 1}
                   </div>
@@ -239,13 +239,13 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         {isCollectionLoading ? (
           <div className="flex h-32 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>
         ) : (
-          <div className="flex flex-wrap gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
             {collection?.map((c: any) => {
               const card = c.player_cards;
               if (!card) return null;
               const isSelected = selectedIds.has(card.id);
               return (
-                <div key={card.id} className="relative w-32 sm:w-36 shrink-0 transition-transform hover:-translate-y-1">
+                <div key={card.id} className="relative max-w-[140px] w-full mx-auto transition-transform hover:-translate-y-1">
                   <div onClick={() => handleCardClick(card.id)} className="cursor-pointer">
                     <PlayerCard card={card} />
                   </div>

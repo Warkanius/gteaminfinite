@@ -6,8 +6,8 @@ const corsHeaders = {
 };
 
 const DEFAULT_CONFIG = {
-  min_price: 200,
-  max_price: 5000,
+  min_price: 1000,
+  max_price: 10000,
   snipe_chance: 10,
   snipe_discount_min: 15,
   snipe_discount_max: 40,
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     }
 
     // Get card IDs that belong to paid packs (cost > 0)
-    const { data: packs } = await supabase.from("packs").select("id").gt("cost", 0);
+    const { data: packs } = await supabase.from("packs").select("id").eq("pack_type", "standard");
     const packIds = (packs ?? []).map((p: any) => p.id);
 
     if (packIds.length === 0) {
@@ -109,16 +109,16 @@ Deno.serve(async (req) => {
       const card = pickRandomCard();
       const isSnipe = Math.random() * 100 < config.snipe_chance;
 
-      // Use market_value as base price with ±30% variance
-      const baseValue = card.market_value ?? 500;
-      let price = Math.round(baseValue * (0.8 + Math.random() * 0.5)); // 0.8x to 1.3x
+      // Use market_value as base price with 0.9x–1.5x variance
+      const baseValue = card.market_value ?? 1500;
+      let price = Math.round(baseValue * (0.9 + Math.random() * 0.6)); // 0.9x to 1.5x
       price = Math.max(config.min_price, Math.min(config.max_price, price));
 
       if (isSnipe) {
         const discMin = (config.snipe_discount_min ?? 15) / 100;
         const discMax = (config.snipe_discount_max ?? 40) / 100;
         price = Math.round(baseValue * (discMin + Math.random() * (discMax - discMin)));
-        price = Math.max(50, price);
+        price = Math.max(500, price);
       }
 
       listings.push({
