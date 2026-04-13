@@ -1,44 +1,75 @@
 
 
-# Fix Card Grid Layout, Auction Prices & Pack Filter
+# Rank Reward Ladder — Coin & Pack Focused
 
-## 1. Card Grid Layout Cleanup (LineupSelect + RunLineupSelect)
+## Approach
 
-**Problem**: Cards render at inconsistent sizes. `LineupSelect` uses `max-w-[140px]` with `mx-auto` in a responsive grid, but `RunLineupSelect` uses `flex-wrap gap-4` with `w-32 sm:w-36` inline — no grid, no uniform sizing.
+No new DB tables. Use a new `run_rank_rewards` table seeded with all 25 ranks, each with coin/gem/pack rewards. Admins can edit rewards via a clean editor in the Admin Teams page. Rewards auto-grant on rank-up in `RunGameBoard`.
 
-**Fix**: Apply the same uniform grid layout to both:
-- **LineupSelect.tsx** (line 161): Already has a proper grid with `max-w-[140px]`. Looks correct. Will verify the aspect ratio wrapper is applied.
-- **RunLineupSelect.tsx** (line 242): Replace the `flex flex-wrap gap-4` collection grid with the same `grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3` layout and wrap each card in `max-w-[140px] w-full mx-auto` — identical to `LineupSelect`.
-- Also fix the selected lineup row (line 173) and CPU lineup row (line 204): use consistent `w-[120px] sm:w-[140px]` sizing instead of `w-32 sm:w-36` which creates uneven widths.
+## Default Reward Seeding
 
-## 2. Auction House Prices Too Low
+Coin-heavy with packs at key rank-ups. Gems are sparse.
 
-**Problem**: The only standard pack costs 5,000 coins. The current auction config has `min_price: 200, max_price: 5000`. Prices based on `market_value` with 0.8x–1.3x variance can land as low as 200 coins — far below what players pay for packs.
+| Rank | Wins | Coins | Gems | Pack |
+|------|------|-------|------|------|
+| Nobody I | 1 | 100 | 0 | — |
+| Nobody II | 5 | 250 | 0 | — |
+| Nobody III | 10 | 500 | 0 | — |
+| Nobody IV | 15 | 1,000 | 0 | — |
+| Nobody V | 20 | 2,000 | 0 | — |
+| Regular I | 25 | 2,500 | 0 | Random Pack |
+| Regular II | 35 | 3,000 | 0 | — |
+| Regular III | 45 | 3,500 | 0 | — |
+| Regular IV | 55 | 4,000 | 0 | — |
+| Regular V | 65 | 5,000 | 5 | Random Pack |
+| Hooper I | 75 | 6,000 | 0 | — |
+| Hooper II | 90 | 7,000 | 0 | — |
+| Hooper III | 105 | 8,000 | 0 | Random Pack |
+| Hooper IV | 120 | 9,000 | 0 | — |
+| Hooper V | 135 | 10,000 | 10 | Random Pack |
+| Top Pick I | 150 | 12,000 | 0 | Random Box |
+| Top Pick II | 170 | 14,000 | 0 | — |
+| Top Pick III | 190 | 16,000 | 0 | Random Pack |
+| Top Pick IV | 210 | 18,000 | 0 | — |
+| Top Pick V | 230 | 20,000 | 15 | Random Box |
+| Legend I | 250 | 25,000 | 0 | Random Box |
+| Legend II | 350 | 30,000 | 0 | Random Pack |
+| Legend III | 500 | 40,000 | 20 | Random Box |
+| Legend IV | 725 | 50,000 | 0 | Random Box |
+| Legend V | 1000 | 75,000 | 25 | Random Box |
 
-**Fix**: Update `refresh-auction/index.ts`:
-- Raise `DEFAULT_CONFIG.min_price` to `1000` and `max_price` to `10000`.
-- Adjust the price variance to `0.9x–1.5x` of `market_value` (instead of 0.8x–1.3x), so prices cluster higher.
-- Snipe prices should still be discounted but capped at a higher floor (e.g., `500` instead of `50`).
+## Implementation
 
-## 3. Only Standard Packs in Auction
+### 1. DB Migration
+- Create `run_rank_rewards` table: `id`, `rank_name` (unique), `wins_required`, `coin_reward`, `gem_reward`, `pack_reward` (text: `""`, `"random_standard"`, `"random_standard_box"`, or pack ID), `sort_order`
+- Create `user_rank_claims` table: `id`, `user_id`, `rank_name`, `claimed_at`, with `UNIQUE(user_id, rank_name)` to prevent double-granting
+- Seed all 25 rows with the defaults above
+- RLS: readable by authenticated, admin-managed, users insert/read own claims
 
-**Problem**: The current filter uses `.gt("cost", 0)` which catches reward packs with artificially high costs (e.g., "Shutoku I" at 9999 coins, "Hidden Gem" at 99999). These are reward packs, not standard packs.
+### 2. Admin Rank Reward Editor (`RankRewardEditor.tsx`)
+- Fixed 25 rows (no add/remove) in a clean table format
+- Each row: rank name (read-only), wins (read-only), coin input, gem input, pack dropdown (None / Random Pack / Random Box / specific packs)
+- Batch save button
+- Integrated into AdminTeams page as a new tab/section
 
-**Fix**: Change the pack query in `refresh-auction/index.ts` from:
-```
-.from("packs").select("id").gt("cost", 0)
-```
-to:
-```
-.from("packs").select("id").eq("pack_type", "standard")
-```
+### 3. Grant Rewards on Rank-Up (`RunGameBoard.tsx`)
+- After updating `highest_wins`, compare old vs new highest
+- Query `run_rank_rewards` for ranks between old and new thresholds
+- Check `user_rank_claims` to skip already-claimed ranks
+- Grant coins/gems, add packs/boxes to `user_pack_inventory`
+- Insert claim records
+- Show rank-up toast with reward summary
 
-This ensures only cards from standard packs appear in the auction house.
+### 4. MilestoneEditor Update
+- Add `"random_standard_box"` option (🎲 Random Box) to the pack dropdown
 
-## Files Changed
+## Files
 
 | File | Change |
 |------|--------|
-| `src/components/game/RunLineupSelect.tsx` | Uniform grid layout for collection cards, consistent card widths |
-| `supabase/functions/refresh-auction/index.ts` | Filter by `pack_type = 'standard'`, raise min/max prices, adjust variance |
+| DB migration | Create `run_rank_rewards` + seed, create `user_rank_claims` |
+| `src/components/admin/RankRewardEditor.tsx` | New: fixed-row reward table |
+| `src/components/admin/MilestoneEditor.tsx` | Add Random Box option |
+| `src/components/game/RunGameBoard.tsx` | Rank-up detection + reward granting |
+| `src/pages/admin/AdminTeams.tsx` | Integrate RankRewardEditor |
 
