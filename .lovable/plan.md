@@ -1,48 +1,31 @@
 
-Goal: decouple Gem Tier from Gem Market, make Domination reward packs editable per game, swap the requested collection item for the missing rewards, and fix compound evo progress.
 
-1. Separate Gem Tier from Gem Market
-- Add a dedicated market-assignment table so market membership is no longer inferred from `player_cards.gem_tier_id`.
-- Keep `player_cards.gem_tier_id` and `gem_name` for card tiering, visuals, and stat scaling only.
-- Update Admin Gem Market to create/remove market assignments instead of editing the player’s base gem tier.
-- Update the Gem Market page and gem purchase backend to read availability, grouping, and pricing from market assignments.
-- Preserve the current visible market during migration so the storefront does not go blank, but future tier edits will no longer auto-list cards.
+# Fix Runs Mode: Evo Tracking, Scoring Bug, and Badge Behavior
 
-2. Make reward packs truly editable per pack/game
-- Change pack odds from `pack_type`-based to pack-specific so every pack can have its own odds table.
-- Update pack opening logic to use the selected pack’s own odds/content first, with legacy fallback only where old data still exists.
-- Remove the admin restriction that hides odds editing for reward packs.
-- Fix Domination reward selection so it stores a real pack ID, shows the pack name, and can jump straight to managing that pack’s contents/odds.
-- Audit existing Domination reward values and normalize any bad text values to real pack references.
+## Problems Found
 
-3. Apply the requested collection/reward data fix
-- Identify your signed-in account and verify the owned `Shrive M'Live` entry.
-- Remove one owned copy from `user_collections`.
-- Look up your Kaijo and Shutoku Domination wins, resolve their configured reward packs, and grant those two packs into your pack inventory so they can be opened normally.
-- If those wins already granted something previously, I’ll still add the replacement packs you explicitly requested.
+1. **No evo progress tracking from Runs games**: `RunGameBoard.handleGameEnd` never calls `trackEvoProgress`. Only the Domination `GameResults` component does.
 
-4. Fix compound evo tracking
-- Audit compound progress storage versus display.
-- Update the evo UI to show per-requirement compound progress from `compound_progress` instead of incorrectly comparing `current_value` to the step’s single `challenge_target`.
-- Keep `current_value` as the summary count of completed requirements and use `completed`/`claimed` for claim logic.
-- If implementation shows any tracker-side bug in `trackCompoundProgress`, I’ll patch that too and verify with a real compound evo case.
+2. **Scoring bug (5-point shots)**: In `RunGameBoard.tsx` lines 225 and 317, bonus points from badges are added on top of the shot's point value: `result.points + Math.round(offBadge.totalBonus)`. A 3PT shot with a badge bonus of 1.5-2 rounds to 5 points. In basketball, a made shot should only score 2 or 3 (or 1 for INT). Badge bonuses should affect the dice rolls and stat values (influencing whether a shot is made), not add free points after the fact.
 
-Technical details
-- Likely database work:
-  - new market-assignment table with admin-write/authenticated-read RLS
-  - pack-odds migration to pack-specific records
-  - normalization of Domination reward references to real packs
-- Main files likely affected:
-  - `src/pages/admin/AdminGemMarket.tsx`
-  - `src/pages/GemMarket.tsx`
-  - `supabase/functions/buy-gem-card/index.ts`
-  - `src/pages/admin/AdminPacks.tsx`
-  - `src/pages/admin/AdminTeams.tsx`
-  - `supabase/functions/open-pack/index.ts`
-  - `src/components/cards/CardDetailDialog.tsx`
-  - `src/lib/evoProgressTracker.ts`
+3. **Badges need Runs-specific behavior**: The badge `totalBonus` (from reroll flat bonuses and bonus-type badges) is being treated as extra points. In Runs mode, these bonuses should instead be added to the offense roll value before the contest comparison (boosting the chance of making the shot), not to the final score.
 
-Why this plan
-- The current market bug exists because `gem_tier_id` is still doing two jobs.
-- Reward packs are currently blocked by a pack-type odds model and a Domination selector that saves the wrong value shape.
-- Compound evos are at least rendered incorrectly today, even if some progress is being stored underneath.
+## Changes
+
+### `src/components/game/RunGameBoard.tsx`
+- **Fix scoring**: Remove `+ Math.round(offBadge.totalBonus)` from point calculations on both player shoot (line 225) and CPU contest (line 317). Points scored = `result.points` only (2 or 3 for made shots).
+- **Apply badge bonus to the roll instead**: Pass `offBadge.totalBonus` into `resolveRunShotContest` so it's added to the offense roll value before comparing to defense. This makes badges influence shot success, not inflate scores.
+- **Add evo progress tracking**: After a game ends in `handleGameEnd`, build `CardGameResult` objects for each player card and call `trackEvoProgress(userId, userCards, won)`. This requires accumulating per-card stats during the game (points scored, stat values used).
+
+### `src/lib/gameEngine.ts`
+- Update `resolveRunShotContest` to accept optional `offenseBonus` and `defenseBonus` parameters that get added to the roll totals before comparison.
+
+### Stat Accumulation for Evo Tracking
+- Add state to `RunGameBoard` to accumulate per-card performance (points scored, stat roll values) across all possessions.
+- On game end, convert accumulated stats into `CardGameResult` format and pass to `trackEvoProgress`.
+
+| File | What |
+|------|------|
+| `src/components/game/RunGameBoard.tsx` | Fix scoring, add badge-to-roll, add evo tracking |
+| `src/lib/gameEngine.ts` | Add bonus params to `resolveRunShotContest` |
+
