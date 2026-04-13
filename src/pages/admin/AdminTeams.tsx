@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { RunRosterManager } from "@/components/admin/RunRosterManager";
 import { MilestoneEditor, type Milestone } from "@/components/admin/MilestoneEditor";
+import { RankRewardEditor } from "@/components/admin/RankRewardEditor";
 import { TEAM_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
 import { generateFromProfile, ARCHETYPE_LIST, type WizardProfile } from "@/lib/archetypeEngine";
 
@@ -391,6 +392,7 @@ export default function AdminTeams() {
           <TabsTrigger value="domination">Domination</TabsTrigger>
           <TabsTrigger value="teams">Teams</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
+          <TabsTrigger value="rank-rewards">Rank Rewards</TabsTrigger>
         </TabsList>
 
         <TabsContent value="domination" className="space-y-4">
@@ -508,6 +510,18 @@ export default function AdminTeams() {
             <CardContent>
               <DataTable data={runs} columns={runCols} isLoading={runsLoading} searchKeys={["name"]} onAdd={() => { setRunForm({ name: "", target_score: 21, team_id: null, milestones: [] }); setRunEditId(null); setRunDialog(true); }} addLabel="Add Run"
                 actions={(r: any) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setRunForm({ name: r.name, target_score: r.target_score || 21, team_id: r.team_id, milestones: r.milestones || [] }); setRunEditId(r.id); setRunDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setRunDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rank-rewards">
+          <Card>
+            <CardHeader>
+              <CardTitle>Rank Reward Ladder</CardTitle>
+              <CardDescription>Configure rewards for each of the 25 rank tiers across all Runs.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RankRewardEditor packs={packs} />
             </CardContent>
           </Card>
         </TabsContent>
