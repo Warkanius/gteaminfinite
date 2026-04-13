@@ -37,7 +37,7 @@ export function DiceInput({ diceCount, onSubmit }: DiceInputProps) {
       <div className="flex flex-wrap gap-1.5">
         {values.map((v, i) => (
           <div key={i} className="relative">
-            <Dice5 className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Dice5 className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               type="number"
               min={1}
@@ -49,7 +49,7 @@ export function DiceInput({ diceCount, onSubmit }: DiceInputProps) {
                 next[i] = e.target.value;
                 setter(next);
               }}
-              className="pl-6 text-center text-sm font-bold w-14"
+              className="pl-7 text-center text-base font-bold w-16"
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             />
           </div>

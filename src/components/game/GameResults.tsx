@@ -178,37 +178,37 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
 
 function BoxScore({ cards }: { cards: CardGameResult[] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs border-collapse">
+    <div className="overflow-x-auto rounded-lg border border-border/50 bg-card/50">
+      <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="border-b border-border">
-            <th className="text-left p-1.5 text-muted-foreground">Player</th>
+            <th className="text-left p-2 text-muted-foreground">Player</th>
             {STATS.map((s) => (
-              <th key={s} className="p-1.5 text-center text-muted-foreground">{STAT_LABELS[s]}</th>
+              <th key={s} className="p-2 text-center text-muted-foreground text-xs">{STAT_LABELS[s]}</th>
             ))}
-            <th className="p-1.5 text-center font-bold">PTS</th>
+            <th className="p-2 text-center font-bold">PTS</th>
           </tr>
         </thead>
         <tbody>
           {cards.map((c) => (
             <tr key={c.playerCardId} className="border-b border-border/50">
-              <td className="p-1.5 font-medium whitespace-nowrap">{c.cardName}</td>
+              <td className="p-2 font-medium whitespace-nowrap">{c.cardName}</td>
               {STATS.map((s) => (
-                <td key={s} className="p-1.5 text-center font-mono">
+                <td key={s} className="p-2 text-center font-mono">
                   {c.statValues[s]}
                 </td>
               ))}
-              <td className="p-1.5 text-center font-bold text-primary">{c.totalPoints}</td>
+              <td className="p-2 text-center font-bold text-primary">{c.totalPoints}</td>
             </tr>
           ))}
           <tr className="font-bold">
-            <td className="p-1.5">Total</td>
+            <td className="p-2">Total</td>
             {STATS.map((s) => (
-              <td key={s} className="p-1.5 text-center font-mono">
+              <td key={s} className="p-2 text-center font-mono">
                 {cards.reduce((sum, c) => sum + c.statValues[s], 0)}
               </td>
             ))}
-            <td className="p-1.5 text-center text-primary">
+            <td className="p-2 text-center text-primary">
               {cards.reduce((sum, c) => sum + c.totalPoints, 0)}
             </td>
           </tr>
