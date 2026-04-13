@@ -570,42 +570,47 @@ export function RunRosterManager({ runId }: Props) {
               </div>
 
               {pendingPlayers.map((p) => (
-                <div key={p.id} className="grid grid-cols-[1fr_repeat(6,48px)_auto] gap-1 px-2 py-1.5 items-center border-b border-border/30">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        className="font-medium text-xs truncate hover:underline hover:text-primary transition-colors"
-                        onClick={() => setQuickEditPlayerId(p.id)}
-                        title="Click to edit player"
-                      >
-                        {p.name}
-                      </button>
-                      <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary cursor-pointer shrink-0" onClick={() => setQuickEditPlayerId(p.id)} />
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">{p.rating}★</Badge>
+                <div key={p.id} className="space-y-1 px-2 py-2 border-b border-border/30">
+                  <div className="grid grid-cols-[1fr_repeat(6,48px)_auto] gap-1 items-center">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          className="font-medium text-xs truncate hover:underline hover:text-primary transition-colors"
+                          onClick={() => setQuickEditPlayerId(p.id)}
+                          title="Click to edit player"
+                        >
+                          {p.name}
+                        </button>
+                        <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary cursor-pointer shrink-0" onClick={() => setQuickEditPlayerId(p.id)} />
+                      </div>
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 flex-wrap">
+                        {p.position1 && <span>{p.position1}{p.position2 ? `/${p.position2}` : ""}</span>}
+                        {p.badges.length > 0 && p.badges.map((b, i) => (
+                          <Badge key={i} variant="outline" className={`text-[8px] px-1 py-0 ${tierColor[b.tier] || ""}`}>
+                            {b.name}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
-                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 flex-wrap">
-                      {p.position1 && <span>{p.position1}{p.position2 ? `/${p.position2}` : ""}</span>}
-                      {p.badges.length > 0 && p.badges.map((b, i) => (
-                        <Badge key={i} variant="outline" className={`text-[8px] px-1 py-0 ${tierColor[b.tier] || ""}`}>
-                          {b.name}
-                        </Badge>
-                      ))}
-                    </div>
+                    {(["run_stat_3pt", "run_stat_mid", "run_stat_fin", "run_stat_dnk", "run_stat_stl", "run_stat_blk"] as const).map((key) => (
+                      <Input
+                        key={key}
+                        type="number"
+                        min={0}
+                        max={200}
+                        value={(p as any)[key]}
+                        onChange={(e) => updatePendingStat(p.id, key, Number(e.target.value) || 0)}
+                        className="h-7 text-[11px] text-center font-mono px-1"
+                      />
+                    ))}
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setPendingPlayers((prev) => prev.filter((x) => x.id !== p.id))}>
+                      <X className="h-3 w-3 text-destructive" />
+                    </Button>
                   </div>
-                  {(["run_stat_3pt", "run_stat_mid", "run_stat_fin", "run_stat_dnk", "run_stat_stl", "run_stat_blk"] as const).map((key) => (
-                    <Input
-                      key={key}
-                      type="number"
-                      min={0}
-                      max={200}
-                      value={(p as any)[key]}
-                      onChange={(e) => updatePendingStat(p.id, key, Number(e.target.value) || 0)}
-                      className="h-7 text-[11px] text-center font-mono px-1"
-                    />
-                  ))}
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setPendingPlayers((prev) => prev.filter((x) => x.id !== p.id))}>
-                    <X className="h-3 w-3 text-destructive" />
-                  </Button>
+                  <div className="flex items-center gap-2 pl-1">
+                    <span className="text-[10px] text-muted-foreground w-12 shrink-0">{p.rating}★ OVR</span>
+                    <Slider min={0} max={6} step={1} value={[p.rating]} onValueChange={([v]) => updatePendingStarRating(p.id, v)} className="flex-1 max-w-[160px]" />
+                  </div>
                 </div>
               ))}
             </div>
