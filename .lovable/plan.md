@@ -1,32 +1,29 @@
 
 
-# Run Roster Manager — Split Layout + Quick Edit Visibility
+# Fix Card Grid "Soup" — Overlapping Cards in All Game Modes
 
 ## Problem
-The current RunRosterManager shows everything in a single mixed list — roster players, pending players, and the entire selection pool are interleaved. This makes it hard to see who's actually in the run vs. who's available. Quick edit buttons exist but are buried in the list.
+On mobile (430px viewport), the 3-column card grid causes player cards to overlap horizontally and vertically. The `PlayerCard` component has no fixed height/aspect-ratio, and the grid cells are too narrow at `grid-cols-3` with only 3px gaps, causing the cards to bleed into each other.
 
-## Plan
+## Root Cause
+- `PlayerCard` is a flex button with no explicit height — its height varies based on content (name length, badges, gem tier chips)
+- The grids use `grid-cols-3` with `gap-3` (12px) which is too tight for 140px cards on a ~400px screen
+- Cards have `hover:scale-105` which compounds the overlap
 
-### Restructure into Two Clear Sections
+## Fix
 
-**Section 1: "Current Roster" (top)**
-- Dedicated panel showing only players currently in `run_players` for this run
-- Each row shows: name (clickable for quick edit), pencil icon, position, rating, run stats summary, and a remove button
-- Shows the count prominently (e.g. "5 Players in Roster")
-- Clear All button stays here
+### 1. Add fixed aspect ratio to PlayerCard
+Add `aspect-[3/4]` and `w-full` to the card button so all cards are uniformly sized regardless of content. This prevents variable heights from breaking the grid.
 
-**Section 2: "Add Players" (bottom, collapsible)**
-- Contains the search bar, autofill templates, quick add, mass import
-- Player list here shows ONLY players NOT already in the roster
-- Checking a player adds them to pending review (existing flow)
-- Pending review section stays between the two as it is now
+### 2. Fix grid sizing across all lineup screens
+Replace `grid-cols-3` with `grid-cols-2 sm:grid-cols-3` on mobile for the collection grids, and increase gap to `gap-4`. Remove `max-w-[140px]` constraint that fights with the grid.
 
-### Quick Edit Integration
-- Both sections get clickable player names + pencil icons that open `PlayerQuickEdit`
-- Roster section names are more prominent (not buried in a checkbox list)
+### Files Changed
 
-### File Changed
 | File | Change |
 |---|---|
-| `src/components/admin/RunRosterManager.tsx` | Split single list into "Current Roster" panel + "Add Players" panel; roster section shows only rostered players with edit buttons; selection pool excludes rostered players |
+| `src/components/cards/PlayerCard.tsx` | Add `aspect-[3/4] w-full` to root button, ensure content is positioned at bottom via `justify-end` |
+| `src/components/game/LineupSelect.tsx` | Grid: `grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4`, remove `max-w-[140px]` |
+| `src/components/game/RunLineupSelect.tsx` | Same grid fix for the collection section |
+| `src/pages/Collection.tsx` | Same grid fix if it uses the same pattern |
 
