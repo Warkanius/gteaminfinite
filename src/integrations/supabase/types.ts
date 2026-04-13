@@ -1115,6 +1115,36 @@ export type Database = {
           },
         ]
       }
+      run_rank_rewards: {
+        Row: {
+          coin_reward: number
+          gem_reward: number
+          id: string
+          pack_reward: string
+          rank_name: string
+          sort_order: number
+          wins_required: number
+        }
+        Insert: {
+          coin_reward?: number
+          gem_reward?: number
+          id?: string
+          pack_reward?: string
+          rank_name: string
+          sort_order?: number
+          wins_required: number
+        }
+        Update: {
+          coin_reward?: number
+          gem_reward?: number
+          id?: string
+          pack_reward?: string
+          rank_name?: string
+          sort_order?: number
+          wins_required?: number
+        }
+        Relationships: []
+      }
       runs: {
         Row: {
           created_at: string
@@ -1420,6 +1450,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_rank_claims: {
+        Row: {
+          claimed_at: string
+          id: string
+          rank_name: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          id?: string
+          rank_name: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          id?: string
+          rank_name?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {

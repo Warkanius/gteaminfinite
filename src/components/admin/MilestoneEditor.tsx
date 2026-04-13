@@ -97,6 +97,7 @@ export function MilestoneEditor({ milestones, onChange, packs }: Props) {
                 <SelectContent>
                   <SelectItem value="none">No Pack</SelectItem>
                   <SelectItem value="random_standard">🎲 Random Pack</SelectItem>
+                  <SelectItem value="random_standard_box">📦 Random Box (10-pack)</SelectItem>
                   {packs.map(p => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name} ({p.pack_type})
