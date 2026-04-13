@@ -145,15 +145,17 @@ export function resolveRunShotContest(
   defenseStatValue: number,
   defRating: number,
   defDice: number[],
+  offenseBonus: number = 0,
+  defenseBonus: number = 0,
 ): ShotContestResult {
   const offMod = getRunModifier(offRating);
   const defMod = getRunModifier(defRating);
   const offTotal = offDice.reduce((a, b) => a + b, 0);
   const defTotal = defDice.reduce((a, b) => a + b, 0);
   
-  // Scale by stat value (normalized to ~60 as midpoint)
-  const offenseRoll = Math.round(offTotal * offMod * (offenseStatValue / 60));
-  const defenseRoll = Math.round(defTotal * defMod * (defenseStatValue / 60));
+  // Scale by stat value (normalized to ~60 as midpoint), then add badge bonus
+  const offenseRoll = Math.round(offTotal * offMod * (offenseStatValue / 60)) + Math.round(offenseBonus);
+  const defenseRoll = Math.round(defTotal * defMod * (defenseStatValue / 60)) + Math.round(defenseBonus);
   
   const made = offenseRoll > defenseRoll;
   const points = made ? getPointMultiplier(offenseStat) : 0;

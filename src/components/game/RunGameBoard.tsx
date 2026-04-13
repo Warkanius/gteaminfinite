@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { PlayerCard } from "@/components/cards/PlayerCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ActivationLogEntry } from "@/components/game/ActivationBanner";
 import {
-  SCORING_STATS, STAT_LABELS, type StatKey,
+  SCORING_STATS, STAT_LABELS, STATS, type StatKey,
   rollDice, getRunDiceCount, getDefenseStat, isInsideStat,
   resolveRunShotContest, pickRebounderSlot, resolveRunReboundRoll,
-  type ShotContestResult,
+  type ShotContestResult, type CardGameResult,
 } from "@/lib/gameEngine";
 import {
   resolveBadgeEffects, getTeammateBadges,
@@ -17,6 +17,7 @@ import {
   resolveTraitBoosts, resolveTeammateTraitBoosts, getTeammateTraits,
   computeCardAvgStat, type CardTrait, type TraitActivation,
 } from "@/lib/traitEngine";
+import { trackEvoProgress } from "@/lib/evoProgressTracker";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -39,6 +40,11 @@ interface LogEntry {
   activation?: (BadgeActivation | TraitActivation);
 }
 
+interface CardAccum {
+  points: number;
+  statValues: Record<StatKey, number>;
+}
+
 export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, onGameComplete }: Props) {
   const { user } = useAuth();
   const targetScore = run.target_score;
@@ -54,6 +60,20 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
   const [lastContest, setLastContest] = useState<ShotContestResult | null>(null);
   const [cpuShooterIdx, setCpuShooterIdx] = useState(0);
   const [cpuStat, setCpuStat] = useState<StatKey>("stat_3pt");
+
+  // Accumulate per-card stats for evo tracking (user cards only)
+  const cardAccumRef = useRef<Record<string, CardAccum>>({});
+
+  const accumulateCardStat = (cardId: string, stat: StatKey, rollValue: number, pointsScored: number) => {
+    const accum = cardAccumRef.current;
+    if (!accum[cardId]) {
+      const empty = {} as Record<StatKey, number>;
+      for (const s of STATS) empty[s] = 0;
+      accum[cardId] = { points: 0, statValues: empty };
+    }
+    accum[cardId].statValues[stat] += rollValue;
+    accum[cardId].points += pointsScored;
+  };
 
   const checkWinner = (pScore: number, cScore: number) => {
     if (pScore >= targetScore && pScore - cScore >= 2) return "player";
@@ -74,6 +94,22 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     });
 
     if (user) {
+      // Track evo progress for user cards
+      const accum = cardAccumRef.current;
+      const userCards: CardGameResult[] = playerLineup.map((card: any) => {
+        const a = accum[card.id];
+        const statValues = (a?.statValues ?? {}) as Record<StatKey, number>;
+        return {
+          playerCardId: card.id,
+          cardName: card.name,
+          side: "user" as const,
+          statResults: [],
+          totalPoints: a?.points ?? 0,
+          statValues,
+        };
+      });
+      await trackEvoProgress(user.id, userCards, winner === "player");
+
       const { data: userRun } = await supabase
         .from("user_runs")
         .select("id, current_wins, highest_wins")
@@ -126,6 +162,9 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
       msg: `🏀 Rebound: ${pRebounder.name} (${pRebRoll}) vs ${cRebounder.name} (${cRebRoll}) → ${rebWinner === "player" ? "Your ball" : "CPU ball"}`,
       type: "rebound",
     });
+
+    // Accumulate rebound stat for user rebounder
+    accumulateCardStat(pRebounder.id, "stat_reb", pRebRoll, 0);
 
     setPossession(rebWinner);
 
@@ -215,17 +254,22 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     const result = resolveRunShotContest(
       selectedStat, offBadge.adjustedStat, offRating, offBadge.finalDice,
       defStat, defBadge.adjustedStat, defRating, defBadge.finalDice,
+      offBadge.totalBonus, defBadge.totalBonus,
     );
     setLastContest(result);
 
     let newPScore = playerScore;
     let newCScore = cpuScore;
 
+    // Accumulate offensive stat for evo tracking
+    accumulateCardStat(shooter.id, selectedStat, result.offenseRoll, 0);
+
     if (result.made) {
-      const pts = result.points + Math.round(offBadge.totalBonus);
+      const pts = result.points;
       newPScore += pts;
       setPlayerScore(newPScore);
       addLog({ msg: `🏀 ${shooter.name} hits ${STAT_LABELS[selectedStat]}! +${pts}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-player" });
+      accumulateCardStat(shooter.id, selectedStat, 0, pts);
       
       const idx = Math.floor(Math.random() * 3);
       const stat = SCORING_STATS[Math.floor(Math.random() * SCORING_STATS.length)];
@@ -307,14 +351,18 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     const result = resolveRunShotContest(
       cpuStat, offBadge.adjustedStat, offRating, offBadge.finalDice,
       defStat, defBadge.adjustedStat, defRating, defBadge.finalDice,
+      offBadge.totalBonus, defBadge.totalBonus,
     );
     setLastContest(result);
 
     let newPScore = playerScore;
     let newCScore = cpuScore;
 
+    // Accumulate defensive stat for evo tracking (user defender)
+    accumulateCardStat(defender.id, defStat, result.defenseRoll, 0);
+
     if (result.made) {
-      const pts = result.points + Math.round(offBadge.totalBonus);
+      const pts = result.points;
       newCScore += pts;
       setCpuScore(newCScore);
       addLog({ msg: `🏀 CPU ${shooter.name} hits ${STAT_LABELS[cpuStat]}! +${pts}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-cpu" });
