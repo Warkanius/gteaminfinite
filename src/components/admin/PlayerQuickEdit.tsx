@@ -126,10 +126,10 @@ export function PlayerQuickEdit({ playerId, onClose }: PlayerQuickEditProps) {
             </div>
             <div className="space-y-1">
               <Label>Position 2</Label>
-              <Select value={form.position2} onValueChange={(v) => setForm(f => ({ ...f, position2: v }))}>
+              <Select value={form.position2 || "none"} onValueChange={(v) => setForm(f => ({ ...f, position2: v === "none" ? "" : v }))}>
                 <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {POSITIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                 </SelectContent>
               </Select>
