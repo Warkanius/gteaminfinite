@@ -222,6 +222,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
       .filter(Boolean) as { badge_id: string; tier: string }[];
 
     return {
+      name,
       stats: gen.stats,
       badges: mappedBadges,
       traits: [] as { trait_id: string; tier: string; target_stat: string | null }[],
