@@ -40,6 +40,7 @@ type BadgeRow = Tables<"badges">;
 type TraitRow = Tables<"signature_traits">;
 
 interface WizardResult {
+  name: string;
   stats: Record<string, number>;
   badges: { badge_id: string; tier: string }[];
   traits: { trait_id: string; tier: string; target_stat: string | null }[];
