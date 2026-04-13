@@ -682,7 +682,7 @@ export default function AdminTeams() {
               <Label>Star Rating</Label>
               <span className="font-bold">{quickAddStars}★</span>
             </div>
-            <Slider min={1} max={5} step={1} value={[quickAddStars]} onValueChange={([v]) => setQuickAddStars(v)} />
+            <Slider min={0} max={6} step={1} value={[quickAddStars]} onValueChange={([v]) => setQuickAddStars(v)} />
           </div>
         </div>
       </FormDialog>
@@ -804,7 +804,7 @@ export default function AdminTeams() {
               <Label>Star Rating</Label>
               <span className="font-bold">{teamQuickAddStars}★</span>
             </div>
-            <Slider min={1} max={5} step={1} value={[teamQuickAddStars]} onValueChange={([v]) => setTeamQuickAddStars(v)} />
+            <Slider min={0} max={6} step={1} value={[teamQuickAddStars]} onValueChange={([v]) => setTeamQuickAddStars(v)} />
           </div>
         </div>
       </FormDialog>
