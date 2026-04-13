@@ -9,7 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { Search, Users, Loader2, Upload, Check, X, Wand2, Plus, RefreshCw } from "lucide-react";
+import { Search, Users, Loader2, Upload, Check, X, Wand2, Plus, RefreshCw, Pencil } from "lucide-react";
+import { PlayerQuickEdit } from "@/components/admin/PlayerQuickEdit";
 import { toast } from "sonner";
 import { RUN_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
 import { generateFromProfile, ARCHETYPE_LIST, type WizardProfile } from "@/lib/archetypeEngine";
@@ -64,6 +65,7 @@ export function RunRosterManager({ runId }: Props) {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddArchetype, setQuickAddArchetype] = useState("");
   const [quickAddStars, setQuickAddStars] = useState(3);
+  const [quickEditPlayerId, setQuickEditPlayerId] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -537,7 +539,13 @@ export function RunRosterManager({ runId }: Props) {
                 <div key={p.id} className="grid grid-cols-[1fr_repeat(6,48px)_auto] gap-1 px-2 py-1.5 items-center border-b border-border/30">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-xs truncate">{p.name}</span>
+                      <button
+                        className="font-medium text-xs truncate hover:underline hover:text-primary transition-colors"
+                        onClick={() => setQuickEditPlayerId(p.id)}
+                        title="Click to edit player"
+                      >
+                        {p.name}
+                      </button>
                       <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">{p.rating}★</Badge>
                     </div>
                     <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 flex-wrap">
@@ -653,7 +661,13 @@ export function RunRosterManager({ runId }: Props) {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm truncate">{player.name}</span>
+                      <button
+                        className="font-medium text-sm truncate hover:underline hover:text-primary transition-colors"
+                        onClick={(e) => { e.preventDefault(); setQuickEditPlayerId(player.id); }}
+                        title="Click to edit player"
+                      >
+                        {player.name}
+                      </button>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{player.rating}★</Badge>
                       {inRoster && <Badge className="text-[9px] px-1 py-0 bg-primary/20 text-primary border-primary/30">Roster</Badge>}
                       {inPending && <Badge className="text-[9px] px-1 py-0 bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Pending</Badge>}
@@ -677,6 +691,8 @@ export function RunRosterManager({ runId }: Props) {
           </div>
         )}
       </ScrollArea>
+
+      <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} />
     </div>
   );
 }
