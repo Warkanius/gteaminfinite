@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -56,7 +56,7 @@ export default function AdminChallenges() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Challenges Manager</h1>
       <DataTable data={challenges} columns={columns} isLoading={isLoading} searchKeys={["name"]} onAdd={() => { setForm(empty()); setEditId(null); setDialogOpen(true); }} addLabel="Add Challenge"
-        actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setForm({ name: r.name, description: r.description ?? "", challenge_type: r.challenge_type, coin_reward: r.coin_reward, gem_reward: r.gem_reward, conditions: r.conditions }); setEditId(r.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+        actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setForm({ name: r.name, description: r.description ?? "", challenge_type: r.challenge_type, coin_reward: r.coin_reward, gem_reward: r.gem_reward, conditions: r.conditions }); setEditId(r.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setForm({ name: `${r.name} (Copy)`, description: r.description ?? "", challenge_type: r.challenge_type, coin_reward: r.coin_reward, gem_reward: r.gem_reward, conditions: r.conditions }); setEditId(null); setDialogOpen(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
 
       <FormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editId ? "Edit Challenge" : "Add Challenge"} onSave={() => saveMut.mutate()} saving={saveMut.isPending}>
         <div className="space-y-4">

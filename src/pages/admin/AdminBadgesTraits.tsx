@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -94,12 +94,12 @@ export default function AdminBadgesTraits() {
 
         <TabsContent value="badges">
           <DataTable data={badges} columns={badgeCols} isLoading={badgesLoading} searchKeys={["name"]} onAdd={() => { setBadgeForm({ name: "", abbreviation: "", effect_type: "reroll", affected_stat: null }); setBadgeEditId(null); setBadgeDialog(true); }} addLabel="Add Badge"
-            actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setBadgeForm(r); setBadgeEditId(r.id); setBadgeDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setBadgeDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+            actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setBadgeForm(r); setBadgeEditId(r.id); setBadgeDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { const { id, created_at, ...rest } = r as any; setBadgeForm({ ...rest, name: `${r.name} (Copy)` }); setBadgeEditId(null); setBadgeDialog(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setBadgeDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
         </TabsContent>
 
         <TabsContent value="traits">
           <DataTable data={traits} columns={traitCols} isLoading={traitsLoading} searchKeys={["name"]} onAdd={() => { setTraitForm({ name: "", abbreviation: "", condition_type: null }); setTraitEditId(null); setTraitDialog(true); }} addLabel="Add Trait"
-            actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTraitForm(r); setTraitEditId(r.id); setTraitDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTraitDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+            actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTraitForm(r); setTraitEditId(r.id); setTraitDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { const { id, created_at, ...rest } = r as any; setTraitForm({ ...rest, name: `${r.name} (Copy)` }); setTraitEditId(null); setTraitDialog(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTraitDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
         </TabsContent>
       </Tabs>
 

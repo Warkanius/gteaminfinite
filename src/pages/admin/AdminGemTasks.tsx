@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 type GemTask = {
@@ -95,6 +95,7 @@ export default function AdminGemTasks() {
         actions={(r) => (
           <div className="flex gap-1">
             <Button size="icon" variant="ghost" onClick={() => { setForm({ title: r.title, description: r.description ?? "", gem_reward: r.gem_reward, cooldown_hours: r.cooldown_hours, category: r.category, is_active: r.is_active }); setEditId(r.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setForm({ title: `${r.title} (Copy)`, description: r.description ?? "", gem_reward: r.gem_reward, cooldown_hours: r.cooldown_hours, category: r.category, is_active: r.is_active }); setEditId(null); setDialogOpen(true); }}><Copy className="h-4 w-4" /></Button>
             <Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
           </div>
         )}
