@@ -496,7 +496,7 @@ export default function AdminTeams() {
             </CardHeader>
             <CardContent>
               <DataTable data={teams} columns={teamCols} isLoading={teamsLoading} searchKeys={["name"]} onAdd={() => { setTeamForm({ name: "", category: "domination", unlock_cost: 0 }); setTeamEditId(null); setTeamDialog(true); }} addLabel="Add Team"
-                actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTeamForm({ name: r.name, category: r.category, unlock_cost: r.unlock_cost }); setTeamEditId(r.id); setTeamDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTeamDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+                actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTeamForm({ name: r.name, category: r.category, unlock_cost: r.unlock_cost }); setTeamEditId(r.id); setTeamDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setTeamForm({ name: `${r.name} (Copy)`, category: r.category, unlock_cost: r.unlock_cost }); setTeamEditId(null); setTeamDialog(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTeamDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -509,7 +509,7 @@ export default function AdminTeams() {
             </CardHeader>
             <CardContent>
               <DataTable data={runs} columns={runCols} isLoading={runsLoading} searchKeys={["name"]} onAdd={() => { setRunForm({ name: "", target_score: 21, team_id: null, milestones: [] }); setRunEditId(null); setRunDialog(true); }} addLabel="Add Run"
-                actions={(r: any) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setRunForm({ name: r.name, target_score: r.target_score || 21, team_id: r.team_id, milestones: r.milestones || [] }); setRunEditId(r.id); setRunDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setRunDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+                actions={(r: any) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setRunForm({ name: r.name, target_score: r.target_score || 21, team_id: r.team_id, milestones: r.milestones || [] }); setRunEditId(r.id); setRunDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setRunForm({ name: `${r.name} (Copy)`, target_score: r.target_score || 21, team_id: r.team_id, milestones: r.milestones || [] }); setRunEditId(null); setRunDialog(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setRunDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
             </CardContent>
           </Card>
         </TabsContent>
