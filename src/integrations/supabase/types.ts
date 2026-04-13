@@ -174,6 +174,7 @@ export type Database = {
       }
       challenges: {
         Row: {
+          card_reward_id: string | null
           challenge_type: string
           coin_reward: number
           conditions: Json | null
@@ -182,8 +183,22 @@ export type Database = {
           gem_reward: number
           id: string
           name: string
+          opponent_team_id: string | null
+          pack_reward: string | null
+          prerequisite_id: string | null
+          series_length: number | null
+          series_loss_coins: number
+          series_win_coins: number
+          sort_order: number
+          spotlight_group: string | null
+          stat_limit_player_id: string | null
+          stat_limit_stat: string | null
+          stat_limit_value: number | null
+          win_by_amount: number | null
+          win_condition: string
         }
         Insert: {
+          card_reward_id?: string | null
           challenge_type?: string
           coin_reward?: number
           conditions?: Json | null
@@ -192,8 +207,22 @@ export type Database = {
           gem_reward?: number
           id?: string
           name: string
+          opponent_team_id?: string | null
+          pack_reward?: string | null
+          prerequisite_id?: string | null
+          series_length?: number | null
+          series_loss_coins?: number
+          series_win_coins?: number
+          sort_order?: number
+          spotlight_group?: string | null
+          stat_limit_player_id?: string | null
+          stat_limit_stat?: string | null
+          stat_limit_value?: number | null
+          win_by_amount?: number | null
+          win_condition?: string
         }
         Update: {
+          card_reward_id?: string | null
           challenge_type?: string
           coin_reward?: number
           conditions?: Json | null
@@ -202,8 +231,50 @@ export type Database = {
           gem_reward?: number
           id?: string
           name?: string
+          opponent_team_id?: string | null
+          pack_reward?: string | null
+          prerequisite_id?: string | null
+          series_length?: number | null
+          series_loss_coins?: number
+          series_win_coins?: number
+          sort_order?: number
+          spotlight_group?: string | null
+          stat_limit_player_id?: string | null
+          stat_limit_stat?: string | null
+          stat_limit_value?: number | null
+          win_by_amount?: number | null
+          win_condition?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "challenges_card_reward_id_fkey"
+            columns: ["card_reward_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_opponent_team_id_fkey"
+            columns: ["opponent_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_prerequisite_id_fkey"
+            columns: ["prerequisite_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_stat_limit_player_id_fkey"
+            columns: ["stat_limit_player_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       domination_game_players: {
         Row: {
