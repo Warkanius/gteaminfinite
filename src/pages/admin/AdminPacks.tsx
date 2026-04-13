@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, X, Plus, Zap } from "lucide-react";
+import { Pencil, Trash2, X, Plus, Zap, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -247,6 +247,7 @@ export default function AdminPacks() {
             actions={(row) => (
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" onClick={() => { setForm({ name: row.name, pack_type: row.pack_type, cost: row.cost, ten_box_cost: row.ten_box_cost }); setEditId(row.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setForm({ name: `${row.name} (Copy)`, pack_type: row.pack_type, cost: row.cost, ten_box_cost: row.ten_box_cost }); setEditId(null); setDialogOpen(true); }}><Copy className="h-4 w-4" /></Button>
                 <Button size="sm" variant="outline" onClick={() => setDetailPack(row)}>Manage</Button>
                 <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>

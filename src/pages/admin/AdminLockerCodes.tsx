@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 type LockerCode = {
@@ -126,6 +126,7 @@ export default function AdminLockerCodes() {
         actions={(r) => (
           <div className="flex gap-1">
             <Button size="icon" variant="ghost" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setForm({ code: `${r.code}-COPY`, reward_type: r.reward_type, reward_value: r.reward_value, max_redemptions: r.max_redemptions, expires_at: r.expires_at ?? "" }); setEditId(null); setDialogOpen(true); }}><Copy className="h-4 w-4" /></Button>
             <Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
           </div>
         )}

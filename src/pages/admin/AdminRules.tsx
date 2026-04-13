@@ -8,7 +8,7 @@ import { JsonEditor } from "@/components/admin/JsonEditor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -52,7 +52,7 @@ export default function AdminRules() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Rules Configuration</h1>
       <DataTable data={rules} columns={columns} isLoading={isLoading} searchKeys={["key", "description"]} searchPlaceholder="Search rules…" onAdd={() => { setForm({ key: "", value: {}, description: "" }); setEditId(null); setDialogOpen(true); }} addLabel="Add Rule"
-        actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setForm({ key: r.key, value: r.value, description: r.description ?? "" }); setEditId(r.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+        actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setForm({ key: r.key, value: r.value, description: r.description ?? "" }); setEditId(r.id); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setForm({ key: `${r.key}_copy`, value: r.value, description: r.description ?? "" }); setEditId(null); setDialogOpen(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
 
       <FormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editId ? "Edit Rule" : "Add Rule"} onSave={() => saveMut.mutate()} saving={saveMut.isPending}>
         <div className="space-y-4">
