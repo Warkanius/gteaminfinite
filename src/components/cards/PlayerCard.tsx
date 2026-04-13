@@ -32,7 +32,7 @@ export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked
     <button
       onClick={onClick}
       className={cn(
-        "relative group flex flex-col items-center justify-end rounded-xl border border-border/50 p-3 pt-10 transition-transform hover:scale-105 cursor-pointer overflow-hidden",
+        "relative group flex flex-col items-center justify-end rounded-xl border border-border/50 p-3 pt-10 transition-transform hover:scale-105 cursor-pointer overflow-hidden w-full aspect-[3/4]",
         visuals.animation === "shimmer" && "animate-shimmer",
         visuals.animation === "pulse" && "animate-card-pulse",
         visuals.animation === "holographic" && "animate-holographic",
