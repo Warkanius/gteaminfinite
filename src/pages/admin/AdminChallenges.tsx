@@ -12,8 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, Trash2, Copy } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Pencil, Trash2, Copy, CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { COLOR_BUCKET_NAMES } from "@/lib/colorBucket";
 
 interface LineupRestrictions {
@@ -48,6 +53,8 @@ interface ChallengeForm {
   spotlight_group: string;
   sort_order: number;
   lineup_restrictions: LineupRestrictions;
+  is_repeatable: boolean;
+  expires_at: string;
 }
 
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
@@ -61,6 +68,7 @@ const empty = (): ChallengeForm => ({
   coin_reward: 0, gem_reward: 0, pack_reward: "", card_reward_id: "",
   prerequisite_id: "", spotlight_group: "", sort_order: 0,
   lineup_restrictions: {},
+  is_repeatable: true, expires_at: "",
 });
 
 const STATS = ["3pt", "mid", "fin", "dnk", "ast", "stl", "reb", "blk", "int"];
