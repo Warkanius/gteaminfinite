@@ -409,6 +409,16 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
         <DiceInput diceCount={maxDiceCount} onSubmit={handleManualSubmit} />
       )}
 
+      {/* Reroll choice */}
+      {phase === "reroll" && pendingReroll && (
+        <RerollChoice
+          statLabel={STAT_LABELS[currentStat]}
+          originalDice={pendingReroll.originalUserDice}
+          rerollDice={pendingReroll.rerollDice}
+          onChoose={handleRerollChoice}
+        />
+      )}
+
       {/* Result for this stat */}
       {phase === "result" && lastUserResult && lastCpuResult && (
         <div className="space-y-4">
