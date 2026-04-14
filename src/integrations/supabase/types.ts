@@ -172,6 +172,35 @@ export type Database = {
           },
         ]
       }
+      challenge_completions: {
+        Row: {
+          challenge_id: string
+          completed_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          completed_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          completed_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_completions_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       challenges: {
         Row: {
           card_reward_id: string | null
@@ -180,8 +209,10 @@ export type Database = {
           conditions: Json | null
           created_at: string
           description: string | null
+          expires_at: string | null
           gem_reward: number
           id: string
+          is_repeatable: boolean
           lineup_restrictions: Json | null
           name: string
           opponent_team_id: string | null
@@ -205,8 +236,10 @@ export type Database = {
           conditions?: Json | null
           created_at?: string
           description?: string | null
+          expires_at?: string | null
           gem_reward?: number
           id?: string
+          is_repeatable?: boolean
           lineup_restrictions?: Json | null
           name: string
           opponent_team_id?: string | null
@@ -230,8 +263,10 @@ export type Database = {
           conditions?: Json | null
           created_at?: string
           description?: string | null
+          expires_at?: string | null
           gem_reward?: number
           id?: string
+          is_repeatable?: boolean
           lineup_restrictions?: Json | null
           name?: string
           opponent_team_id?: string | null
