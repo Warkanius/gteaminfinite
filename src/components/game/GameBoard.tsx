@@ -5,6 +5,7 @@ import { PlayerCard } from "@/components/cards/PlayerCard";
 import { DiceInput } from "@/components/game/DiceInput";
 import { DiceRoll } from "@/components/game/DiceRoll";
 import { StatResult } from "@/components/game/StatResult";
+import { RerollChoice } from "@/components/game/RerollChoice";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
@@ -14,7 +15,8 @@ import {
   rollDice, type StatRollResult, type CardGameResult, type StatKey,
 } from "@/lib/gameEngine";
 import {
-  resolveBadgeEffects, getTeammateBadges, applyHiddenGem,
+  resolveBadgeEffects, applyRerolls, getPendingReroll, resolveRerollChoice,
+  getTeammateBadges, applyHiddenGem, applyDebuffs, applyFloorGeneralBoost, applyBonusBadge,
   type CardBadge, type BadgeActivation,
 } from "@/lib/badgeEngine";
 import {
@@ -56,8 +58,8 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
   const [currentUserStats, setCurrentUserStats] = useState<StatRollResult[]>([]);
   const [currentCpuStats, setCurrentCpuStats] = useState<StatRollResult[]>([]);
 
-  // Phase: roll dice or show result for this stat
-  const [phase, setPhase] = useState<"dice" | "result">("dice");
+  // Phase: roll dice, reroll choice, or show result for this stat
+  const [phase, setPhase] = useState<"dice" | "reroll" | "result">("dice");
   const [lastUserResult, setLastUserResult] = useState<StatRollResult | null>(null);
   const [lastCpuResult, setLastCpuResult] = useState<StatRollResult | null>(null);
 
@@ -68,6 +70,20 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
 
   // Badge + trait activations for display
   const [lastBadgeActivations, setLastBadgeActivations] = useState<(BadgeActivation | TraitActivation)[]>([]);
+
+  // Reroll state
+  const [pendingReroll, setPendingReroll] = useState<{
+    originalUserDice: number[];
+    rerollDice: number[];
+    badge: CardBadge;
+    bonusValue: number;
+    cpuDice: number[];
+    precomputedActivations: (BadgeActivation | TraitActivation)[];
+    userTraitAdjustedStat: number;
+    cpuTraitAdjustedStat: number;
+    cpuBadgeResult: any;
+    effectiveDifficulty: number | undefined;
+  } | null>(null);
 
   // Running score
   const userRunningScore = useMemo(
@@ -105,84 +121,61 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
   const cpuDiceCount = getStatDiceCount(cpuStatValue);
   const maxDiceCount = Math.max(userDiceCount, cpuDiceCount);
 
-  const handleDiceSubmit = useCallback((userDice: number[], cpuDice: number[]) => {
-    const allActivations: (BadgeActivation | TraitActivation)[] = [];
+  // Finalize the stat result given user's final dice (after reroll choice or direct)
+  const finalizeStatResult = useCallback((
+    userFinalDice: number[],
+    userRerollBonus: number,
+    userRerollActivations: BadgeActivation[],
+    cpuDice: number[],
+    preActivations: (BadgeActivation | TraitActivation)[],
+    userTraitAdjustedStat: number,
+    cpuTraitAdjustedStat: number,
+    cpuBadgeResult: any,
+    effectiveDifficulty: number | undefined,
+  ) => {
+    const allActivations = [...preActivations, ...userRerollActivations];
 
-    // --- User card: apply traits FIRST, then badges ---
-    const userTraits = traitMap[userCard.id] ?? [];
-    const userTeammateTraits = getTeammateTraits(traitMap, userLineup, userCard.id);
-    const userAvgStat = computeCardAvgStat(userCard);
-    
-    // Trait boosts on user
-    const userTraitResult = resolveTraitBoosts(
-      currentStat, userCard[currentStat], userTraits, gameContext, "5v5",
-      cpuCard.rating, userCard.rating, userAvgStat,
-    );
-    allActivations.push(...userTraitResult.activations);
-    // Teammate trait boosts on user
-    const userTeammateTraitResult = resolveTeammateTraitBoosts(
-      currentStat, userTraitResult.adjustedStat, userTeammateTraits, "5v5",
-    );
-    allActivations.push(...userTeammateTraitResult.activations);
-
-    // Apply badges to user roll (with trait-adjusted stat)
+    // User: apply debuffs, boosts, bonus badges (non-reroll) on the final dice
     const userBadges = badgeMap[userCard.id] ?? [];
     const cpuDefenderBadges = badgeMap[cpuCard.id] ?? [];
     const userTeammateBadges = getTeammateBadges(badgeMap, userLineup, userCard.id);
 
-    const userBadgeResult = resolveBadgeEffects(
-      currentStat, userTeammateTraitResult.adjustedStat, userDice,
-      userBadges, cpuDefenderBadges, userTeammateBadges, "5v5",
+    const { adjustedStat: userAfterDebuff, activations: debuffActs } = applyDebuffs(
+      currentStat, userTraitAdjustedStat, cpuDefenderBadges, userBadges, "5v5",
     );
-    allActivations.push(...userBadgeResult.activations);
+    allActivations.push(...debuffActs);
 
-    // --- CPU card: apply traits FIRST, then badges ---
-    const cpuTraits = traitMap[cpuCard.id] ?? [];
-    const cpuTeammateTraits = getTeammateTraits(traitMap, cpuLineup, cpuCard.id);
-    const cpuAvgStat = computeCardAvgStat(cpuCard);
-
-    const cpuTraitResult = resolveTraitBoosts(
-      currentStat, cpuCard[currentStat], cpuTraits, gameContext, "5v5",
-      userCard.rating, cpuCard.rating, cpuAvgStat,
+    const { adjustedStat: userAfterBoost, activations: boostActs } = applyFloorGeneralBoost(
+      currentStat, userAfterDebuff, userTeammateBadges, "5v5",
     );
-    allActivations.push(...cpuTraitResult.activations);
-    const cpuTeammateTraitResult = resolveTeammateTraitBoosts(
-      currentStat, cpuTraitResult.adjustedStat, cpuTeammateTraits, "5v5",
-    );
-    allActivations.push(...cpuTeammateTraitResult.activations);
+    allActivations.push(...boostActs);
 
-    const cpuBadges = badgeMap[cpuCard.id] ?? [];
-    const userDefenderBadges = badgeMap[userCard.id] ?? [];
-    const cpuTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, cpuCard.id);
+    const { bonusValue: userBonusBadgeVal, activations: bonusActs } = applyBonusBadge(currentStat, userBadges);
+    allActivations.push(...bonusActs);
 
-    const cpuBadgeResult = resolveBadgeEffects(
-      currentStat, cpuTeammateTraitResult.adjustedStat, cpuDice,
-      cpuBadges, userDefenderBadges, cpuTeammateBadges, "5v5",
-    );
-    allActivations.push(...cpuBadgeResult.activations);
+    const userTotalBonus = userRerollBonus + userBonusBadgeVal;
 
-    // Apply Hidden Gem to difficulty modifier before resolving stat roll
-    let effectiveDifficulty = difficultyStars;
+    // Hidden Gem
+    let finalEffectiveDifficulty = effectiveDifficulty;
     if (difficultyStars != null) {
       const userBadgesForGem = badgeMap[userCard.id] ?? [];
       const rawDiffMod = 1 + (userStars - difficultyStars) * 0.1;
       const { adjustedModifier, activation: gemAct } = applyHiddenGem(rawDiffMod, userBadgesForGem);
       if (gemAct) {
         allActivations.push(gemAct);
-        // Convert adjusted modifier back to effective difficulty stars for resolveStatRoll
-        // resolveStatRoll computes: 1 + (stars - diff) * 0.1 = adjustedModifier
-        // => diff = stars - (adjustedModifier - 1) / 0.1
-        effectiveDifficulty = userStars - (adjustedModifier - 1) / 0.1;
+        finalEffectiveDifficulty = userStars - (adjustedModifier - 1) / 0.1;
       }
     }
 
+    // CPU badge result activations
+    allActivations.push(...cpuBadgeResult.activations);
+
     const uResult = resolveStatRoll(
-      currentStat, userBadgeResult.adjustedStat, userStars,
-      userBadgeResult.finalDice, effectiveDifficulty,
+      currentStat, userAfterBoost, userStars,
+      userFinalDice, finalEffectiveDifficulty,
     );
-    // Add badge bonus to points
-    if (userBadgeResult.totalBonus > 0) {
-      uResult.rollResult += Math.round(userBadgeResult.totalBonus);
+    if (userTotalBonus > 0) {
+      uResult.rollResult += Math.round(userTotalBonus);
       uResult.points = uResult.rollResult * uResult.pointMultiplier;
     }
 
@@ -201,7 +194,84 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
     setCurrentCpuStats((prev) => [...prev, cResult]);
     setLastBadgeActivations(allActivations);
     setPhase("result");
-  }, [currentStat, userCard, cpuCard, userStars, cpuStars, difficultyStars, badgeMap, traitMap, gameContext, userLineup, cpuLineup]);
+  }, [currentStat, userCard, cpuCard, userStars, cpuStars, difficultyStars, badgeMap, userLineup]);
+
+  const handleRerollChoice = useCallback((keepReroll: boolean) => {
+    if (!pendingReroll) return;
+    const { originalUserDice, rerollDice, badge, bonusValue, cpuDice, precomputedActivations, userTraitAdjustedStat, cpuTraitAdjustedStat, cpuBadgeResult, effectiveDifficulty } = pendingReroll;
+    const { finalDice, bonusValue: rerollBonusVal, activations: rerollActs } = resolveRerollChoice(
+      originalUserDice, rerollDice, keepReroll, badge, bonusValue,
+    );
+    setPendingReroll(null);
+    finalizeStatResult(finalDice, rerollBonusVal, rerollActs, cpuDice, precomputedActivations, userTraitAdjustedStat, cpuTraitAdjustedStat, cpuBadgeResult, effectiveDifficulty);
+  }, [pendingReroll, finalizeStatResult]);
+
+  const handleDiceSubmit = useCallback((userDice: number[], cpuDice: number[]) => {
+    const preActivations: (BadgeActivation | TraitActivation)[] = [];
+
+    // --- User card: apply traits ---
+    const userTraits = traitMap[userCard.id] ?? [];
+    const userTeammateTraits = getTeammateTraits(traitMap, userLineup, userCard.id);
+    const userAvgStat = computeCardAvgStat(userCard);
+    
+    const userTraitResult = resolveTraitBoosts(
+      currentStat, userCard[currentStat], userTraits, gameContext, "5v5",
+      cpuCard.rating, userCard.rating, userAvgStat,
+    );
+    preActivations.push(...userTraitResult.activations);
+    const userTeammateTraitResult = resolveTeammateTraitBoosts(
+      currentStat, userTraitResult.adjustedStat, userTeammateTraits, "5v5",
+    );
+    preActivations.push(...userTeammateTraitResult.activations);
+
+    // --- CPU card: apply traits + full badge resolution (CPU auto-resolves) ---
+    const cpuTraits = traitMap[cpuCard.id] ?? [];
+    const cpuTeammateTraits = getTeammateTraits(traitMap, cpuLineup, cpuCard.id);
+    const cpuAvgStat = computeCardAvgStat(cpuCard);
+
+    const cpuTraitResult = resolveTraitBoosts(
+      currentStat, cpuCard[currentStat], cpuTraits, gameContext, "5v5",
+      userCard.rating, cpuCard.rating, cpuAvgStat,
+    );
+    preActivations.push(...cpuTraitResult.activations);
+    const cpuTeammateTraitResult = resolveTeammateTraitBoosts(
+      currentStat, cpuTraitResult.adjustedStat, cpuTeammateTraits, "5v5",
+    );
+    preActivations.push(...cpuTeammateTraitResult.activations);
+
+    const cpuBadges = badgeMap[cpuCard.id] ?? [];
+    const userDefenderBadges = badgeMap[userCard.id] ?? [];
+    const cpuTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, cpuCard.id);
+
+    const cpuBadgeResult = resolveBadgeEffects(
+      currentStat, cpuTeammateTraitResult.adjustedStat, cpuDice,
+      cpuBadges, userDefenderBadges, cpuTeammateBadges, "5v5",
+    );
+
+    // Check if user has a reroll badge for this stat
+    const userBadges = badgeMap[userCard.id] ?? [];
+    const rerollInfo = getPendingReroll(currentStat, userDice, userBadges);
+
+    if (rerollInfo) {
+      // Show reroll choice to user
+      setPendingReroll({
+        originalUserDice: userDice,
+        rerollDice: rerollInfo.rerollDice,
+        badge: rerollInfo.badge,
+        bonusValue: rerollInfo.bonusValue,
+        cpuDice,
+        precomputedActivations: preActivations,
+        userTraitAdjustedStat: userTeammateTraitResult.adjustedStat,
+        cpuTraitAdjustedStat: cpuTeammateTraitResult.adjustedStat,
+        cpuBadgeResult,
+        effectiveDifficulty: difficultyStars,
+      });
+      setPhase("reroll");
+    } else {
+      // No reroll — finalize directly
+      finalizeStatResult(userDice, 0, [], cpuDice, preActivations, userTeammateTraitResult.adjustedStat, cpuTeammateTraitResult.adjustedStat, cpuBadgeResult, difficultyStars);
+    }
+  }, [currentStat, userCard, cpuCard, userStars, cpuStars, difficultyStars, badgeMap, traitMap, gameContext, userLineup, cpuLineup, finalizeStatResult]);
 
   const handleAutoRoll = useCallback(() => {
     setRolling(true);
@@ -337,6 +407,16 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
       {/* Manual dice */}
       {phase === "dice" && useOwnDice && (
         <DiceInput diceCount={maxDiceCount} onSubmit={handleManualSubmit} />
+      )}
+
+      {/* Reroll choice */}
+      {phase === "reroll" && pendingReroll && (
+        <RerollChoice
+          statLabel={STAT_LABELS[currentStat]}
+          originalDice={pendingReroll.originalUserDice}
+          rerollDice={pendingReroll.rerollDice}
+          onChoose={handleRerollChoice}
+        />
       )}
 
       {/* Result for this stat */}

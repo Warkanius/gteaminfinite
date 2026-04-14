@@ -18,6 +18,9 @@ interface GameResultsProps {
   opponentName?: string;
   mode?: string;
   packReward?: string;
+  gemReward?: number;
+  cardRewardId?: string;
+  challengeId?: string;
 }
 
 interface PulledCard {
@@ -34,7 +37,7 @@ interface PulledCard {
   gem_tiers?: { color?: string; name?: string } | null;
 }
 
-export function GameResults({ result, onPlayAgain, coinReward, opponentName, mode = "5v5", packReward }: GameResultsProps) {
+export function GameResults({ result, onPlayAgain, coinReward, opponentName, mode = "5v5", packReward, gemReward, cardRewardId, challengeId }: GameResultsProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
@@ -104,6 +107,38 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
             console.error("Failed to open reward pack:", e);
           }
         }
+
+        // Grant gem reward
+        if (gemReward && gemReward > 0) {
+          const { data: gemProfile } = await supabase
+            .from("profiles")
+            .select("gems")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          if (gemProfile) {
+            await supabase
+              .from("profiles")
+              .update({ gems: gemProfile.gems + gemReward })
+              .eq("user_id", user.id);
+          }
+        }
+
+        // Grant card reward
+        if (cardRewardId) {
+          await supabase.from("user_collections").insert({
+            user_id: user.id,
+            player_card_id: cardRewardId,
+            source: "challenge_reward",
+          });
+        }
+
+        // Record challenge completion
+        if (challengeId) {
+          await supabase.from("challenge_completions").insert({
+            user_id: user.id,
+            challenge_id: challengeId,
+          }).maybeSingle(); // ignore duplicate
+        }
       }
 
       // Track evolution progress for user cards
@@ -116,7 +151,7 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
       setSaved(true);
     };
     save();
-  }, [user, saved, result, won, reward, mode, opponentName, packReward]);
+  }, [user, saved, result, won, reward, mode, opponentName, packReward, gemReward, cardRewardId, challengeId]);
 
   const isDomination = mode === "domination";
 

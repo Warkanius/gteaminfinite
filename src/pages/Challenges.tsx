@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trophy, Coins, Gem, Package, Target } from "lucide-react";
+import { Trophy, Coins, Gem, Package, Target, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function Challenges() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const { data: challenges = [], isLoading } = useQuery({
     queryKey: ["challenges"],
@@ -21,8 +23,31 @@ export default function Challenges() {
     },
   });
 
+  const { data: completions = [] } = useQuery({
+    queryKey: ["challenge-completions", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("challenge_completions")
+        .select("challenge_id")
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return data.map((c: any) => c.challenge_id);
+    },
+    enabled: !!user,
+  });
+
+  const completedSet = new Set(completions);
+
+  // Filter out expired challenges
+  const now = new Date().toISOString();
+  const activeChallenges = challenges.filter((c: any) => {
+    if (c.expires_at && c.expires_at < now) return false;
+    return true;
+  });
+
   // Group by spotlight_group
-  const spotlightGroups = challenges.reduce((acc: Record<string, any[]>, c: any) => {
+  const spotlightGroups = activeChallenges.reduce((acc: Record<string, any[]>, c: any) => {
     const group = c.spotlight_group || "Other";
     if (!acc[group]) acc[group] = [];
     acc[group].push(c);
@@ -69,7 +94,7 @@ export default function Challenges() {
     );
   }
 
-  if (challenges.length === 0) {
+  if (activeChallenges.length === 0) {
     return (
       <div className="space-y-6">
         <h1 className="font-display text-3xl font-bold">Challenges</h1>
@@ -95,19 +120,31 @@ export default function Challenges() {
           <div className="space-y-3">
             {(items as any[]).map((c: any) => {
               const restrictionTags = formatRestrictions(c.lineup_restrictions);
+              const isCompleted = completedSet.has(c.id);
+              const isLocked = isCompleted && !c.is_repeatable;
               return (
-                <Card key={c.id} className="border-border/50 bg-card">
+                <Card key={c.id} className={`border-border/50 bg-card ${isLocked ? "opacity-60" : ""}`}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-semibold">{c.name}</h3>
+                          {isCompleted && (
+                            <Badge variant="secondary" className="text-[10px] gap-1">
+                              <CheckCircle2 className="h-3 w-3" /> Completed
+                            </Badge>
+                          )}
                           <Badge variant="outline" className="text-[10px]">{c.challenge_type}</Badge>
                           {c.win_condition !== "win" && (
                             <Badge variant="secondary" className="text-[10px]">{c.win_condition}</Badge>
                           )}
                           {c.win_by_amount && (
                             <Badge variant="secondary" className="text-[10px]">Win by {c.win_by_amount}+</Badge>
+                          )}
+                          {c.expires_at && (
+                            <Badge variant="outline" className="text-[10px] border-destructive/30 text-destructive">
+                              Expires {new Date(c.expires_at).toLocaleDateString()}
+                            </Badge>
                           )}
                         </div>
                         {c.description && <p className="text-sm text-muted-foreground">{c.description}</p>}
@@ -148,8 +185,8 @@ export default function Challenges() {
                           )}
                         </div>
                       </div>
-                      <Button size="sm" className="shrink-0" onClick={() => handlePlay(c)}>
-                        Play
+                      <Button size="sm" className="shrink-0" onClick={() => handlePlay(c)} disabled={isLocked}>
+                        {isLocked ? "Done" : "Play"}
                       </Button>
                     </div>
                   </CardContent>

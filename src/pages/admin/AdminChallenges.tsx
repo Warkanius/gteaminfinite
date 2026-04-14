@@ -12,8 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, Trash2, Copy } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Pencil, Trash2, Copy, CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { COLOR_BUCKET_NAMES } from "@/lib/colorBucket";
 
 interface LineupRestrictions {
@@ -48,6 +53,8 @@ interface ChallengeForm {
   spotlight_group: string;
   sort_order: number;
   lineup_restrictions: LineupRestrictions;
+  is_repeatable: boolean;
+  expires_at: string;
 }
 
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
@@ -61,6 +68,7 @@ const empty = (): ChallengeForm => ({
   coin_reward: 0, gem_reward: 0, pack_reward: "", card_reward_id: "",
   prerequisite_id: "", spotlight_group: "", sort_order: 0,
   lineup_restrictions: {},
+  is_repeatable: true, expires_at: "",
 });
 
 const STATS = ["3pt", "mid", "fin", "dnk", "ast", "stl", "reb", "blk", "int"];
@@ -174,6 +182,8 @@ export default function AdminChallenges() {
         spotlight_group: form.challenge_type === "spotlight" ? (form.spotlight_group || null) : null,
         sort_order: form.sort_order,
         lineup_restrictions: hasRestrictions ? lr : null,
+        is_repeatable: form.is_repeatable,
+        expires_at: form.expires_at || null,
       };
       if (editId) {
         const { error } = await supabase.from("challenges").update(payload).eq("id", editId);
@@ -215,6 +225,8 @@ export default function AdminChallenges() {
       spotlight_group: r.spotlight_group ?? "",
       sort_order: r.sort_order ?? 0,
       lineup_restrictions: r.lineup_restrictions ?? {},
+      is_repeatable: r.is_repeatable ?? true,
+      expires_at: r.expires_at ?? "",
     });
     setEditId(r.id);
     setDialogOpen(true);
@@ -497,6 +509,38 @@ export default function AdminChallenges() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* ── Lifecycle ── */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Lifecycle</h3>
+            <div className="flex items-center gap-3">
+              <Switch checked={form.is_repeatable} onCheckedChange={v => f("is_repeatable", v)} />
+              <Label>Repeatable (can be played again after completion)</Label>
+            </div>
+            <div className="space-y-1">
+              <Label>Expires At</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !form.expires_at && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {form.expires_at ? format(new Date(form.expires_at), "PPP") : "No expiration"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={form.expires_at ? new Date(form.expires_at) : undefined}
+                    onSelect={(d) => f("expires_at", d ? d.toISOString() : "")}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+              {form.expires_at && (
+                <Button variant="ghost" size="sm" onClick={() => f("expires_at", "")} className="text-xs">Clear expiration</Button>
+              )}
+            </div>
           </div>
 
           {/* ── Prerequisite ── */}
