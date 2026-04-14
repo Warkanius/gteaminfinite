@@ -5,6 +5,7 @@ import { PlayerCard } from "@/components/cards/PlayerCard";
 import { DiceInput } from "@/components/game/DiceInput";
 import { DiceRoll } from "@/components/game/DiceRoll";
 import { StatResult } from "@/components/game/StatResult";
+import { RerollChoice } from "@/components/game/RerollChoice";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
@@ -14,7 +15,8 @@ import {
   rollDice, type StatRollResult, type CardGameResult, type StatKey,
 } from "@/lib/gameEngine";
 import {
-  resolveBadgeEffects, getTeammateBadges, applyHiddenGem,
+  resolveBadgeEffects, applyRerolls, getPendingReroll, resolveRerollChoice,
+  getTeammateBadges, applyHiddenGem, applyDebuffs, applyFloorGeneralBoost, applyBonusBadge,
   type CardBadge, type BadgeActivation,
 } from "@/lib/badgeEngine";
 import {
@@ -56,8 +58,8 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
   const [currentUserStats, setCurrentUserStats] = useState<StatRollResult[]>([]);
   const [currentCpuStats, setCurrentCpuStats] = useState<StatRollResult[]>([]);
 
-  // Phase: roll dice or show result for this stat
-  const [phase, setPhase] = useState<"dice" | "result">("dice");
+  // Phase: roll dice, reroll choice, or show result for this stat
+  const [phase, setPhase] = useState<"dice" | "reroll" | "result">("dice");
   const [lastUserResult, setLastUserResult] = useState<StatRollResult | null>(null);
   const [lastCpuResult, setLastCpuResult] = useState<StatRollResult | null>(null);
 
@@ -68,6 +70,20 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
 
   // Badge + trait activations for display
   const [lastBadgeActivations, setLastBadgeActivations] = useState<(BadgeActivation | TraitActivation)[]>([]);
+
+  // Reroll state
+  const [pendingReroll, setPendingReroll] = useState<{
+    originalUserDice: number[];
+    rerollDice: number[];
+    badge: CardBadge;
+    bonusValue: number;
+    cpuDice: number[];
+    precomputedActivations: (BadgeActivation | TraitActivation)[];
+    userTraitAdjustedStat: number;
+    cpuTraitAdjustedStat: number;
+    cpuBadgeResult: any;
+    effectiveDifficulty: number | undefined;
+  } | null>(null);
 
   // Running score
   const userRunningScore = useMemo(
