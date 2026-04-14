@@ -225,6 +225,8 @@ export default function AdminChallenges() {
       spotlight_group: r.spotlight_group ?? "",
       sort_order: r.sort_order ?? 0,
       lineup_restrictions: r.lineup_restrictions ?? {},
+      is_repeatable: r.is_repeatable ?? true,
+      expires_at: r.expires_at ?? "",
     });
     setEditId(r.id);
     setDialogOpen(true);
