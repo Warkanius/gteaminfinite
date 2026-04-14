@@ -1,62 +1,55 @@
 
 
-# Fix Challenge Play Button + Add Lineup Restrictions + Collection System
+# Fix Challenge Rewards, Add Non-Repeatable/Expiring Challenges & Interactive Rerolls
 
-## Three changes
+## Issues
 
-### 1. Play Button Does Nothing
-The `Challenges.tsx` Play button has no `onClick`. Need to navigate to `/play/match` passing challenge state (opponent team, win condition, rewards) similar to how Domination does it.
+1. **Pack reward not granted**: `Play.tsx` passes `packReward` to `GameResults`, and that flow works — but `gemReward`, `cardRewardId`, and `challengeId` are never passed, so gem and card rewards are silently lost. The user completed a challenge expecting a pack reward; need to verify the challenge's `pack_reward` value is a valid pack UUID.
 
-**File**: `src/pages/Challenges.tsx` — add `onClick={() => navigate("/play/match", { state: { challengeId: c.id, opponentTeamId: c.opponent_team_id, ... } })}` to each Play button.
+2. **No challenge completion tracking**: No mechanism to mark challenges as done or prevent replays.
 
-**File**: `src/pages/Play.tsx` — extend `DominationState` to include challenge fields. When `challengeId` is present, use the challenge's opponent team to load CPU lineup (same pattern as domination).
+3. **Rerolls always produce 6s**: The `applyRerolls` function (badgeEngine.ts) rolls N extra times and keeps the best. With 3 rerolls on 1d6, the expected max is ~5.24. This needs to become interactive — player sees both rolls and picks one.
 
-**File**: `src/components/game/LineupSelect.tsx` — accept `challengeTeamId` prop and load CPU from `team_players` for that team, plus support lineup restriction filters.
+## Plan
 
-### 2. Lineup Restrictions on Challenges
-Add a `lineup_restrictions` JSONB column to the `challenges` table. This stores an object like:
-```json
-{
-  "positions": ["PG", "SG"],
-  "badge_ids": ["uuid"],
-  "trait_ids": ["uuid"],
-  "gem_tier_ids": ["uuid"],
-  "team_ids": ["uuid"],
-  "collection_ids": ["uuid"],
-  "sub_collection_ids": ["uuid"],
-  "card_colors": ["red", "blue", "gold"]
-}
-```
-All fields optional. When present, only cards matching ALL specified restrictions are selectable.
+### Migration
+- Add `is_repeatable` (boolean, default true) and `expires_at` (timestamptz, nullable) to `challenges`
+- Create `challenge_completions` table (user_id, challenge_id, completed_at) with unique constraint and RLS
 
-**Migration**: `ALTER TABLE challenges ADD COLUMN lineup_restrictions jsonb DEFAULT NULL`
+### GameResults.tsx
+- Accept new props: `gemReward`, `cardRewardId`, `challengeId`
+- On win: grant gems (update `profiles.gems`), grant card reward (insert into `user_collections`), record `challenge_completions` entry
+- All rewards already handled: coins, packs — just add the missing gem/card/completion logic
 
-**Admin UI** (`AdminChallenges.tsx`): Add a "Lineup Restrictions" section with multi-select pickers for each restriction type. Card color uses broad color buckets derived from card_color_primary HSL hue (red, orange, gold, green, blue, purple, pink, white, black).
+### Play.tsx
+- Pass `gemReward`, `cardRewardId`, `challengeId` from `gameState` to `GameResults`
 
-**LineupSelect.tsx**: Filter user's collection based on active challenge restrictions before rendering.
+### Challenges.tsx
+- Fetch user's `challenge_completions`
+- Hide or show "Completed" badge on non-repeatable finished challenges, disable Play button
+- Filter out expired challenges (`expires_at < now()`)
 
-**Challenges.tsx**: Display restriction badges (e.g. "PG/SG only", "Gold cards only") on each challenge card.
+### AdminChallenges.tsx
+- Add `is_repeatable` toggle and `expires_at` date picker to the challenge form
 
-### 3. Collection & Sub-Collection System
-New tables:
-- `collections` — `id`, `name`, `description`, `created_at`
-- `sub_collections` — `id`, `collection_id`, `name`, `created_at`
+### Interactive Reroll System
+- **badgeEngine.ts**: Split `applyRerolls` into two functions:
+  - `getPendingReroll(stat, originalDice, badges)` — returns the reroll dice (or null if no reroll badge)
+  - `resolveRerollChoice(originalDice, rerollDice, keepReroll: boolean)` — returns chosen dice
+  - CPU auto-resolves by keeping best
+- **GameBoard.tsx**: Add a `"reroll"` phase between dice roll and result. After rolling, check if user card has a reroll badge for the current stat. If yes, show the `RerollChoice` component before proceeding.
+- **New: RerollChoice.tsx**: Shows original roll vs reroll side by side, player taps to pick one. Timer or simple two-button UI.
 
-Add `collection_id` and `sub_collection_id` columns to `player_cards` so cards can be assigned to a collection/sub-collection.
-
-**Admin page**: Create `AdminCollectionSets.tsx` (or extend existing admin) for managing collection and sub-collection definitions. In `AdminPlayers.tsx` (or PlayerQuickEdit), add dropdowns to assign a card to a collection/sub-collection.
-
-**Example**: Collection = "Kuroko no Basuke", Sub-collection = "Kaijo High". A card assigned to both can be filtered by either.
-
-## Files Changed
+### Files Changed
 
 | File | Change |
 |---|---|
-| Migration | Add `lineup_restrictions` to challenges; create `collections` + `sub_collections` tables; add `collection_id`/`sub_collection_id` to `player_cards` |
-| `src/pages/Challenges.tsx` | Wire Play button to navigate with challenge state; show restriction badges |
-| `src/pages/Play.tsx` | Extend state to accept challenge fields; pass to LineupSelect |
-| `src/components/game/LineupSelect.tsx` | Accept challenge restrictions; filter user cards; load CPU from challenge team |
-| `src/pages/admin/AdminChallenges.tsx` | Add lineup restrictions section with multi-selects |
-| `src/pages/admin/AdminPlayers.tsx` or `PlayerQuickEdit.tsx` | Add collection/sub-collection assignment dropdowns |
-| New: admin page for collections/sub-collections | CRUD for collection sets and sub-collections |
+| Migration | `is_repeatable`, `expires_at` on challenges; `challenge_completions` table |
+| `src/components/game/GameResults.tsx` | Accept + handle `gemReward`, `cardRewardId`, `challengeId` |
+| `src/pages/Play.tsx` | Pass missing props to GameResults |
+| `src/pages/Challenges.tsx` | Fetch completions, filter expired, disable completed non-repeatable |
+| `src/pages/admin/AdminChallenges.tsx` | Add repeatable toggle + expiration picker |
+| `src/lib/badgeEngine.ts` | Split reroll into interactive check + resolve functions |
+| `src/components/game/GameBoard.tsx` | Add reroll phase between dice and result |
+| New: `src/components/game/RerollChoice.tsx` | UI for comparing original vs reroll dice |
 
