@@ -511,6 +511,38 @@ export default function AdminChallenges() {
             )}
           </div>
 
+          {/* ── Lifecycle ── */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Lifecycle</h3>
+            <div className="flex items-center gap-3">
+              <Switch checked={form.is_repeatable} onCheckedChange={v => f("is_repeatable", v)} />
+              <Label>Repeatable (can be played again after completion)</Label>
+            </div>
+            <div className="space-y-1">
+              <Label>Expires At</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !form.expires_at && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {form.expires_at ? format(new Date(form.expires_at), "PPP") : "No expiration"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={form.expires_at ? new Date(form.expires_at) : undefined}
+                    onSelect={(d) => f("expires_at", d ? d.toISOString() : "")}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+              {form.expires_at && (
+                <Button variant="ghost" size="sm" onClick={() => f("expires_at", "")} className="text-xs">Clear expiration</Button>
+              )}
+            </div>
+          </div>
+
           {/* ── Prerequisite ── */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Prerequisite</h3>
