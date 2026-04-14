@@ -311,6 +311,7 @@ export default function Collection() {
         traits={selectedTraits}
         duplicateCount={selectedCardId ? (duplicateMap[selectedCardId] ?? 1) : 1}
         isLocked={selectedCardId ? !!lockMap[selectedCardId] : false}
+        canSell={selectedCardId ? (sourceMap[selectedCardId] === "standard_pack") : false}
         onToggleLock={() => toggleLockMutation.mutate()}
         onQuicksell={() => quicksellMutation.mutate()}
         quicksellLoading={quicksellMutation.isPending}
