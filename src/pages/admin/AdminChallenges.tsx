@@ -182,6 +182,8 @@ export default function AdminChallenges() {
         spotlight_group: form.challenge_type === "spotlight" ? (form.spotlight_group || null) : null,
         sort_order: form.sort_order,
         lineup_restrictions: hasRestrictions ? lr : null,
+        is_repeatable: form.is_repeatable,
+        expires_at: form.expires_at || null,
       };
       if (editId) {
         const { error } = await supabase.from("challenges").update(payload).eq("id", editId);
