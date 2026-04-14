@@ -38,6 +38,7 @@ const SocialFeed = lazy(() => import("@/pages/SocialFeed"));
 const FeedProfile = lazy(() => import("@/pages/FeedProfile"));
 const Install = lazy(() => import("@/pages/Install"));
 const AdminCollections = lazy(() => import("@/pages/admin/AdminCollections"));
+const AdminCollectionSets = lazy(() => import("@/pages/admin/AdminCollectionSets"));
 const Challenges = lazy(() => import("@/pages/Challenges"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
@@ -102,6 +103,7 @@ const App = () => (
             <Route path="/feed/profile/:handle" element={<ProtectedRoute><LazyLoad><FeedProfile /></LazyLoad></ProtectedRoute>} />
             <Route path="/install" element={<ProtectedRoute><LazyLoad><Install /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/collections" element={<ProtectedRoute><LazyLoad><AdminCollections /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/collection-sets" element={<ProtectedRoute><LazyLoad><AdminCollectionSets /></LazyLoad></ProtectedRoute>} />
             <Route path="/challenges" element={<ProtectedRoute><LazyLoad><Challenges /></LazyLoad></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

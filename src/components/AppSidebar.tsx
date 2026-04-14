@@ -65,6 +65,7 @@ const adminItems = [
   { title: "Starter Packs", url: "/admin/starter-packs", icon: Gift },
   { title: "Social Feed", url: "/admin/social-feed", icon: Newspaper },
   { title: "Collections", url: "/admin/collections", icon: FolderOpen },
+  { title: "Collection Sets", url: "/admin/collection-sets", icon: FolderOpen },
 ];
 
 export function AppSidebar() {

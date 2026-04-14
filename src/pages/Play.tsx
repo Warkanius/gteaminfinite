@@ -39,17 +39,28 @@ export interface FullGameResult {
 
 type Phase = "lineup" | "game" | "results";
 
-interface DominationState {
+interface GameState {
+  // Domination fields
   dominationGameId?: string;
+  difficultyStars?: number;
+  // Challenge fields
+  challengeId?: string;
+  challengeTeamId?: string;
+  lineupRestrictions?: any;
+  winCondition?: string;
+  winByAmount?: number;
+  seriesLength?: number;
+  gemReward?: number;
+  cardRewardId?: string;
+  // Shared
   opponentName?: string;
   coinReward?: number;
   packReward?: string;
-  difficultyStars?: number;
 }
 
 export default function Play() {
   const location = useLocation();
-  const domState = (location.state as DominationState) ?? {};
+  const gameState = (location.state as GameState) ?? {};
 
   const [phase, setPhase] = useState<Phase>("lineup");
   const [userLineup, setUserLineup] = useState<GameCard[]>([]);
@@ -58,7 +69,8 @@ export default function Play() {
   const [traitMap, setTraitMap] = useState<Record<string, CardTrait[]>>({});
   const [gameResult, setGameResult] = useState<FullGameResult | null>(null);
 
-  const isDomination = !!domState.dominationGameId;
+  const isDomination = !!gameState.dominationGameId;
+  const isChallenge = !!gameState.challengeId;
 
   const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[], badges: Record<string, CardBadge[]>, traits: Record<string, CardTrait[]>) => {
     setUserLineup(user);
@@ -82,15 +94,23 @@ export default function Play() {
     setGameResult(null);
   }, []);
 
+  const title = isDomination
+    ? `vs ${gameState.opponentName}`
+    : isChallenge
+    ? `Challenge: ${gameState.opponentName ?? "Challenge"}`
+    : "5v5 Dice Mode";
+
+  const mode = isDomination ? "domination" : isChallenge ? "challenge" : "5v5";
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold font-display">
-        {isDomination ? `vs ${domState.opponentName}` : "5v5 Dice Mode"}
-      </h1>
+      <h1 className="text-2xl font-bold font-display">{title}</h1>
       {phase === "lineup" && (
         <LineupSelect
           onConfirm={handleLineupConfirm}
-          dominationGameId={domState.dominationGameId}
+          dominationGameId={gameState.dominationGameId}
+          challengeTeamId={gameState.challengeTeamId}
+          lineupRestrictions={gameState.lineupRestrictions}
         />
       )}
       {phase === "game" && (
@@ -100,7 +120,7 @@ export default function Play() {
           badgeMap={badgeMap}
           traitMap={traitMap}
           onComplete={handleGameComplete}
-          difficultyStars={domState.difficultyStars}
+          difficultyStars={gameState.difficultyStars}
           gameContext={{ isHome: !isDomination, isAway: isDomination, isKeyGame: false }}
         />
       )}
@@ -108,10 +128,10 @@ export default function Play() {
         <GameResults
           result={gameResult}
           onPlayAgain={handlePlayAgain}
-          coinReward={domState.coinReward}
-          opponentName={domState.opponentName}
-          mode={isDomination ? "domination" : "5v5"}
-          packReward={domState.packReward}
+          coinReward={gameState.coinReward}
+          opponentName={gameState.opponentName}
+          mode={mode}
+          packReward={gameState.packReward}
         />
       )}
     </div>
