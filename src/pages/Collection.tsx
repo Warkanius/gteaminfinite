@@ -195,10 +195,7 @@ export default function Collection() {
       toast.success(`Sold for ${data.coin_value} coins! Balance: ${data.coins}`);
       queryClient.invalidateQueries({ queryKey: ["user-collection"] });
       queryClient.invalidateQueries({ queryKey: ["profile"] });
-      if (duplicateMap[selectedCardId!] <= 2) {
-        // Was last duplicate, close dialog
-        setSelectedCardId(null);
-      }
+      setSelectedCardId(null);
     },
     onError: (err: any) => {
       toast.error(err.message || "Quicksell failed");
