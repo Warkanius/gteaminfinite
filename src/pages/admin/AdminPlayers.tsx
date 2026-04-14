@@ -519,6 +519,28 @@ export default function AdminPlayers() {
               <Switch checked={form.is_collection_reward ?? false} onCheckedChange={(v) => setForm((f) => ({ ...f, is_collection_reward: v }))} />
               <Label>Collection Reward</Label>
             </div>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="space-y-1">
+                <Label>Collection</Label>
+                <Select value={(form as any).collection_id ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, collection_id: v || null, sub_collection_id: null }))}>
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">— None —</SelectItem>
+                    {collections.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Sub-Collection</Label>
+                <Select value={(form as any).sub_collection_id ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, sub_collection_id: v || null }))} disabled={!(form as any).collection_id}>
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">— None —</SelectItem>
+                    {subCollections.filter((sc) => sc.collection_id === (form as any).collection_id).map((sc) => <SelectItem key={sc.id} value={sc.id}>{sc.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
 
           {/* Stats */}
