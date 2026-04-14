@@ -32,7 +32,7 @@ export default function Auth() {
     setSubmitting(true);
     try {
       if (isSignUp) {
-        const { error } = await signUp(email, password, displayName);
+        const { error } = await signUp(email, password, displayName, teamName);
         if (error) throw error;
         toast.success("Account created! Check your email to verify.");
       } else {
