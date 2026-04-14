@@ -9,9 +9,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Pencil, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { COLOR_BUCKET_NAMES } from "@/lib/colorBucket";
+
+interface LineupRestrictions {
+  positions?: string[];
+  badge_ids?: string[];
+  trait_ids?: string[];
+  gem_tier_ids?: string[];
+  team_ids?: string[];
+  collection_ids?: string[];
+  sub_collection_ids?: string[];
+  card_colors?: string[];
+}
 
 interface ChallengeForm {
   name: string;
@@ -33,7 +47,10 @@ interface ChallengeForm {
   prerequisite_id: string;
   spotlight_group: string;
   sort_order: number;
+  lineup_restrictions: LineupRestrictions;
 }
+
+const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 
 const empty = (): ChallengeForm => ({
   name: "", description: "", challenge_type: "single",
@@ -43,6 +60,7 @@ const empty = (): ChallengeForm => ({
   stat_limit_player_id: "", stat_limit_stat: "", stat_limit_value: 0,
   coin_reward: 0, gem_reward: 0, pack_reward: "", card_reward_id: "",
   prerequisite_id: "", spotlight_group: "", sort_order: 0,
+  lineup_restrictions: {},
 });
 
 const STATS = ["3pt", "mid", "fin", "dnk", "ast", "stl", "reb", "blk", "int"];
@@ -90,8 +108,51 @@ export default function AdminChallenges() {
     },
   });
 
+  const { data: badges = [] } = useQuery({
+    queryKey: ["admin-badges-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("badges").select("id, name").order("name");
+      return data ?? [];
+    },
+  });
+
+  const { data: traits = [] } = useQuery({
+    queryKey: ["admin-traits-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("signature_traits").select("id, name").order("name");
+      return data ?? [];
+    },
+  });
+
+  const { data: gemTiers = [] } = useQuery({
+    queryKey: ["admin-gem-tiers-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("gem_tiers").select("id, name").order("sort_order");
+      return data ?? [];
+    },
+  });
+
+  const { data: collections = [] } = useQuery({
+    queryKey: ["admin-collections-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("collections").select("id, name").order("name");
+      return data ?? [];
+    },
+  });
+
+  const { data: subCollections = [] } = useQuery({
+    queryKey: ["admin-sub-collections-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("sub_collections").select("id, name, collection_id").order("name");
+      return data ?? [];
+    },
+  });
+
   const saveMut = useMutation({
     mutationFn: async () => {
+      const lr = form.lineup_restrictions;
+      const hasRestrictions = lr && Object.values(lr).some((v: any) => Array.isArray(v) && v.length > 0);
+
       const payload: any = {
         name: form.name,
         description: form.description || null,
@@ -112,6 +173,7 @@ export default function AdminChallenges() {
         prerequisite_id: form.prerequisite_id || null,
         spotlight_group: form.challenge_type === "spotlight" ? (form.spotlight_group || null) : null,
         sort_order: form.sort_order,
+        lineup_restrictions: hasRestrictions ? lr : null,
       };
       if (editId) {
         const { error } = await supabase.from("challenges").update(payload).eq("id", editId);
@@ -152,6 +214,7 @@ export default function AdminChallenges() {
       prerequisite_id: r.prerequisite_id ?? "",
       spotlight_group: r.spotlight_group ?? "",
       sort_order: r.sort_order ?? 0,
+      lineup_restrictions: r.lineup_restrictions ?? {},
     });
     setEditId(r.id);
     setDialogOpen(true);
@@ -186,6 +249,15 @@ export default function AdminChallenges() {
     return parts.join(" + ") || "—";
   };
 
+  // Helpers for multi-select restriction toggles
+  const toggleRestrictionItem = (field: keyof LineupRestrictions, id: string) => {
+    setForm(prev => {
+      const current = (prev.lineup_restrictions[field] as string[]) ?? [];
+      const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+      return { ...prev, lineup_restrictions: { ...prev.lineup_restrictions, [field]: next } };
+    });
+  };
+
   const columns: Column<any>[] = [
     { key: "name", label: "Name", sortable: true },
     { key: "challenge_type", label: "Type", sortable: true },
@@ -195,6 +267,8 @@ export default function AdminChallenges() {
   ];
 
   const f = (key: keyof ChallengeForm, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+
+  const lr = form.lineup_restrictions;
 
   return (
     <div className="space-y-6">
@@ -215,7 +289,7 @@ export default function AdminChallenges() {
         )}
       />
 
-      <FormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editId ? "Edit Challenge" : "Add Challenge"} onSave={() => saveMut.mutate()} saving={saveMut.isPending}>
+      <FormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editId ? "Edit Challenge" : "Add Challenge"} onSave={() => saveMut.mutate()} saving={saveMut.isPending} className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="space-y-5">
           {/* ── Basic Info ── */}
           <div className="space-y-3">
@@ -309,6 +383,118 @@ export default function AdminChallenges() {
                   </Select>
                 </div>
                 <div className="space-y-1"><Label>Max Value</Label><Input type="number" value={form.stat_limit_value} onChange={e => f("stat_limit_value", Number(e.target.value))} /></div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Lineup Restrictions ── */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Lineup Restrictions</h3>
+            <p className="text-xs text-muted-foreground">Optional. When set, players can only use cards that match ALL selected restrictions.</p>
+
+            {/* Positions */}
+            <div className="space-y-1">
+              <Label className="text-xs">Positions</Label>
+              <div className="flex gap-2 flex-wrap">
+                {POSITIONS.map(pos => (
+                  <label key={pos} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox checked={(lr.positions ?? []).includes(pos)} onCheckedChange={() => toggleRestrictionItem("positions", pos)} />
+                    {pos}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Gem Tiers */}
+            <div className="space-y-1">
+              <Label className="text-xs">Gem Tiers</Label>
+              <div className="flex gap-2 flex-wrap">
+                {gemTiers.map(gt => (
+                  <label key={gt.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox checked={(lr.gem_tier_ids ?? []).includes(gt.id)} onCheckedChange={() => toggleRestrictionItem("gem_tier_ids", gt.id)} />
+                    {gt.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Card Colors */}
+            <div className="space-y-1">
+              <Label className="text-xs">Card Colors</Label>
+              <div className="flex gap-2 flex-wrap">
+                {COLOR_BUCKET_NAMES.map(color => (
+                  <label key={color} className="flex items-center gap-1.5 text-xs cursor-pointer capitalize">
+                    <Checkbox checked={(lr.card_colors ?? []).includes(color)} onCheckedChange={() => toggleRestrictionItem("card_colors", color)} />
+                    {color}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Teams */}
+            <div className="space-y-1">
+              <Label className="text-xs">Teams</Label>
+              <div className="flex gap-2 flex-wrap max-h-24 overflow-y-auto">
+                {teams.map(t => (
+                  <label key={t.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox checked={(lr.team_ids ?? []).includes(t.id)} onCheckedChange={() => toggleRestrictionItem("team_ids", t.id)} />
+                    {t.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Badges */}
+            <div className="space-y-1">
+              <Label className="text-xs">Badges (has any of)</Label>
+              <div className="flex gap-2 flex-wrap max-h-24 overflow-y-auto">
+                {badges.map(b => (
+                  <label key={b.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox checked={(lr.badge_ids ?? []).includes(b.id)} onCheckedChange={() => toggleRestrictionItem("badge_ids", b.id)} />
+                    {b.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Traits */}
+            <div className="space-y-1">
+              <Label className="text-xs">Signature Traits (has any of)</Label>
+              <div className="flex gap-2 flex-wrap max-h-24 overflow-y-auto">
+                {traits.map(t => (
+                  <label key={t.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox checked={(lr.trait_ids ?? []).includes(t.id)} onCheckedChange={() => toggleRestrictionItem("trait_ids", t.id)} />
+                    {t.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Collections */}
+            <div className="space-y-1">
+              <Label className="text-xs">Collections</Label>
+              <div className="flex gap-2 flex-wrap">
+                {collections.map(c => (
+                  <label key={c.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox checked={(lr.collection_ids ?? []).includes(c.id)} onCheckedChange={() => toggleRestrictionItem("collection_ids", c.id)} />
+                    {c.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Sub-Collections */}
+            {subCollections.length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-xs">Sub-Collections</Label>
+                <div className="flex gap-2 flex-wrap">
+                  {subCollections.map(sc => (
+                    <label key={sc.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <Checkbox checked={(lr.sub_collection_ids ?? []).includes(sc.id)} onCheckedChange={() => toggleRestrictionItem("sub_collection_ids", sc.id)} />
+                      {sc.name}
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
           </div>
