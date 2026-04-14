@@ -98,6 +98,22 @@ export default function AdminPlayers() {
     },
   });
 
+  const { data: collections = [] } = useQuery({
+    queryKey: ["admin-collections"],
+    queryFn: async () => {
+      const { data } = await supabase.from("collections").select("*").order("name");
+      return data ?? [];
+    },
+  });
+
+  const { data: subCollections = [] } = useQuery({
+    queryKey: ["admin-sub-collections"],
+    queryFn: async () => {
+      const { data } = await supabase.from("sub_collections").select("*").order("name");
+      return data ?? [];
+    },
+  });
+
   const { data: allBadges = [] } = useQuery({
     queryKey: ["badges"],
     queryFn: async () => {
