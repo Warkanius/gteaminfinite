@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.97.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const DEFAULT_CONFIG = {
@@ -22,16 +23,33 @@ Deno.serve(async (req) => {
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+    // Check for force parameter
+    let force = false;
+    try {
+      const body = await req.json();
+      force = body?.force === true;
+    } catch {
+      // No body or invalid JSON — not forced
+    }
+
     // Load auction config
     const { data: configRow } = await supabase.from("rule_config").select("value").eq("key", "auction_config").single();
     const config = { ...DEFAULT_CONFIG, ...(configRow?.value as any ?? {}) };
 
-    // Expire old listings
-    await supabase
-      .from("auction_listings")
-      .update({ is_active: false })
-      .eq("is_active", true)
-      .lt("expires_at", new Date().toISOString());
+    if (force) {
+      // Deactivate ALL active listings when force-refreshing
+      await supabase
+        .from("auction_listings")
+        .update({ is_active: false })
+        .eq("is_active", true);
+    } else {
+      // Expire old listings only
+      await supabase
+        .from("auction_listings")
+        .update({ is_active: false })
+        .eq("is_active", true)
+        .lt("expires_at", new Date().toISOString());
+    }
 
     // Count current active listings
     const { count: activeCount } = await supabase
@@ -40,7 +58,10 @@ Deno.serve(async (req) => {
       .eq("is_active", true)
       .is("bought_by", null);
 
-    const toGenerate = Math.max(0, config.listings_per_refresh - (activeCount ?? 0));
+    const toGenerate = force
+      ? config.listings_per_refresh
+      : Math.max(0, config.listings_per_refresh - (activeCount ?? 0));
+
     if (toGenerate === 0) {
       return new Response(JSON.stringify({ message: "Market is full", active: activeCount }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -111,7 +132,7 @@ Deno.serve(async (req) => {
 
       // Use market_value as base price with 0.9x–1.5x variance
       const baseValue = card.market_value ?? 1500;
-      let price = Math.round(baseValue * (0.9 + Math.random() * 0.6)); // 0.9x to 1.5x
+      let price = Math.round(baseValue * (0.9 + Math.random() * 0.6));
       price = Math.max(config.min_price, Math.min(config.max_price, price));
 
       if (isSnipe) {
