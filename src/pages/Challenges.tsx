@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trophy, Lock, Coins, Gem, Package, Target } from "lucide-react";
+import { Trophy, Coins, Gem, Package, Target } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function Challenges() {
@@ -28,6 +28,38 @@ export default function Challenges() {
     acc[group].push(c);
     return acc;
   }, {});
+
+  const handlePlay = (c: any) => {
+    navigate("/play/match", {
+      state: {
+        challengeId: c.id,
+        challengeTeamId: c.opponent_team_id,
+        opponentName: (c.opponent_team as any)?.name ?? "Challenge",
+        coinReward: c.coin_reward,
+        gemReward: c.gem_reward,
+        packReward: c.pack_reward,
+        cardRewardId: c.card_reward_id,
+        winCondition: c.win_condition,
+        winByAmount: c.win_by_amount,
+        seriesLength: c.series_length,
+        lineupRestrictions: c.lineup_restrictions,
+      },
+    });
+  };
+
+  const formatRestrictions = (restrictions: any) => {
+    if (!restrictions) return null;
+    const tags: string[] = [];
+    if (restrictions.positions?.length) tags.push(`${restrictions.positions.join("/")} only`);
+    if (restrictions.card_colors?.length) tags.push(`${restrictions.card_colors.join(", ")} cards`);
+    if (restrictions.gem_tier_ids?.length) tags.push("Specific gem tiers");
+    if (restrictions.badge_ids?.length) tags.push("Requires badges");
+    if (restrictions.trait_ids?.length) tags.push("Requires traits");
+    if (restrictions.team_ids?.length) tags.push("Specific teams");
+    if (restrictions.collection_ids?.length) tags.push("Specific collection");
+    if (restrictions.sub_collection_ids?.length) tags.push("Specific sub-collection");
+    return tags;
+  };
 
   if (isLoading) {
     return (
@@ -61,56 +93,69 @@ export default function Challenges() {
         <div key={group} className="space-y-3">
           <h2 className="text-lg font-semibold text-primary">{group}</h2>
           <div className="space-y-3">
-            {(items as any[]).map((c: any) => (
-              <Card key={c.id} className="border-border/50 bg-card">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold">{c.name}</h3>
-                        <Badge variant="outline" className="text-[10px]">{c.challenge_type}</Badge>
-                        {c.win_condition !== "win" && (
-                          <Badge variant="secondary" className="text-[10px]">{c.win_condition}</Badge>
+            {(items as any[]).map((c: any) => {
+              const restrictionTags = formatRestrictions(c.lineup_restrictions);
+              return (
+                <Card key={c.id} className="border-border/50 bg-card">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold">{c.name}</h3>
+                          <Badge variant="outline" className="text-[10px]">{c.challenge_type}</Badge>
+                          {c.win_condition !== "win" && (
+                            <Badge variant="secondary" className="text-[10px]">{c.win_condition}</Badge>
+                          )}
+                          {c.win_by_amount && (
+                            <Badge variant="secondary" className="text-[10px]">Win by {c.win_by_amount}+</Badge>
+                          )}
+                        </div>
+                        {c.description && <p className="text-sm text-muted-foreground">{c.description}</p>}
+                        {(c.opponent_team as any)?.name && (
+                          <p className="text-xs text-muted-foreground">vs. {(c.opponent_team as any).name}</p>
                         )}
-                        {c.win_by_amount && (
-                          <Badge variant="secondary" className="text-[10px]">Win by {c.win_by_amount}+</Badge>
+                        {/* Restriction tags */}
+                        {restrictionTags && restrictionTags.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {restrictionTags.map((tag, i) => (
+                              <Badge key={i} variant="outline" className="text-[10px] border-primary/30 text-primary">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
+                        {/* Rewards */}
+                        <div className="flex items-center gap-3 pt-1 flex-wrap">
+                          {c.coin_reward > 0 && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Coins className="h-3 w-3" /> {c.coin_reward}
+                            </span>
+                          )}
+                          {c.gem_reward > 0 && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Gem className="h-3 w-3" /> {c.gem_reward}
+                            </span>
+                          )}
+                          {c.pack_reward && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Package className="h-3 w-3" /> Pack
+                            </span>
+                          )}
+                          {(c.card_reward as any)?.name && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Trophy className="h-3 w-3" /> {(c.card_reward as any).name}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      {c.description && <p className="text-sm text-muted-foreground">{c.description}</p>}
-                      {(c.opponent_team as any)?.name && (
-                        <p className="text-xs text-muted-foreground">vs. {(c.opponent_team as any).name}</p>
-                      )}
-                      {/* Rewards */}
-                      <div className="flex items-center gap-3 pt-1 flex-wrap">
-                        {c.coin_reward > 0 && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Coins className="h-3 w-3" /> {c.coin_reward}
-                          </span>
-                        )}
-                        {c.gem_reward > 0 && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Gem className="h-3 w-3" /> {c.gem_reward}
-                          </span>
-                        )}
-                        {c.pack_reward && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Package className="h-3 w-3" /> Pack
-                          </span>
-                        )}
-                        {(c.card_reward as any)?.name && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Trophy className="h-3 w-3" /> {(c.card_reward as any).name}
-                          </span>
-                        )}
-                      </div>
+                      <Button size="sm" className="shrink-0" onClick={() => handlePlay(c)}>
+                        Play
+                      </Button>
                     </div>
-                    <Button size="sm" className="shrink-0">
-                      Play
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       ))}

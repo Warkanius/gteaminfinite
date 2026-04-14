@@ -9,17 +9,32 @@ import { X } from "lucide-react";
 import type { GameCard } from "@/pages/Play";
 import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 import { fetchTraitsForCards, type CardTrait } from "@/lib/traitEngine";
+import { hslToColorBucket } from "@/lib/colorBucket";
+
+interface LineupRestrictions {
+  positions?: string[];
+  badge_ids?: string[];
+  trait_ids?: string[];
+  gem_tier_ids?: string[];
+  team_ids?: string[];
+  collection_ids?: string[];
+  sub_collection_ids?: string[];
+  card_colors?: string[];
+}
 
 interface LineupSelectProps {
   onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[], badgeMap: Record<string, CardBadge[]>, traitMap: Record<string, CardTrait[]>) => void;
   dominationGameId?: string;
+  challengeTeamId?: string;
+  lineupRestrictions?: LineupRestrictions;
 }
 
-export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps) {
+export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lineupRestrictions }: LineupSelectProps) {
   const { user } = useAuth();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const { data: collection = [], isLoading } = useQuery({
+  // Fetch user's full collection with player_cards joined
+  const { data: rawCollection = [], isLoading } = useQuery({
     queryKey: ["user-collection-play", user?.id],
     enabled: !!user,
     queryFn: async () => {
@@ -28,14 +43,14 @@ export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps)
         .select("*, player_cards(*)")
         .eq("user_id", user!.id);
       if (error) throw error;
-      return (data ?? []).map((c: any) => c.player_cards).filter(Boolean) as GameCard[];
+      return (data ?? []).map((c: any) => c.player_cards).filter(Boolean) as (GameCard & { team_id?: string; collection_id?: string; sub_collection_id?: string })[];
     },
   });
 
-  // For non-domination: fetch all cards for random CPU
+  // For non-domination, non-challenge: fetch all cards for random CPU
   const { data: allCards = [] } = useQuery({
     queryKey: ["all-player-cards"],
-    enabled: !dominationGameId,
+    enabled: !dominationGameId && !challengeTeamId,
     queryFn: async () => {
       const { data } = await supabase.from("player_cards").select("*");
       return (data ?? []) as GameCard[];
@@ -57,6 +72,40 @@ export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps)
     },
   });
 
+  // For challenge: fetch CPU from team_players
+  const { data: challengeCpuLineup } = useQuery({
+    queryKey: ["challenge-cpu-lineup", challengeTeamId],
+    enabled: !!challengeTeamId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("team_players")
+        .select("slot, player_cards(*)")
+        .eq("team_id", challengeTeamId!)
+        .order("slot");
+      if (error) throw error;
+      return (data ?? []).map((d: any) => d.player_cards).filter(Boolean) as GameCard[];
+    },
+  });
+
+  // Fetch badge/trait assignments for restriction filtering
+  const { data: cardBadgeAssignments = [] } = useQuery({
+    queryKey: ["card-badge-assignments-play"],
+    enabled: !!(lineupRestrictions?.badge_ids?.length),
+    queryFn: async () => {
+      const { data } = await supabase.from("player_card_badges").select("player_card_id, badge_id");
+      return data ?? [];
+    },
+  });
+
+  const { data: cardTraitAssignments = [] } = useQuery({
+    queryKey: ["card-trait-assignments-play"],
+    enabled: !!(lineupRestrictions?.trait_ids?.length),
+    queryFn: async () => {
+      const { data } = await supabase.from("player_card_traits").select("player_card_id, trait_id");
+      return data ?? [];
+    },
+  });
+
   const { data: gemTiers = [] } = useQuery({
     queryKey: ["gem-tiers"],
     queryFn: async () => {
@@ -66,6 +115,63 @@ export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps)
   });
 
   const gemTierMap = useMemo(() => Object.fromEntries(gemTiers.map((g) => [g.id, g])), [gemTiers]);
+
+  // Apply lineup restrictions to filter the collection
+  const collection = useMemo(() => {
+    if (!lineupRestrictions) return rawCollection;
+
+    return rawCollection.filter((card: any) => {
+      // Position filter
+      if (lineupRestrictions.positions?.length) {
+        const cardPositions = [card.position1, card.position2].filter(Boolean);
+        if (!cardPositions.some((p: string) => lineupRestrictions.positions!.includes(p))) return false;
+      }
+
+      // Gem tier filter
+      if (lineupRestrictions.gem_tier_ids?.length) {
+        if (!card.gem_tier_id || !lineupRestrictions.gem_tier_ids.includes(card.gem_tier_id)) return false;
+      }
+
+      // Team filter
+      if (lineupRestrictions.team_ids?.length) {
+        if (!card.team_id || !lineupRestrictions.team_ids.includes(card.team_id)) return false;
+      }
+
+      // Collection filter
+      if (lineupRestrictions.collection_ids?.length) {
+        if (!card.collection_id || !lineupRestrictions.collection_ids.includes(card.collection_id)) return false;
+      }
+
+      // Sub-collection filter
+      if (lineupRestrictions.sub_collection_ids?.length) {
+        if (!card.sub_collection_id || !lineupRestrictions.sub_collection_ids.includes(card.sub_collection_id)) return false;
+      }
+
+      // Card color filter
+      if (lineupRestrictions.card_colors?.length) {
+        const bucket = hslToColorBucket(card.card_color_primary);
+        if (!bucket || !lineupRestrictions.card_colors.includes(bucket)) return false;
+      }
+
+      // Badge filter
+      if (lineupRestrictions.badge_ids?.length) {
+        const cardBadgeIds = cardBadgeAssignments
+          .filter((a: any) => a.player_card_id === card.id)
+          .map((a: any) => a.badge_id);
+        if (!lineupRestrictions.badge_ids.some((bid: string) => cardBadgeIds.includes(bid))) return false;
+      }
+
+      // Trait filter
+      if (lineupRestrictions.trait_ids?.length) {
+        const cardTraitIds = cardTraitAssignments
+          .filter((a: any) => a.player_card_id === card.id)
+          .map((a: any) => a.trait_id);
+        if (!lineupRestrictions.trait_ids.some((tid: string) => cardTraitIds.includes(tid))) return false;
+      }
+
+      return true;
+    });
+  }, [rawCollection, lineupRestrictions, cardBadgeAssignments, cardTraitAssignments]);
 
   const toggleCard = (id: string) => {
     setSelectedIds((prev) => {
@@ -85,6 +191,8 @@ export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps)
     let cpuCards: GameCard[];
     if (dominationGameId && domCpuLineup && domCpuLineup.length > 0) {
       cpuCards = domCpuLineup;
+    } else if (challengeTeamId && challengeCpuLineup && challengeCpuLineup.length > 0) {
+      cpuCards = challengeCpuLineup;
     } else {
       // Random CPU
       const pool = allCards.filter((c) => !selectedIds.has(c.id));
@@ -111,7 +219,11 @@ export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps)
   if (collection.length < 5) {
     return (
       <div className="text-center py-20 text-muted-foreground">
-        <p className="text-lg">You need at least 5 cards to play</p>
+        <p className="text-lg">
+          {lineupRestrictions
+            ? "You don't have enough eligible cards for this challenge"
+            : "You need at least 5 cards to play"}
+        </p>
         <p className="text-sm mt-1">Open packs to build your collection!</p>
       </div>
     );
@@ -122,6 +234,16 @@ export function LineupSelect({ onConfirm, dominationGameId }: LineupSelectProps)
     return (
       <div className="text-center py-20 text-muted-foreground">
         <p className="text-lg">This opponent's roster hasn't been set up yet</p>
+        <p className="text-sm mt-1">Check back later!</p>
+      </div>
+    );
+  }
+
+  // Challenge team has no players
+  if (challengeTeamId && challengeCpuLineup && challengeCpuLineup.length === 0) {
+    return (
+      <div className="text-center py-20 text-muted-foreground">
+        <p className="text-lg">This challenge team hasn't been set up yet</p>
         <p className="text-sm mt-1">Check back later!</p>
       </div>
     );
