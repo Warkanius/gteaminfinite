@@ -1,6 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { LineupSelect } from "@/components/game/LineupSelect";
+import { MatchupArrange } from "@/components/game/MatchupArrange";
 import { GameBoard } from "@/components/game/GameBoard";
 import { GameResults } from "@/components/game/GameResults";
 import type { CardGameResult } from "@/lib/gameEngine";
@@ -37,13 +40,11 @@ export interface FullGameResult {
   cpuTotal: number;
 }
 
-type Phase = "lineup" | "game" | "results";
+type Phase = "lineup" | "matchup" | "game" | "results";
 
 interface GameState {
-  // Domination fields
   dominationGameId?: string;
   difficultyStars?: number;
-  // Challenge fields
   challengeId?: string;
   challengeTeamId?: string;
   lineupRestrictions?: any;
@@ -52,7 +53,6 @@ interface GameState {
   seriesLength?: number;
   gemReward?: number;
   cardRewardId?: string;
-  // Shared
   opponentName?: string;
   coinReward?: number;
   packReward?: string;
@@ -69,6 +69,15 @@ export default function Play() {
   const [traitMap, setTraitMap] = useState<Record<string, CardTrait[]>>({});
   const [gameResult, setGameResult] = useState<FullGameResult | null>(null);
 
+  const { data: gemTiers = [] } = useQuery({
+    queryKey: ["gem-tiers"],
+    queryFn: async () => {
+      const { data } = await supabase.from("gem_tiers").select("*").order("sort_order");
+      return data ?? [];
+    },
+  });
+  const gemTierMap = useMemo(() => Object.fromEntries(gemTiers.map((g) => [g.id, g])), [gemTiers]);
+
   const isDomination = !!gameState.dominationGameId;
   const isChallenge = !!gameState.challengeId;
 
@@ -77,6 +86,12 @@ export default function Play() {
     setCpuLineup(cpu);
     setBadgeMap(badges);
     setTraitMap(traits);
+    // Go to matchup arrangement phase
+    setPhase("matchup");
+  }, []);
+
+  const handleMatchupConfirm = useCallback((arrangedUser: GameCard[]) => {
+    setUserLineup(arrangedUser);
     setPhase("game");
   }, []);
 
@@ -111,6 +126,14 @@ export default function Play() {
           dominationGameId={gameState.dominationGameId}
           challengeTeamId={gameState.challengeTeamId}
           lineupRestrictions={gameState.lineupRestrictions}
+        />
+      )}
+      {phase === "matchup" && (
+        <MatchupArrange
+          userLineup={userLineup}
+          cpuLineup={cpuLineup}
+          gemTierMap={gemTierMap}
+          onConfirm={handleMatchupConfirm}
         />
       )}
       {phase === "game" && (

@@ -40,6 +40,7 @@ const Install = lazy(() => import("@/pages/Install"));
 const AdminCollections = lazy(() => import("@/pages/admin/AdminCollections"));
 const AdminCollectionSets = lazy(() => import("@/pages/admin/AdminCollectionSets"));
 const Challenges = lazy(() => import("@/pages/Challenges"));
+const Settings = lazy(() => import("@/pages/Settings"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
@@ -105,6 +106,7 @@ const App = () => (
             <Route path="/admin/collections" element={<ProtectedRoute><LazyLoad><AdminCollections /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/collection-sets" element={<ProtectedRoute><LazyLoad><AdminCollectionSets /></LazyLoad></ProtectedRoute>} />
             <Route path="/challenges" element={<ProtectedRoute><LazyLoad><Challenges /></LazyLoad></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><LazyLoad><Settings /></LazyLoad></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

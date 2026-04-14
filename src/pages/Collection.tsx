@@ -6,8 +6,9 @@ import { PlayerCard } from "@/components/cards/PlayerCard";
 import { CardDetailDialog } from "@/components/cards/CardDetailDialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { Search, Gift, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Collection() {
@@ -19,7 +20,7 @@ export default function Collection() {
   const [sortBy, setSortBy] = useState<"name" | "rating">("rating");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
-  // Fetch raw collection entries (includes is_locked, id per entry)
+  // Fetch raw collection entries
   const { data: rawCollection = [], isLoading } = useQuery({
     queryKey: ["user-collection", user?.id],
     enabled: !!user,
@@ -49,12 +50,37 @@ export default function Collection() {
     },
   });
 
-  // Total cards in the game
   const { data: totalCardsInGame = 0 } = useQuery({
     queryKey: ["total-player-cards"],
     queryFn: async () => {
       const { count } = await supabase.from("player_cards").select("id", { count: "exact", head: true });
       return count ?? 0;
+    },
+  });
+
+  // Fetch all collections and sub-collections for reward tracking
+  const { data: collections = [] } = useQuery({
+    queryKey: ["collections-all"],
+    queryFn: async () => {
+      const { data } = await supabase.from("collections").select("*").order("name");
+      return data ?? [];
+    },
+  });
+
+  const { data: subCollections = [] } = useQuery({
+    queryKey: ["sub-collections-all"],
+    queryFn: async () => {
+      const { data } = await supabase.from("sub_collections").select("*").order("name");
+      return data ?? [];
+    },
+  });
+
+  // Fetch ALL player cards to compute collection completion
+  const { data: allPlayerCards = [] } = useQuery({
+    queryKey: ["all-player-cards-collection"],
+    queryFn: async () => {
+      const { data } = await supabase.from("player_cards").select("id, name, collection_id, sub_collection_id, is_collection_reward");
+      return data ?? [];
     },
   });
 
@@ -66,16 +92,28 @@ export default function Collection() {
     const dupMap: Record<string, number> = {};
     const lockMap: Record<string, boolean> = {};
     const colIdMap: Record<string, string> = {};
-    const srcMap: Record<string, string> = {}; // player_card_id -> source of first entry
+    const srcMap: Record<string, string> = {};
 
     for (const entry of rawCollection as any[]) {
       const pcId = entry.player_card_id;
       dupMap[pcId] = (dupMap[pcId] || 0) + 1;
       if (entry.is_locked) lockMap[pcId] = true;
-      if (!colIdMap[pcId] || (colIdMap[pcId] && !entry.is_locked)) {
+
+      // For quicksell: prefer an unlocked standard_pack entry
+      const currentBest = colIdMap[pcId];
+      if (!currentBest) {
         colIdMap[pcId] = entry.id;
+      } else {
+        const currentEntry = (rawCollection as any[]).find((e: any) => e.id === currentBest);
+        const currentIsIdeal = currentEntry && !currentEntry.is_locked && currentEntry.source === "standard_pack";
+        const newIsIdeal = !entry.is_locked && entry.source === "standard_pack";
+        if (!currentIsIdeal && newIsIdeal) {
+          colIdMap[pcId] = entry.id;
+        } else if (!currentIsIdeal && !entry.is_locked && currentEntry?.is_locked) {
+          colIdMap[pcId] = entry.id;
+        }
       }
-      // Track source — prefer showing "standard_pack" if any copy is standard
+
       if (!srcMap[pcId]) srcMap[pcId] = entry.source ?? "standard_pack";
       if (entry.source === "standard_pack") srcMap[pcId] = "standard_pack";
     }
@@ -91,6 +129,99 @@ export default function Collection() {
 
     return { groupedCards: grouped, duplicateMap: dupMap, lockMap, collectionIdMap: colIdMap, sourceMap: srcMap };
   }, [rawCollection]);
+
+  // Set of player_card_ids user owns
+  const ownedCardIds = useMemo(() => new Set(groupedCards.map((c: any) => c.id)), [groupedCards]);
+
+  // Collection reward completion tracking
+  const collectionRewardStatus = useMemo(() => {
+    const results: {
+      id: string;
+      name: string;
+      type: "collection" | "sub_collection";
+      needed: number;
+      owned: number;
+      complete: boolean;
+      rewardCardId: string | null;
+      rewardCardName: string | null;
+      alreadyClaimed: boolean;
+    }[] = [];
+
+    // Check sub-collections first
+    for (const sc of subCollections as any[]) {
+      const cardsInSet = (allPlayerCards as any[]).filter(
+        (pc: any) => pc.sub_collection_id === sc.id && !pc.is_collection_reward
+      );
+      const rewardCard = (allPlayerCards as any[]).find(
+        (pc: any) => pc.sub_collection_id === sc.id && pc.is_collection_reward
+      );
+      if (cardsInSet.length === 0 || !rewardCard) continue;
+
+      const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
+      const complete = ownedCount >= cardsInSet.length;
+      const alreadyClaimed = ownedCardIds.has(rewardCard.id);
+
+      results.push({
+        id: sc.id,
+        name: sc.name,
+        type: "sub_collection",
+        needed: cardsInSet.length,
+        owned: ownedCount,
+        complete,
+        rewardCardId: rewardCard.id,
+        rewardCardName: rewardCard.name,
+        alreadyClaimed,
+      });
+    }
+
+    // Check collections (top-level, cards directly in collection without sub_collection)
+    for (const col of collections as any[]) {
+      const cardsInSet = (allPlayerCards as any[]).filter(
+        (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && !pc.is_collection_reward
+      );
+      const rewardCard = (allPlayerCards as any[]).find(
+        (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && pc.is_collection_reward
+      );
+      if (cardsInSet.length === 0 || !rewardCard) continue;
+
+      const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
+      const complete = ownedCount >= cardsInSet.length;
+      const alreadyClaimed = ownedCardIds.has(rewardCard.id);
+
+      results.push({
+        id: col.id,
+        name: col.name,
+        type: "collection",
+        needed: cardsInSet.length,
+        owned: ownedCount,
+        complete,
+        rewardCardId: rewardCard.id,
+        rewardCardName: rewardCard.name,
+        alreadyClaimed,
+      });
+    }
+
+    return results;
+  }, [collections, subCollections, allPlayerCards, ownedCardIds]);
+
+  // Claim collection reward
+  const claimRewardMutation = useMutation({
+    mutationFn: async (rewardCardId: string) => {
+      const { error } = await supabase.from("user_collections").insert({
+        user_id: user!.id,
+        player_card_id: rewardCardId,
+        source: "collection_reward",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Collection reward claimed!");
+      queryClient.invalidateQueries({ queryKey: ["user-collection"] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to claim reward");
+    },
+  });
 
   // Filter & sort
   const cards = useMemo(() => {
@@ -121,7 +252,6 @@ export default function Collection() {
     });
   }, [gemTiers, groupedCards]);
 
-  // All player cards count per tier (for progress)
   const { data: tierTotals = {} } = useQuery({
     queryKey: ["tier-totals"],
     queryFn: async () => {
@@ -134,7 +264,6 @@ export default function Collection() {
     },
   });
 
-  // Selected card detail
   const selectedCard = cards.find((c: any) => c.id === selectedCardId) ?? null;
 
   const { data: selectedBadges = [] } = useQuery({
@@ -161,13 +290,10 @@ export default function Collection() {
     },
   });
 
-  // Toggle lock
   const toggleLockMutation = useMutation({
     mutationFn: async () => {
       if (!selectedCardId) return;
-      // Find all collection entries for this card and toggle the first one's lock
       const entries = (rawCollection as any[]).filter((e) => e.player_card_id === selectedCardId);
-      // Toggle: if any is locked, unlock all; otherwise lock all
       const anyLocked = entries.some((e: any) => e.is_locked);
       for (const entry of entries) {
         await supabase.from("user_collections").update({ is_locked: !anyLocked }).eq("id", entry.id);
@@ -178,13 +304,11 @@ export default function Collection() {
     },
   });
 
-  // Quicksell
   const quicksellMutation = useMutation({
     mutationFn: async () => {
       if (!selectedCardId) throw new Error("No card selected");
       const collectionId = collectionIdMap[selectedCardId];
       if (!collectionId) throw new Error("No collection entry found");
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await supabase.functions.invoke("quicksell-card", {
         body: { collection_id: collectionId },
       });
@@ -205,6 +329,9 @@ export default function Collection() {
   const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
   const isHsl = (c: string) => /^\d+\s/.test(c);
   const bg = (c: string) => isHsl(c) ? `hsl(${c})` : c;
+
+  // Claimable rewards
+  const claimableRewards = collectionRewardStatus.filter((r) => r.complete && !r.alreadyClaimed);
 
   return (
     <div className="space-y-6">
@@ -242,6 +369,47 @@ export default function Collection() {
           })}
         </div>
       </div>
+
+      {/* Collection Rewards */}
+      {collectionRewardStatus.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Gift className="h-4 w-4 text-primary" /> Collection Rewards
+          </h2>
+          <div className="space-y-2">
+            {collectionRewardStatus.map((r) => {
+              const pct = r.needed > 0 ? Math.round((r.owned / r.needed) * 100) : 0;
+              return (
+                <div key={r.id} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between text-xs mb-0.5">
+                      <span className="font-medium truncate">{r.name}</span>
+                      <span className="text-muted-foreground">{r.owned}/{r.needed}</span>
+                    </div>
+                    <Progress value={pct} className="h-1.5" />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Reward: {r.rewardCardName}
+                    </p>
+                  </div>
+                  {r.alreadyClaimed ? (
+                    <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                  ) : r.complete ? (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="shrink-0 text-xs"
+                      onClick={() => claimRewardMutation.mutate(r.rewardCardId!)}
+                      disabled={claimRewardMutation.isPending}
+                    >
+                      Claim
+                    </Button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">

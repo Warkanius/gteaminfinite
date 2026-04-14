@@ -56,8 +56,9 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Card is locked" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Block selling reward cards (only standard_pack cards can be sold)
-    if (entry.source && entry.source !== "standard_pack") {
+    // Block selling non-standard cards (gem_market, collection_reward, starter_pack, locker_code)
+    const nonSellableSources = ["gem_market", "collection_reward", "starter_pack", "locker_code"];
+    if (entry.source && nonSellableSources.includes(entry.source)) {
       return new Response(JSON.stringify({ error: "Cannot sell reward cards" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

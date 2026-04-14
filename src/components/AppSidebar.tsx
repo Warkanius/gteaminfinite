@@ -48,6 +48,7 @@ const playerItems = [
   { title: "Earn Gems", url: "/gem-tasks", icon: Gem },
   { title: "Feed", url: "/feed", icon: Newspaper },
   { title: "Install App", url: "/install", icon: Download },
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 const adminItems = [

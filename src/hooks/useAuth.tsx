@@ -8,7 +8,7 @@ interface AuthContext {
   loading: boolean;
   role: "admin" | "player" | null;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, displayName?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, displayName?: string, teamName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -60,13 +60,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error as Error | null };
   }
 
-  async function signUp(email: string, password: string, displayName?: string) {
+  async function signUp(email: string, password: string, displayName?: string, teamName?: string) {
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: window.location.origin,
-        data: { display_name: displayName },
+        data: { display_name: displayName, team_name: teamName },
       },
     });
     return { error: error as Error | null };
