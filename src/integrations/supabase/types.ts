@@ -182,6 +182,7 @@ export type Database = {
           description: string | null
           gem_reward: number
           id: string
+          lineup_restrictions: Json | null
           name: string
           opponent_team_id: string | null
           pack_reward: string | null
@@ -206,6 +207,7 @@ export type Database = {
           description?: string | null
           gem_reward?: number
           id?: string
+          lineup_restrictions?: Json | null
           name: string
           opponent_team_id?: string | null
           pack_reward?: string | null
@@ -230,6 +232,7 @@ export type Database = {
           description?: string | null
           gem_reward?: number
           id?: string
+          lineup_restrictions?: Json | null
           name?: string
           opponent_team_id?: string | null
           pack_reward?: string | null
@@ -275,6 +278,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      collections: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       domination_game_players: {
         Row: {
@@ -908,6 +932,7 @@ export type Database = {
           card_color_primary: string | null
           card_color_secondary: string | null
           card_glow_color: string | null
+          collection_id: string | null
           created_at: string
           gem_name: string | null
           gem_tier_id: string | null
@@ -938,6 +963,7 @@ export type Database = {
           stat_mid: number
           stat_reb: number
           stat_stl: number
+          sub_collection_id: string | null
           team_id: string | null
           updated_at: string
         }
@@ -947,6 +973,7 @@ export type Database = {
           card_color_primary?: string | null
           card_color_secondary?: string | null
           card_glow_color?: string | null
+          collection_id?: string | null
           created_at?: string
           gem_name?: string | null
           gem_tier_id?: string | null
@@ -977,6 +1004,7 @@ export type Database = {
           stat_mid?: number
           stat_reb?: number
           stat_stl?: number
+          sub_collection_id?: string | null
           team_id?: string | null
           updated_at?: string
         }
@@ -986,6 +1014,7 @@ export type Database = {
           card_color_primary?: string | null
           card_color_secondary?: string | null
           card_glow_color?: string | null
+          collection_id?: string | null
           created_at?: string
           gem_name?: string | null
           gem_tier_id?: string | null
@@ -1016,15 +1045,30 @@ export type Database = {
           stat_mid?: number
           stat_reb?: number
           stat_stl?: number
+          sub_collection_id?: string | null
           team_id?: string | null
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "player_cards_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "player_cards_gem_tier_id_fkey"
             columns: ["gem_tier_id"]
             isOneToOne: false
             referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_cards_sub_collection_id_fkey"
+            columns: ["sub_collection_id"]
+            isOneToOne: false
+            referencedRelation: "sub_collections"
             referencedColumns: ["id"]
           },
           {
@@ -1373,6 +1417,35 @@ export type Database = {
             columns: ["player_card_id"]
             isOneToOne: false
             referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sub_collections: {
+        Row: {
+          collection_id: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          collection_id: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          collection_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_collections_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
             referencedColumns: ["id"]
           },
         ]
