@@ -145,7 +145,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
               {isLocked ? "Locked" : "Unlocked"}
             </Button>
           )}
-          {onQuicksell && (
+          {onQuicksell && canSell && (
             <Button
               variant="outline"
               size="sm"
@@ -154,7 +154,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
               className="gap-1.5 ml-auto"
             >
               <Coins className="w-3.5 h-3.5" />
-              {quicksellLoading ? "Selling…" : canQuicksell ? "Quicksell" : isLocked ? "Locked" : "Last copy"}
+              {quicksellLoading ? "Selling…" : canQuicksell ? "Quicksell" : "Locked"}
             </Button>
           )}
         </div>
