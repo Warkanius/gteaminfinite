@@ -89,7 +89,9 @@ export default function AdminAuction() {
 
   const refreshMut = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("refresh-auction");
+      const { data, error } = await supabase.functions.invoke("refresh-auction", {
+        body: { force: true },
+      });
       if (error) throw error;
       return data;
     },
