@@ -87,6 +87,7 @@ Deno.serve(async (req) => {
     const collectionInserts = cardIds.map((cid) => ({
       user_id: user.id,
       player_card_id: cid,
+      source: "starter_pack",
     }));
 
     const { error: insertErr } = await admin

@@ -37,6 +37,7 @@ interface CardDetailProps {
   traits?: { name: string; tier: string; target_stat?: string | null }[];
   duplicateCount?: number;
   isLocked?: boolean;
+  canSell?: boolean;
   onToggleLock?: () => void;
   onQuicksell?: () => void;
   quicksellLoading?: boolean;
@@ -55,7 +56,7 @@ const TIER_COLORS: Record<string, string> = {
   actolytrene: "hsl(var(--gem-actolytrene))",
 };
 
-export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [], duplicateCount = 1, isLocked, onToggleLock, onQuicksell, quicksellLoading }: CardDetailProps) {
+export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [], duplicateCount = 1, isLocked, canSell = false, onToggleLock, onQuicksell, quicksellLoading }: CardDetailProps) {
   const { user } = useAuth();
 
   if (!card) return null;
@@ -66,7 +67,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
   const positions = [card.position1, card.position2].filter(Boolean).join(" / ");
 
   const statKeys = Object.keys(STAT_LABELS) as (keyof typeof STAT_LABELS)[];
-  const canQuicksell = duplicateCount > 1 && !isLocked;
+  const canQuicksell = canSell && !isLocked;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -144,7 +145,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
               {isLocked ? "Locked" : "Unlocked"}
             </Button>
           )}
-          {onQuicksell && (
+          {onQuicksell && canSell && (
             <Button
               variant="outline"
               size="sm"
@@ -153,7 +154,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
               className="gap-1.5 ml-auto"
             >
               <Coins className="w-3.5 h-3.5" />
-              {quicksellLoading ? "Selling…" : canQuicksell ? "Quicksell" : isLocked ? "Locked" : "Last copy"}
+              {quicksellLoading ? "Selling…" : canQuicksell ? "Quicksell" : "Locked"}
             </Button>
           )}
         </div>

@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     } else if (rewardType === "card") {
       const cardId = rewardValue.player_card_id;
       if (cardId) {
-        await supabaseAdmin.from("user_collections").insert({ user_id: user.id, player_card_id: cardId });
+        await supabaseAdmin.from("user_collections").insert({ user_id: user.id, player_card_id: cardId, source: "locker_code" });
         const { data: card } = await supabaseAdmin.from("player_cards").select("name").eq("id", cardId).single();
         rewardDescription = `Card: ${card?.name ?? "Unknown"}`;
       }

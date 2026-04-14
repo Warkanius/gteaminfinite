@@ -1447,6 +1447,7 @@ export type Database = {
           id: string
           is_locked: boolean
           player_card_id: string
+          source: string
           user_id: string
         }
         Insert: {
@@ -1455,6 +1456,7 @@ export type Database = {
           id?: string
           is_locked?: boolean
           player_card_id: string
+          source?: string
           user_id: string
         }
         Update: {
@@ -1463,6 +1465,7 @@ export type Database = {
           id?: string
           is_locked?: boolean
           player_card_id?: string
+          source?: string
           user_id?: string
         }
         Relationships: [

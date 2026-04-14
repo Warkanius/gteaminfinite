@@ -1,5 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.97.0";
-import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.97.0/cors";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
 
 const DEFAULT_QUICKSELL_VALUE = 50;
 
@@ -51,15 +56,9 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Card is locked" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Check duplicates (must own more than 1 of this player_card_id)
-    const { count } = await supabaseAdmin
-      .from("user_collections")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("player_card_id", entry.player_card_id);
-
-    if (!count || count <= 1) {
-      return new Response(JSON.stringify({ error: "Cannot quicksell last copy" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Block selling reward cards (only standard_pack cards can be sold)
+    if (entry.source && entry.source !== "standard_pack") {
+      return new Response(JSON.stringify({ error: "Cannot sell reward cards" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Get quicksell value from rule_config

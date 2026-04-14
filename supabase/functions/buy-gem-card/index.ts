@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
     // Add to collection
     const { error: insertErr } = await admin
       .from("user_collections")
-      .insert({ user_id: user.id, player_card_id });
+      .insert({ user_id: user.id, player_card_id, source: "gem_market" });
 
     if (insertErr) {
       // Rollback gems

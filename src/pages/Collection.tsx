@@ -62,23 +62,24 @@ export default function Collection() {
   const teamMap = useMemo(() => Object.fromEntries(teams.map((t: any) => [t.id, t.name])), [teams]);
 
   // Group by player_card_id for duplicate counting & dedup display
-  const { groupedCards, duplicateMap, lockMap, collectionIdMap } = useMemo(() => {
+  const { groupedCards, duplicateMap, lockMap, collectionIdMap, sourceMap } = useMemo(() => {
     const dupMap: Record<string, number> = {};
     const lockMap: Record<string, boolean> = {};
-    const colIdMap: Record<string, string> = {}; // player_card_id -> first unlocked collection entry id (for quicksell)
+    const colIdMap: Record<string, string> = {};
+    const srcMap: Record<string, string> = {}; // player_card_id -> source of first entry
 
     for (const entry of rawCollection as any[]) {
       const pcId = entry.player_card_id;
       dupMap[pcId] = (dupMap[pcId] || 0) + 1;
-      // Track if ANY copy is locked
       if (entry.is_locked) lockMap[pcId] = true;
-      // Store a quicksellable collection id (prefer unlocked)
       if (!colIdMap[pcId] || (colIdMap[pcId] && !entry.is_locked)) {
         colIdMap[pcId] = entry.id;
       }
+      // Track source — prefer showing "standard_pack" if any copy is standard
+      if (!srcMap[pcId]) srcMap[pcId] = entry.source ?? "standard_pack";
+      if (entry.source === "standard_pack") srcMap[pcId] = "standard_pack";
     }
 
-    // Deduplicate: one card per player_card_id
     const seen = new Set<string>();
     const grouped: any[] = [];
     for (const entry of rawCollection as any[]) {
@@ -88,7 +89,7 @@ export default function Collection() {
       grouped.push(pc);
     }
 
-    return { groupedCards: grouped, duplicateMap: dupMap, lockMap, collectionIdMap: colIdMap };
+    return { groupedCards: grouped, duplicateMap: dupMap, lockMap, collectionIdMap: colIdMap, sourceMap: srcMap };
   }, [rawCollection]);
 
   // Filter & sort
@@ -194,10 +195,7 @@ export default function Collection() {
       toast.success(`Sold for ${data.coin_value} coins! Balance: ${data.coins}`);
       queryClient.invalidateQueries({ queryKey: ["user-collection"] });
       queryClient.invalidateQueries({ queryKey: ["profile"] });
-      if (duplicateMap[selectedCardId!] <= 2) {
-        // Was last duplicate, close dialog
-        setSelectedCardId(null);
-      }
+      setSelectedCardId(null);
     },
     onError: (err: any) => {
       toast.error(err.message || "Quicksell failed");
@@ -310,6 +308,7 @@ export default function Collection() {
         traits={selectedTraits}
         duplicateCount={selectedCardId ? (duplicateMap[selectedCardId] ?? 1) : 1}
         isLocked={selectedCardId ? !!lockMap[selectedCardId] : false}
+        canSell={selectedCardId ? (sourceMap[selectedCardId] === "standard_pack") : false}
         onToggleLock={() => toggleLockMutation.mutate()}
         onQuicksell={() => quicksellMutation.mutate()}
         quicksellLoading={quicksellMutation.isPending}
