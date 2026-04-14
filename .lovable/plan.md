@@ -1,55 +1,77 @@
 
 
-# Fix Challenge Rewards, Add Non-Repeatable/Expiring Challenges & Interactive Rerolls
+# Multiple Fixes & Features
 
-## Issues
+## Summary of Issues & Requests
 
-1. **Pack reward not granted**: `Play.tsx` passes `packReward` to `GameResults`, and that flow works — but `gemReward`, `cardRewardId`, and `challengeId` are never passed, so gem and card rewards are silently lost. The user completed a challenge expecting a pack reward; need to verify the challenge's `pack_reward` value is a valid pack UUID.
+1. **Clean up empty/duplicate packs** — Several packs have 0 players or duplicate names
+2. **Reuse domination packs by team name** — When creating domination games, reuse existing packs instead of creating new ones
+3. **5v5 matchup selection** — Let players arrange their lineup order against CPU to defend star players
+4. **Team name + username customization** — Players should be able to set a personal username and team name
+5. **Sensations pack card not sellable** — Need to investigate; the quicksell function only allows `source: "standard_pack"` cards, and challenge-won pack cards should be opened with that source
+6. **Collection rewards not working** — The `is_collection_reward` flag exists on player_cards but there's zero logic to grant these rewards when a user completes a collection/sub-collection
 
-2. **No challenge completion tracking**: No mechanism to mark challenges as done or prevent replays.
+## Findings
 
-3. **Rerolls always produce 6s**: The `applyRerolls` function (badgeEngine.ts) rolls N extra times and keeps the best. With 3 rerolls on 1d6, the expected max is ~5.24. This needs to become interactive — player sees both rolls and picks one.
+**Empty/duplicate packs to clean up (will confirm with you first):**
+- `RTTR Pack` (0 players)
+- `Team Dom Pack` (0 players)
+- `Tortuga Starter Pack` (0 players)
+- `Tree Hill Starter Pack` (0 players)
+- 2x `vs Kaijo Reward` duplicates (same name, both have 5 players)
+- 2x `vs Shutoku Reward` duplicates (same name, both have 5 players)
+
+**Quicksell issue:** The `open-pack` edge function sets source to `"standard_pack"` when called directly (not from inventory). All your Sensations cards show `source: standard_pack` in the database, so they should be sellable. The issue may be that the `collectionIdMap` picks a locked entry's ID. Need to verify the quicksell flow in the UI more carefully — could also be a UI-side filtering issue.
+
+**Collection rewards:** The `is_collection_reward` flag on `player_cards` and the badge in `CardDetailDialog` exist, but there is absolutely no logic anywhere that: (a) checks if a user has completed a collection/sub-collection, (b) grants the reward card automatically. This needs to be built from scratch.
 
 ## Plan
 
-### Migration
-- Add `is_repeatable` (boolean, default true) and `expires_at` (timestamptz, nullable) to `challenges`
-- Create `challenge_completions` table (user_id, challenge_id, completed_at) with unique constraint and RLS
+### 1. Pack Cleanup (data operation — will confirm list with you)
+- Delete the 4 empty packs and deduplicate the Kaijo/Shutoku reward packs
+- Check which domination games reference the duplicates and reassign to the surviving pack
 
-### GameResults.tsx
-- Accept new props: `gemReward`, `cardRewardId`, `challengeId`
-- On win: grant gems (update `profiles.gems`), grant card reward (insert into `user_collections`), record `challenge_completions` entry
-- All rewards already handled: coins, packs — just add the missing gem/card/completion logic
+### 2. Domination Pack Reuse
+- In `AdminTeams.tsx` or wherever domination games are created, when assigning a pack reward, search for existing packs matching `vs {teamName} Reward` before creating a new one
 
-### Play.tsx
-- Pass `gemReward`, `cardRewardId`, `challengeId` from `gameState` to `GameResults`
+### 3. 5v5 Matchup Selection
+- After lineup selection, show a new **matchup arrangement** screen where the user sees CPU lineup and can drag/reorder their 5 players to set head-to-head pairings
+- Each slot shows the opponent card so users can strategically defend against star players
+- Update `GameBoard` to respect this user-defined order rather than the default index order
 
-### Challenges.tsx
-- Fetch user's `challenge_completions`
-- Hide or show "Completed" badge on non-repeatable finished challenges, disable Play button
-- Filter out expired challenges (`expires_at < now()`)
+### 4. Team Name + Username
+- **Migration:** Add `team_name` column to `profiles` table
+- **Auth page:** Add optional team name field during signup
+- **Settings/Profile page:** Allow editing display name and team name (currently no settings page exists — add a simple one)
+- Show team name in game results and dashboard
 
-### AdminChallenges.tsx
-- Add `is_repeatable` toggle and `expires_at` date picker to the challenge form
+### 5. Fix Quicksell for Standard Pack Cards
+- Debug the exact quicksell flow — the data shows source is correct, so the issue is likely in the UI (locked card selected, or wrong collection entry ID passed)
+- Ensure `collectionIdMap` always picks an unlocked, sellable entry first
+- Add better error messaging in the quicksell UI
 
-### Interactive Reroll System
-- **badgeEngine.ts**: Split `applyRerolls` into two functions:
-  - `getPendingReroll(stat, originalDice, badges)` — returns the reroll dice (or null if no reroll badge)
-  - `resolveRerollChoice(originalDice, rerollDice, keepReroll: boolean)` — returns chosen dice
-  - CPU auto-resolves by keeping best
-- **GameBoard.tsx**: Add a `"reroll"` phase between dice roll and result. After rolling, check if user card has a reroll badge for the current stat. If yes, show the `RerollChoice` component before proceeding.
-- **New: RerollChoice.tsx**: Shows original roll vs reroll side by side, player taps to pick one. Timer or simple two-button UI.
+### 6. Collection Rewards System
+- **Collection page:** For each collection/sub-collection, check if the user owns all non-reward cards in that group
+- When complete, show a "Claim Reward" button
+- On claim, insert the reward card into `user_collections` with `source: "collection_reward"`
+- The reward card must have `collection_id` (or `sub_collection_id`) set so the system knows which collection it belongs to
+- Show completion progress per collection/sub-collection in the Collection page
+- Reward cards marked `is_collection_reward` should be excluded from the "cards needed" count
 
 ### Files Changed
 
 | File | Change |
 |---|---|
-| Migration | `is_repeatable`, `expires_at` on challenges; `challenge_completions` table |
-| `src/components/game/GameResults.tsx` | Accept + handle `gemReward`, `cardRewardId`, `challengeId` |
-| `src/pages/Play.tsx` | Pass missing props to GameResults |
-| `src/pages/Challenges.tsx` | Fetch completions, filter expired, disable completed non-repeatable |
-| `src/pages/admin/AdminChallenges.tsx` | Add repeatable toggle + expiration picker |
-| `src/lib/badgeEngine.ts` | Split reroll into interactive check + resolve functions |
-| `src/components/game/GameBoard.tsx` | Add reroll phase between dice and result |
-| New: `src/components/game/RerollChoice.tsx` | UI for comparing original vs reroll dice |
+| Migration | Add `team_name` to `profiles` |
+| Data cleanup | Delete empty/duplicate packs (after confirmation) |
+| `src/pages/Collection.tsx` | Add collection completion tracking + reward claiming |
+| `src/pages/Auth.tsx` | Add team name field to signup |
+| New: `src/pages/Settings.tsx` | Profile editing (display name, team name) |
+| `src/App.tsx` | Add Settings route |
+| `src/components/AppSidebar.tsx` | Add Settings nav link |
+| `src/components/game/LineupSelect.tsx` | Add matchup arrangement step |
+| `src/components/game/GameBoard.tsx` | Respect user-defined matchup order |
+| `src/components/game/GameResults.tsx` | Show team name |
+| `src/pages/admin/AdminPlayers.tsx` | Ensure collection_id is set on reward cards |
+| Quicksell fix | Fix `collectionIdMap` logic + edge function source check |
 
