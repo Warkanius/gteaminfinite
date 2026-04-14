@@ -1,47 +1,62 @@
 
 
-# Prevent Selling Reward Cards
+# Fix Challenge Play Button + Add Lineup Restrictions + Collection System
 
-## Problem
-Currently any unlocked card can be quicksold. The user wants to block selling for:
-- **Collection reward** cards (`is_collection_reward = true`)
-- **Gem Market** purchases
-- **Locker code reward pack** pulls
+## Three changes
 
-## Approach
-Add a `source` column to `user_collections` to track how each card was acquired. Only cards with `source = 'standard_pack'` can be quicksold.
+### 1. Play Button Does Nothing
+The `Challenges.tsx` Play button has no `onClick`. Need to navigate to `/play/match` passing challenge state (opponent team, win condition, rewards) similar to how Domination does it.
 
-### 1. Database Migration
-Add column `source text NOT NULL DEFAULT 'standard_pack'` to `user_collections`. Possible values: `standard_pack`, `gem_market`, `collection_reward`, `locker_code`, `starter_pack`.
+**File**: `src/pages/Challenges.tsx` — add `onClick={() => navigate("/play/match", { state: { challengeId: c.id, opponentTeamId: c.opponent_team_id, ... } })}` to each Play button.
 
-### 2. Update Acquisition Flows
-Set `source` when inserting into `user_collections`:
+**File**: `src/pages/Play.tsx` — extend `DominationState` to include challenge fields. When `challengeId` is present, use the challenge's opponent team to load CPU lineup (same pattern as domination).
 
-| Edge Function / Flow | Source Value |
-|---|---|
-| `open-pack` (standard purchase) | `'standard_pack'` |
-| `open-pack` (from `user_pack_inventory` / reward) | `'locker_code'` |
-| `buy-gem-card` | `'gem_market'` |
-| `claim-starter-pack` | `'starter_pack'` |
-| `redeem-locker-code` (direct card reward) | `'locker_code'` |
-| Collection reward grants | `'collection_reward'` |
+**File**: `src/components/game/LineupSelect.tsx` — accept `challengeTeamId` prop and load CPU from `team_players` for that team, plus support lineup restriction filters.
 
-### 3. Block Quicksell in Edge Function
-In `quicksell-card/index.ts`, after fetching the entry, check `entry.source !== 'standard_pack'` and return 400 "Cannot sell reward cards".
+### 2. Lineup Restrictions on Challenges
+Add a `lineup_restrictions` JSONB column to the `challenges` table. This stores an object like:
+```json
+{
+  "positions": ["PG", "SG"],
+  "badge_ids": ["uuid"],
+  "trait_ids": ["uuid"],
+  "gem_tier_ids": ["uuid"],
+  "team_ids": ["uuid"],
+  "collection_ids": ["uuid"],
+  "sub_collection_ids": ["uuid"],
+  "card_colors": ["red", "blue", "gold"]
+}
+```
+All fields optional. When present, only cards matching ALL specified restrictions are selectable.
 
-### 4. Hide Quicksell Button in UI
-In `Collection.tsx`, track source per card. In `CardDetailDialog`, disable/hide the quicksell button when the card's source is not `standard_pack`.
+**Migration**: `ALTER TABLE challenges ADD COLUMN lineup_restrictions jsonb DEFAULT NULL`
+
+**Admin UI** (`AdminChallenges.tsx`): Add a "Lineup Restrictions" section with multi-select pickers for each restriction type. Card color uses broad color buckets derived from card_color_primary HSL hue (red, orange, gold, green, blue, purple, pink, white, black).
+
+**LineupSelect.tsx**: Filter user's collection based on active challenge restrictions before rendering.
+
+**Challenges.tsx**: Display restriction badges (e.g. "PG/SG only", "Gold cards only") on each challenge card.
+
+### 3. Collection & Sub-Collection System
+New tables:
+- `collections` — `id`, `name`, `description`, `created_at`
+- `sub_collections` — `id`, `collection_id`, `name`, `created_at`
+
+Add `collection_id` and `sub_collection_id` columns to `player_cards` so cards can be assigned to a collection/sub-collection.
+
+**Admin page**: Create `AdminCollectionSets.tsx` (or extend existing admin) for managing collection and sub-collection definitions. In `AdminPlayers.tsx` (or PlayerQuickEdit), add dropdowns to assign a card to a collection/sub-collection.
+
+**Example**: Collection = "Kuroko no Basuke", Sub-collection = "Kaijo High". A card assigned to both can be filtered by either.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| Migration | Add `source` column to `user_collections` |
-| `supabase/functions/quicksell-card/index.ts` | Block non-standard_pack cards |
-| `supabase/functions/open-pack/index.ts` | Pass source based on whether it's from inventory |
-| `supabase/functions/buy-gem-card/index.ts` | Set `source: 'gem_market'` |
-| `supabase/functions/claim-starter-pack/index.ts` | Set `source: 'starter_pack'` |
-| `supabase/functions/redeem-locker-code/index.ts` | Set `source: 'locker_code'` for direct card rewards |
-| `src/pages/Collection.tsx` | Track source, pass `canSell` to dialog |
-| `src/components/cards/CardDetailDialog.tsx` | Accept + use `canSell` prop to show/hide quicksell |
+| Migration | Add `lineup_restrictions` to challenges; create `collections` + `sub_collections` tables; add `collection_id`/`sub_collection_id` to `player_cards` |
+| `src/pages/Challenges.tsx` | Wire Play button to navigate with challenge state; show restriction badges |
+| `src/pages/Play.tsx` | Extend state to accept challenge fields; pass to LineupSelect |
+| `src/components/game/LineupSelect.tsx` | Accept challenge restrictions; filter user cards; load CPU from challenge team |
+| `src/pages/admin/AdminChallenges.tsx` | Add lineup restrictions section with multi-selects |
+| `src/pages/admin/AdminPlayers.tsx` or `PlayerQuickEdit.tsx` | Add collection/sub-collection assignment dropdowns |
+| New: admin page for collections/sub-collections | CRUD for collection sets and sub-collections |
 
