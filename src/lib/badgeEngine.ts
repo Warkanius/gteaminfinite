@@ -230,8 +230,55 @@ export function applyFloorGeneralBoost(
 }
 
 /**
- * Apply reroll badges: if the card has a "reroll" badge for this stat,
- * re-roll dice up to N times and keep the best total.
+ * Check if a card has a reroll badge for this stat, and generate a reroll if so.
+ * Returns the reroll dice and badge info, or null if no reroll badge applies.
+ */
+export function getPendingReroll(
+  stat: StatKey,
+  originalDice: number[],
+  badges: CardBadge[],
+): { rerollDice: number[]; badge: CardBadge; bonusValue: number } | null {
+  const badge = bestBadge(badges, stat, "reroll");
+  if (!badge) return null;
+
+  const diceCount = originalDice.length as 1 | 2;
+  const newRoll = rollDice(diceCount);
+  const flatBonus = bonusDiceValue(badge.tier);
+
+  return { rerollDice: newRoll.dice, badge, bonusValue: flatBonus };
+}
+
+/**
+ * Resolve a reroll choice: player picks original or reroll.
+ * Returns the chosen dice and badge activations.
+ */
+export function resolveRerollChoice(
+  originalDice: number[],
+  rerollDice: number[],
+  keepReroll: boolean,
+  badge: CardBadge,
+  bonusValue: number,
+): { finalDice: number[]; bonusValue: number; activations: BadgeActivation[] } {
+  const activations: BadgeActivation[] = [];
+  const chosenDice = keepReroll ? rerollDice : originalDice;
+
+  const parts: string[] = [];
+  if (keepReroll) parts.push(`rerolled → [${rerollDice.join("+")}]`);
+  else parts.push(`kept original [${originalDice.join("+")}]`);
+  if (bonusValue > 0) parts.push(`+${bonusValue} bonus`);
+
+  activations.push({
+    badgeName: badge.name,
+    abbreviation: badge.abbreviation,
+    tier: badge.tier,
+    effect: parts.join(", "),
+  });
+
+  return { finalDice: chosenDice, bonusValue, activations };
+}
+
+/**
+ * CPU auto-resolve: roll rerolls and keep the best (original behavior).
  */
 export function applyRerolls(
   stat: StatKey,
@@ -259,7 +306,6 @@ export function applyRerolls(
     }
   }
 
-  // Diamond/Actolytrene also add a flat dice bonus
   const flatBonus = bonusDiceValue(badge.tier);
   bonusValue = flatBonus;
 
