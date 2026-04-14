@@ -66,16 +66,29 @@ export default function Collection() {
     const dupMap: Record<string, number> = {};
     const lockMap: Record<string, boolean> = {};
     const colIdMap: Record<string, string> = {};
-    const srcMap: Record<string, string> = {}; // player_card_id -> source of first entry
+    const srcMap: Record<string, string> = {};
 
     for (const entry of rawCollection as any[]) {
       const pcId = entry.player_card_id;
       dupMap[pcId] = (dupMap[pcId] || 0) + 1;
       if (entry.is_locked) lockMap[pcId] = true;
-      if (!colIdMap[pcId] || (colIdMap[pcId] && !entry.is_locked)) {
+
+      // For quicksell: prefer an unlocked standard_pack entry
+      const currentBest = colIdMap[pcId];
+      if (!currentBest) {
         colIdMap[pcId] = entry.id;
+      } else {
+        // Find the current best entry to compare
+        const currentEntry = (rawCollection as any[]).find((e: any) => e.id === currentBest);
+        const currentIsIdeal = currentEntry && !currentEntry.is_locked && currentEntry.source === "standard_pack";
+        const newIsIdeal = !entry.is_locked && entry.source === "standard_pack";
+        if (!currentIsIdeal && newIsIdeal) {
+          colIdMap[pcId] = entry.id;
+        } else if (!currentIsIdeal && !entry.is_locked && currentEntry?.is_locked) {
+          colIdMap[pcId] = entry.id;
+        }
       }
-      // Track source — prefer showing "standard_pack" if any copy is standard
+
       if (!srcMap[pcId]) srcMap[pcId] = entry.source ?? "standard_pack";
       if (entry.source === "standard_pack") srcMap[pcId] = "standard_pack";
     }
