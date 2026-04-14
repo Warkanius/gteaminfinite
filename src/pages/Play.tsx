@@ -132,6 +132,9 @@ export default function Play() {
           opponentName={gameState.opponentName}
           mode={mode}
           packReward={gameState.packReward}
+          gemReward={gameState.gemReward}
+          cardRewardId={gameState.cardRewardId}
+          challengeId={gameState.challengeId}
         />
       )}
     </div>
