@@ -27,9 +27,15 @@ const STAT_LABELS: Record<string, string> = {
   stat_stl: "STL", stat_blk: "BLK", stat_ast: "AST", stat_reb: "REB", stat_int: "INT",
 };
 
-function randomizeFromStar(stars: number): number {
+function randomizeFromStar(stars: number, statKey?: string): number {
   const base = stars * 20;
-  if (base === 0) return 0;
+  if (base === 0) {
+    // STL and BLK should never be 0 — floor at 10-19
+    if (statKey === "stat_stl" || statKey === "stat_blk" || statKey === "run_stat_stl" || statKey === "run_stat_blk") {
+      return 10 + Math.floor(Math.random() * 10);
+    }
+    return 0;
+  }
   const variance = Math.floor(Math.random() * 31) - 15;
   return Math.max(0, Math.min(120, base + variance));
 }
@@ -169,15 +175,15 @@ export function RunRosterManager({ runId }: Props) {
       gem_name: p.gem_name,
       badges: badgesByPlayer.get(p.id) || [],
       run_rating: hasRunRatings ? p.run_rating! : randomizeFromStar(p.rating),
-      run_stat_3pt: hasRunRatings ? p.run_stat_3pt! : randomizeFromStar(p.stat_3pt),
-      run_stat_mid: hasRunRatings ? p.run_stat_mid! : randomizeFromStar(p.stat_mid),
-      run_stat_fin: hasRunRatings ? p.run_stat_fin! : randomizeFromStar(p.stat_fin),
-      run_stat_dnk: hasRunRatings ? p.run_stat_dnk! : randomizeFromStar(p.stat_dnk),
-      run_stat_stl: hasRunRatings ? p.run_stat_stl! : randomizeFromStar(p.stat_stl),
-      run_stat_blk: hasRunRatings ? p.run_stat_blk! : randomizeFromStar(p.stat_blk),
-      run_stat_ast: hasRunRatings ? p.run_stat_ast! : randomizeFromStar(p.stat_ast),
-      run_stat_reb: hasRunRatings ? p.run_stat_reb! : randomizeFromStar(p.stat_reb),
-      run_stat_int: hasRunRatings ? p.run_stat_int! : randomizeFromStar(p.stat_int),
+      run_stat_3pt: hasRunRatings ? p.run_stat_3pt! : randomizeFromStar(p.stat_3pt, "stat_3pt"),
+      run_stat_mid: hasRunRatings ? p.run_stat_mid! : randomizeFromStar(p.stat_mid, "stat_mid"),
+      run_stat_fin: hasRunRatings ? p.run_stat_fin! : randomizeFromStar(p.stat_fin, "stat_fin"),
+      run_stat_dnk: hasRunRatings ? p.run_stat_dnk! : randomizeFromStar(p.stat_dnk, "stat_dnk"),
+      run_stat_stl: hasRunRatings ? p.run_stat_stl! : randomizeFromStar(p.stat_stl, "stat_stl"),
+      run_stat_blk: hasRunRatings ? p.run_stat_blk! : randomizeFromStar(p.stat_blk, "stat_blk"),
+      run_stat_ast: hasRunRatings ? p.run_stat_ast! : randomizeFromStar(p.stat_ast, "stat_ast"),
+      run_stat_reb: hasRunRatings ? p.run_stat_reb! : randomizeFromStar(p.stat_reb, "stat_reb"),
+      run_stat_int: hasRunRatings ? p.run_stat_int! : randomizeFromStar(p.stat_int, "stat_int"),
     };
   }
 
@@ -211,15 +217,15 @@ export function RunRosterManager({ runId }: Props) {
           ...p,
           rating: newStars,
           run_rating: randomizeFromStar(newStars),
-          run_stat_3pt: randomizeFromStar(newStars),
-          run_stat_mid: randomizeFromStar(newStars),
-          run_stat_fin: randomizeFromStar(newStars),
-          run_stat_dnk: randomizeFromStar(newStars),
-          run_stat_stl: randomizeFromStar(newStars),
-          run_stat_blk: randomizeFromStar(newStars),
-          run_stat_ast: randomizeFromStar(newStars),
-          run_stat_reb: randomizeFromStar(newStars),
-          run_stat_int: randomizeFromStar(newStars),
+          run_stat_3pt: randomizeFromStar(newStars, "stat_3pt"),
+          run_stat_mid: randomizeFromStar(newStars, "stat_mid"),
+          run_stat_fin: randomizeFromStar(newStars, "stat_fin"),
+          run_stat_dnk: randomizeFromStar(newStars, "stat_dnk"),
+          run_stat_stl: randomizeFromStar(newStars, "stat_stl"),
+          run_stat_blk: randomizeFromStar(newStars, "stat_blk"),
+          run_stat_ast: randomizeFromStar(newStars, "stat_ast"),
+          run_stat_reb: randomizeFromStar(newStars, "stat_reb"),
+          run_stat_int: randomizeFromStar(newStars, "stat_int"),
         };
       })
     );
@@ -348,15 +354,15 @@ export function RunRosterManager({ runId }: Props) {
           run_id: runId,
           player_card_id: card.id,
           run_rating: randomizeFromStar(stars),
-          run_stat_3pt: randomizeFromStar(card.stat_3pt),
-          run_stat_mid: randomizeFromStar(card.stat_mid),
-          run_stat_fin: randomizeFromStar(card.stat_fin),
-          run_stat_dnk: randomizeFromStar(card.stat_dnk),
-          run_stat_stl: randomizeFromStar(card.stat_stl),
-          run_stat_blk: randomizeFromStar(card.stat_blk),
-          run_stat_ast: randomizeFromStar(card.stat_ast),
-          run_stat_reb: randomizeFromStar(card.stat_reb),
-          run_stat_int: randomizeFromStar(card.stat_int),
+          run_stat_3pt: randomizeFromStar(card.stat_3pt, "stat_3pt"),
+          run_stat_mid: randomizeFromStar(card.stat_mid, "stat_mid"),
+          run_stat_fin: randomizeFromStar(card.stat_fin, "stat_fin"),
+          run_stat_dnk: randomizeFromStar(card.stat_dnk, "stat_dnk"),
+          run_stat_stl: randomizeFromStar(card.stat_stl, "stat_stl"),
+          run_stat_blk: randomizeFromStar(card.stat_blk, "stat_blk"),
+          run_stat_ast: randomizeFromStar(card.stat_ast, "stat_ast"),
+          run_stat_reb: randomizeFromStar(card.stat_reb, "stat_reb"),
+          run_stat_int: randomizeFromStar(card.stat_int, "stat_int"),
         });
 
         cards.push(card);
@@ -412,15 +418,15 @@ export function RunRosterManager({ runId }: Props) {
         run_id: runId,
         player_card_id: card.id,
         run_rating: randomizeFromStar(stars),
-        run_stat_3pt: randomizeFromStar(card.stat_3pt),
-        run_stat_mid: randomizeFromStar(card.stat_mid),
-        run_stat_fin: randomizeFromStar(card.stat_fin),
-        run_stat_dnk: randomizeFromStar(card.stat_dnk),
-        run_stat_stl: randomizeFromStar(card.stat_stl),
-        run_stat_blk: randomizeFromStar(card.stat_blk),
-        run_stat_ast: randomizeFromStar(card.stat_ast),
-        run_stat_reb: randomizeFromStar(card.stat_reb),
-        run_stat_int: randomizeFromStar(card.stat_int),
+        run_stat_3pt: randomizeFromStar(card.stat_3pt, "stat_3pt"),
+        run_stat_mid: randomizeFromStar(card.stat_mid, "stat_mid"),
+        run_stat_fin: randomizeFromStar(card.stat_fin, "stat_fin"),
+        run_stat_dnk: randomizeFromStar(card.stat_dnk, "stat_dnk"),
+        run_stat_stl: randomizeFromStar(card.stat_stl, "stat_stl"),
+        run_stat_blk: randomizeFromStar(card.stat_blk, "stat_blk"),
+        run_stat_ast: randomizeFromStar(card.stat_ast, "stat_ast"),
+        run_stat_reb: randomizeFromStar(card.stat_reb, "stat_reb"),
+        run_stat_int: randomizeFromStar(card.stat_int, "stat_int"),
       });
 
       return card;
@@ -494,7 +500,7 @@ export function RunRosterManager({ runId }: Props) {
             No players in roster yet. Use the tools below to add players.
           </div>
         ) : (
-          <ScrollArea className="max-h-[320px]">
+          <ScrollArea className="max-h-[50vh]">
             <div className="divide-y divide-border/30">
               {rosterPlayers.map(({ id, player_card_id, run_rating, card }) => (
                 <div
@@ -572,7 +578,7 @@ export function RunRosterManager({ runId }: Props) {
             Key: 1★=20 · 2★=40 · 3★=60 · 4★=80 · 5★=100 · 6★=120. Adjust values before confirming.
           </p>
 
-          <ScrollArea className="max-h-[400px]">
+          <ScrollArea className="max-h-[50vh]">
             <div className="space-y-1">
               <div className="grid grid-cols-[1fr_repeat(6,48px)_auto] gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sticky top-0 bg-primary/5 z-10">
                 <span>Player</span>

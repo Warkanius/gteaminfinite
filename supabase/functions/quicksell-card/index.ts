@@ -62,14 +62,26 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Cannot sell reward cards" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Get quicksell value from rule_config
-    const { data: ruleRow } = await supabaseAdmin
-      .from("rule_config")
-      .select("value")
-      .eq("key", "quicksell_coin_value")
+    // Get the card's market_value from player_cards
+    const { data: cardData } = await supabaseAdmin
+      .from("player_cards")
+      .select("market_value")
+      .eq("id", entry.player_card_id)
       .single();
 
-    const coinValue = typeof ruleRow?.value === "number" ? ruleRow.value : DEFAULT_QUICKSELL_VALUE;
+    // Use card's market_value, fall back to rule_config, then to default
+    let coinValue = cardData?.market_value && cardData.market_value > 0
+      ? cardData.market_value
+      : null;
+
+    if (coinValue === null) {
+      const { data: ruleRow } = await supabaseAdmin
+        .from("rule_config")
+        .select("value")
+        .eq("key", "quicksell_coin_value")
+        .single();
+      coinValue = typeof ruleRow?.value === "number" ? ruleRow.value : DEFAULT_QUICKSELL_VALUE;
+    }
 
     // Delete the collection entry
     const { error: delErr } = await supabaseAdmin

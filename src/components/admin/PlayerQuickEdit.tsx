@@ -260,7 +260,7 @@ export function PlayerQuickEdit({ playerId, onClose }: PlayerQuickEditProps) {
       {!loaded ? (
         <div className="py-8 text-center text-muted-foreground">Loading…</div>
       ) : (
-        <ScrollArea className="max-h-[70vh]">
+        <ScrollArea className="max-h-[70vh] overflow-y-auto">
           <div className="space-y-5 pr-2">
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-4">

@@ -96,12 +96,21 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
         // Open reward pack if present
         if (packReward) {
           try {
-            const { data } = await supabase.functions.invoke("open-pack", {
-              body: { pack_id: packReward, quantity: 1 },
-            });
-            if (data?.cards && data.cards.length > 0) {
-              setRewardCards(data.cards);
-              setShowReveal(true);
+            // Insert pack into inventory first so open-pack treats it as free
+            const { data: invItem } = await supabase
+              .from("user_pack_inventory")
+              .insert({ user_id: user.id, pack_id: packReward, source: "challenge_reward" })
+              .select("id")
+              .single();
+
+            if (invItem) {
+              const { data } = await supabase.functions.invoke("open-pack", {
+                body: { inventory_id: invItem.id },
+              });
+              if (data?.cards && data.cards.length > 0) {
+                setRewardCards(data.cards);
+                setShowReveal(true);
+              }
             }
           } catch (e) {
             console.error("Failed to open reward pack:", e);

@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
       await admin.from("user_collections").insert({
         user_id: userId,
         player_card_id: confirm_choice_card_id,
-        source: isFreeOpen ? "locker_code" : "standard_pack",
+        source: "standard_pack",
       });
 
       // Fetch card data
@@ -263,11 +263,11 @@ Deno.serve(async (req) => {
         .eq("id", profile.id);
     }
 
-    // Insert into user_collections
+    // Insert into user_collections — always standard_pack so cards are sellable
     await admin.from("user_collections").insert({
       user_id: userId,
       player_card_id: pulledCardId,
-      source: isFreeOpen ? "locker_code" : "standard_pack",
+      source: "standard_pack",
     });
 
     // Log purchase
