@@ -1,77 +1,44 @@
 
 
-# Multiple Fixes & Features
+# Fix: Scrolling, Free Pack Charging, Quicksell Values, and Run Stat Defaults
 
-## Summary of Issues & Requests
+## Issues Found
 
-1. **Clean up empty/duplicate packs** — Several packs have 0 players or duplicate names
-2. **Reuse domination packs by team name** — When creating domination games, reuse existing packs instead of creating new ones
-3. **5v5 matchup selection** — Let players arrange their lineup order against CPU to defend star players
-4. **Team name + username customization** — Players should be able to set a personal username and team name
-5. **Sensations pack card not sellable** — Need to investigate; the quicksell function only allows `source: "standard_pack"` cards, and challenge-won pack cards should be opened with that source
-6. **Collection rewards not working** — The `is_collection_reward` flag exists on player_cards but there's zero logic to grant these rewards when a user completes a collection/sub-collection
+1. **Roster/QuickEdit not scrollable**: The `ScrollArea` components have fixed `max-h` values but the content overflows without proper scroll behavior on small viewports. The `PlayerQuickEdit` dialog uses `max-h-[70vh]` which is fine, but the roster section uses `max-h-[320px]` which may clip. The real issue is likely that the `ScrollArea` viewport needs `overflow-y-auto` and the outer containers need bounded height.
 
-## Findings
+2. **Challenge reward pack charges coins**: In `GameResults.tsx` line 99, `open-pack` is called with `{ pack_id: packReward }` — no `inventory_id`. The edge function only sets `isFreeOpen = true` when `inventory_id` is provided. So reward packs deduct coins. Fix: add the pack to inventory first, then open via `inventory_id`, OR modify the edge function to accept a `free: true` flag for reward contexts.
 
-**Empty/duplicate packs to clean up (will confirm with you first):**
-- `RTTR Pack` (0 players)
-- `Team Dom Pack` (0 players)
-- `Tortuga Starter Pack` (0 players)
-- `Tree Hill Starter Pack` (0 players)
-- 2x `vs Kaijo Reward` duplicates (same name, both have 5 players)
-- 2x `vs Shutoku Reward` duplicates (same name, both have 5 players)
+3. **Quicksell uses flat value instead of market_value**: The `quicksell-card` function reads a single `quicksell_coin_value` from `rule_config` and applies the same amount to every card. It should instead read the card's `market_value` from `player_cards`.
 
-**Quicksell issue:** The `open-pack` edge function sets source to `"standard_pack"` when called directly (not from inventory). All your Sensations cards show `source: standard_pack` in the database, so they should be sellable. The issue may be that the `collectionIdMap` picks a locked entry's ID. Need to verify the quicksell flow in the UI more carefully — could also be a UI-side filtering issue.
-
-**Collection rewards:** The `is_collection_reward` flag on `player_cards` and the badge in `CardDetailDialog` exist, but there is absolutely no logic anywhere that: (a) checks if a user has completed a collection/sub-collection, (b) grants the reward card automatically. This needs to be built from scratch.
+4. **STL/BLK default to 0 in Runs**: `randomizeFromStar(0)` returns `0` (line 32). For STL and BLK specifically, a 0 rating makes it impossible to get stops. Fix: for STL and BLK, when stars = 0, default to a random value between 10-19 instead of 0.
 
 ## Plan
 
-### 1. Pack Cleanup (data operation — will confirm list with you)
-- Delete the 4 empty packs and deduplicate the Kaijo/Shutoku reward packs
-- Check which domination games reference the duplicates and reassign to the surviving pack
+### 1. Fix ScrollArea in RunRosterManager & PlayerQuickEdit
+- Add `overflow-y-auto` styling to the scroll viewport
+- Increase roster `max-h` or make it responsive
+- Ensure the PlayerQuickEdit `ScrollArea` has proper overflow behavior within the dialog
 
-### 2. Domination Pack Reuse
-- In `AdminTeams.tsx` or wherever domination games are created, when assigning a pack reward, search for existing packs matching `vs {teamName} Reward` before creating a new one
+### 2. Fix challenge reward pack not charging coins
+- Modify `GameResults.tsx`: instead of calling `open-pack` with `pack_id`, first insert the pack into `user_pack_inventory` with `source: "challenge_reward"`, then call `open-pack` with `inventory_id`
+- This ensures `isFreeOpen = true` in the edge function
+- Also update the `open-pack` edge function to set `source` to the inventory item's `source` field rather than hardcoding `"locker_code"` for all inventory opens — so challenge reward cards get `source: "standard_pack"` or similar sellable source
 
-### 3. 5v5 Matchup Selection
-- After lineup selection, show a new **matchup arrangement** screen where the user sees CPU lineup and can drag/reorder their 5 players to set head-to-head pairings
-- Each slot shows the opponent card so users can strategically defend against star players
-- Update `GameBoard` to respect this user-defined order rather than the default index order
+### 3. Quicksell uses card's market_value
+- Update `quicksell-card` edge function: after fetching the collection entry, also fetch the `player_cards.market_value` for that card and use it as the coin value instead of the flat `rule_config` value
+- Keep `rule_config.quicksell_coin_value` as a fallback if `market_value` is 0 or null
 
-### 4. Team Name + Username
-- **Migration:** Add `team_name` column to `profiles` table
-- **Auth page:** Add optional team name field during signup
-- **Settings/Profile page:** Allow editing display name and team name (currently no settings page exists — add a simple one)
-- Show team name in game results and dashboard
-
-### 5. Fix Quicksell for Standard Pack Cards
-- Debug the exact quicksell flow — the data shows source is correct, so the issue is likely in the UI (locked card selected, or wrong collection entry ID passed)
-- Ensure `collectionIdMap` always picks an unlocked, sellable entry first
-- Add better error messaging in the quicksell UI
-
-### 6. Collection Rewards System
-- **Collection page:** For each collection/sub-collection, check if the user owns all non-reward cards in that group
-- When complete, show a "Claim Reward" button
-- On claim, insert the reward card into `user_collections` with `source: "collection_reward"`
-- The reward card must have `collection_id` (or `sub_collection_id`) set so the system knows which collection it belongs to
-- Show completion progress per collection/sub-collection in the Collection page
-- Reward cards marked `is_collection_reward` should be excluded from the "cards needed" count
+### 4. STL/BLK minimum in Runs
+- Update `randomizeFromStar` in `RunRosterManager.tsx`: add a `statKey` parameter. When the stat is `stl` or `blk` and stars = 0, return a random value between 10-19 instead of 0
+- Apply the same logic everywhere `randomizeFromStar` is called for these stats
 
 ### Files Changed
 
 | File | Change |
 |---|---|
-| Migration | Add `team_name` to `profiles` |
-| Data cleanup | Delete empty/duplicate packs (after confirmation) |
-| `src/pages/Collection.tsx` | Add collection completion tracking + reward claiming |
-| `src/pages/Auth.tsx` | Add team name field to signup |
-| New: `src/pages/Settings.tsx` | Profile editing (display name, team name) |
-| `src/App.tsx` | Add Settings route |
-| `src/components/AppSidebar.tsx` | Add Settings nav link |
-| `src/components/game/LineupSelect.tsx` | Add matchup arrangement step |
-| `src/components/game/GameBoard.tsx` | Respect user-defined matchup order |
-| `src/components/game/GameResults.tsx` | Show team name |
-| `src/pages/admin/AdminPlayers.tsx` | Ensure collection_id is set on reward cards |
-| Quicksell fix | Fix `collectionIdMap` logic + edge function source check |
+| `src/components/admin/RunRosterManager.tsx` | Fix scroll containers; update `randomizeFromStar` for STL/BLK minimum |
+| `src/components/admin/PlayerQuickEdit.tsx` | Ensure ScrollArea works properly in dialog |
+| `src/components/game/GameResults.tsx` | Insert reward pack into inventory first, then open via `inventory_id` |
+| `supabase/functions/open-pack/index.ts` | Use inventory item's `source` field instead of hardcoding `"locker_code"` |
+| `supabase/functions/quicksell-card/index.ts` | Use card's `market_value` instead of flat `rule_config` value |
 
