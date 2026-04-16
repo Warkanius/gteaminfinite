@@ -172,17 +172,17 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         </div>
 
       <div className="flex gap-3 min-h-[200px] mb-8 overflow-x-auto pb-4">
-          {selectedCards.map((card: any, i) => (
+          {selectedDisplayCards.map((card: any, i) => (
             <div key={card.id} className="w-[120px] sm:w-[140px] shrink-0 relative">
               <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold z-10 shadow-lg border-2 border-background">
                 {i + 1}
               </div>
               <div onClick={() => handleCardClick(card.id)} className="cursor-pointer">
-                <PlayerCard card={card} />
+                <PlayerCard card={card} gemTier={card.gem_tiers} />
               </div>
             </div>
           ))}
-          {Array.from({ length: 3 - selectedCards.length }).map((_, i) => (
+          {Array.from({ length: 3 - selectedDisplayCards.length }).map((_, i) => (
             <div key={`empty-${i}`} className="w-[120px] sm:w-[140px] shrink-0 h-44 sm:h-48 border-2 border-dashed border-border/50 rounded-lg flex items-center justify-center text-muted-foreground text-sm font-semibold opacity-50">
               Empty Slot
             </div>
@@ -203,14 +203,14 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
           <div className="space-y-6 border-t border-border/50 pt-6">
             <h2 className="font-display text-2xl tracking-wider">CPU Lineup (4d6 Roll)</h2>
             <div className="flex gap-3 min-h-[200px] overflow-x-auto pb-4">
-              {cpuLineup.map((card, idx) => (
+              {cpuLineup.map((entry: any, idx) => (
                 <div key={`cpu-${idx}`} className="w-[120px] sm:w-[140px] shrink-0 relative">
                   <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center font-bold z-10 shadow-lg border-2 border-background">
                     {idx + 1}
                   </div>
                   <RevealCard
                     ref={el => revealRefs.current[idx] = el}
-                    card={card}
+                    card={entry.displayCard}
                   />
                 </div>
               ))}
@@ -220,12 +220,16 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
                 className="w-full font-display text-lg tracking-wider bg-gem-diamond hover:bg-gem-diamond/90 text-black" 
                 size="lg"
                 onClick={async () => {
-                  const allCardIds = [...playerLineup.map((c: any) => c.id), ...cpuLineup.map((c: any) => c.id)];
+                  const cpuGameLineup = cpuLineup.map((e: any) => e.gameCard);
+                  const allCardIds = [
+                    ...playerGameLineup.map((c: any) => c.id),
+                    ...cpuGameLineup.map((c: any) => c.id),
+                  ];
                   const [badgeMap, traitMap] = await Promise.all([
                     fetchBadgesForCards(supabase, allCardIds),
                     fetchTraitsForCards(supabase, allCardIds),
                   ]);
-                  onLineupConfirmed(playerLineup, cpuLineup, badgeMap, traitMap);
+                  onLineupConfirmed(playerGameLineup, cpuGameLineup, badgeMap, traitMap);
                 }}
               >
                 START GAUNTLET
