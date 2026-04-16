@@ -1,0 +1,1 @@
+ALTER TABLE public.game_logs ADD COLUMN domination_game_id UUID REFERENCES public.domination_games(id);
