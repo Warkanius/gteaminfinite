@@ -105,17 +105,15 @@ export default function Collection() {
       const isSellable = !entry.is_locked && !NON_SELLABLE.has(entry.source ?? "standard_pack");
       if (isSellable) sellableMap[pcId] = (sellableMap[pcId] || 0) + 1;
 
-      // For quicksell: prefer an unlocked standard_pack entry
+      // For quicksell: always prefer an unlocked SELLABLE entry over anything else
       const currentBest = colIdMap[pcId];
       if (!currentBest) {
         colIdMap[pcId] = entry.id;
       } else {
         const currentEntry = (rawCollection as any[]).find((e: any) => e.id === currentBest);
-        const currentIsIdeal = currentEntry && !currentEntry.is_locked && currentEntry.source === "standard_pack";
-        const newIsIdeal = !entry.is_locked && entry.source === "standard_pack";
-        if (!currentIsIdeal && newIsIdeal) {
-          colIdMap[pcId] = entry.id;
-        } else if (!currentIsIdeal && !entry.is_locked && currentEntry?.is_locked) {
+        const currentIsSellable = currentEntry && !currentEntry.is_locked && !NON_SELLABLE.has(currentEntry.source ?? "standard_pack");
+        const newIsSellable = isSellable;
+        if (!currentIsSellable && newIsSellable) {
           colIdMap[pcId] = entry.id;
         }
       }
