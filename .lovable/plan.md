@@ -1,45 +1,52 @@
 
 
-## Problem
+## Problem Diagnosis
 
-In `RunLineupSelect.tsx`, both the player lineup and CPU lineup objects have their `stat_*` fields **overwritten** with run-stat values (0–120 numerical) before being passed to `<PlayerCard>` and `<RevealCard>`. 
+The user reported three concrete issues with The Runs:
+1. **"Too many possessions back and forth with no make"** — math is too defense-favoured
+2. **"In 5v5 we see badge effects and dice rolls — in The Runs we do not"** — Runs jumps straight from "SHOOT" button → result text in the log, no contest visualization
+3. **Possession flow is confusing** — hard to tell what's happening turn-to-turn
 
-`PlayerCard` calls `computeStars(card)` which averages the 9 stat fields and floors. With run stats (avg ~60), it returns 60 "stars" — completely broken display. It also affects `card.rating`, which is replaced with `runRatingToStars(run_rating)` — another OVR-like value.
+### Why misses chain so often
+The current `resolveRunShotContest` is symmetrical: `offenseRoll = diceTotal × (rating/40) × (statValue/60) + badgeBonus`. With equal cards, that's a coin-flip. After a miss, the rebound is *also* a coin-flip. After a defensive rebound, the CPU shoots — another coin-flip. So 3+ empty possessions in a row is very common (12.5% chance of a miss → defensive board → CPU miss alone, and chains compound from there).
 
-The card art (`resolveCardVisuals`) also doesn't get `gem_tiers` because the spread loses it, and it isn't passed as the `gemTier` prop.
+## Fix: Three Targeted Changes
 
-## Fix
+### 1. Rebalance scoring math (less stalemate)
 
-Keep two separate objects per card:
-1. **Display card** = the raw `player_cards` row (with star stats 0–6, original `rating`, and `gem_tiers`) — passed to all `<PlayerCard>` / `<RevealCard>` renders.
-2. **Game card** = the run-stat-overlaid version (with `_runRating`, numerical stats) — passed only to `RunGameBoard` for engine logic.
+In `src/lib/gameEngine.ts` → `resolveRunShotContest`:
+- Add an **offensive advantage**: shots tilted slightly toward the shooter (offense gets +15% on roll). Real basketball averages ~50% FG, but Runs has rebounds chaining empty possessions, so we need ~60% make rate per shot.
+- Add a **stat-gap floor**: when shooter's stat is meaningfully higher than defender's counter-stat (e.g. 90 FIN vs 50 BLK), guarantee ~75%+ make rate by adding a stat-differential bonus.
+- Cap defensive variance by clamping defenseRoll to `[0.5×offenseRoll, 1.5×offenseRoll]` so a CPU lucky-roll doesn't shut down obvious mismatches.
 
-### Changes
+### 2. Add contest visualization (parity with 5v5)
 
-**`src/components/game/RunLineupSelect.tsx`**
-- `cpuRoster` query: return objects with `displayCard` (raw player_card incl. gem_tiers) + `gameCard` (run-stat overlay). Render `displayCard` in `<RevealCard>`; pass `gameCard` array to `onLineupConfirmed`.
-- `selectedCards` (display): keep raw collection cards as-is for `<PlayerCard>` render.
-- `playerLineup` (game): build separate run-stat overlay version, pass to `onLineupConfirmed`.
-- Remove `rating: runRatingToStars(...)` / stat overwrites from anything used for rendering.
+Insert a "rolling" / "result" phase between SHOOT and the next possession, mirroring how `GameBoard.tsx` uses `<DiceRoll>` and `<StatResult>`:
+- After SHOOT/CONTEST: brief animated dice roll showing both sides' dice
+- Then a result panel showing: shooter card, defender card, both rolls, badges/traits that activated, and MADE/MISSED verdict
+- "Next Possession" button to continue (auto-advance after 3s)
+- Same UI used for the Rebound contest
 
-**`src/components/game/RunGameBoard.tsx`**
-- The `playerLineup` / `cpuLineup` it receives are now game-cards (with `_runRating` + numerical stats) — game logic stays the same.
-- For the in-board `<PlayerCard>` renders (shooter selection, contest screen), use a parallel `displayLineup` derived from each game card's preserved `_displayCard` reference, OR attach a `_displayCard` field to each game card and render that.
+This reuses `<DiceRoll>`, `<ActivationBanner>`, and a new lightweight `<RunContestResult>` panel.
 
-### Implementation detail
+### 3. Clearer possession flow
 
-Each game-card object will carry a `_displayCard` field pointing to the unmodified `player_cards` row (with original star stats + `gem_tiers`). `RunGameBoard` renders `<PlayerCard card={card._displayCard ?? card} />`.
+- Big possession indicator banner above the action area: "🏀 YOUR BALL — Pick Shot" / "🛡️ CPU HAS THE BALL — Contest Their Shot"
+- Mini "Possessions: 7" + "Last play: ✅ MAKE / ❌ MISS / 🏀 REB" chip on the scoreboard
+- Pulse animation on whoever has the ball
 
-This guarantees:
-- Stars: correct (0–6 from real star stats)
-- Card colors: correct (gem_name + gem_tiers preserved)
-- OVR in detail dialog: correct (computed on real star stats)
-- Engine: untouched (still uses `_runRating` + numerical stats)
-
-### Files
+## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/game/RunLineupSelect.tsx` | Split display vs. game card objects; attach `_displayCard` to each game card; render display cards |
-| `src/components/game/RunGameBoard.tsx` | Render `card._displayCard ?? card` in all `<PlayerCard>` instances |
+| `src/lib/gameEngine.ts` | Rebalance `resolveRunShotContest`: offense advantage, stat-gap floor, defense-roll clamp |
+| `src/components/game/RunGameBoard.tsx` | Add `rolling` and `result` phases; show DiceRoll + contest result panel + activations between SHOOT and next possession; add possession banner + last-play chip |
+| `src/components/game/RunContestResult.tsx` | New component — visualizes shooter vs defender, dice, badges/traits, verdict |
+
+## Out of Scope (not changing)
+
+- Manual pick flow (user wants to keep it)
+- Target score / win-by-2 rules
+- 4d6 opponent roll selection
+- The display-card / game-card split (already fixed)
 
