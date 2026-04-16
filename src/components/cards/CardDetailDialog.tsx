@@ -37,6 +37,7 @@ interface CardDetailProps {
   badges?: { name: string; tier: string }[];
   traits?: { name: string; tier: string; target_stat?: string | null }[];
   duplicateCount?: number;
+  sellableCount?: number;
   isLocked?: boolean;
   canSell?: boolean;
   onToggleLock?: () => void;
