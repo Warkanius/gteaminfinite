@@ -801,7 +801,7 @@ export function RunRosterManager({ runId }: Props) {
                 )}
               </div>
             )}
-          </ScrollArea>
+          </div>
         </CollapsibleContent>
       </Collapsible>
 
