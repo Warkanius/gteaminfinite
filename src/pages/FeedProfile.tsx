@@ -2,6 +2,7 @@ import * as React from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { computeOVR } from "@/lib/ovrUtils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -85,7 +86,7 @@ export default function FeedProfile() {
 
       const { data: player } = await supabase
         .from("player_cards")
-        .select("id, name, social_handle, card_color_primary, position1, rating, avatar_url")
+        .select("id, name, social_handle, card_color_primary, position1, rating, avatar_url, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int")
         .or(`social_handle.eq.${decodedHandle},social_handle.eq.@${rawHandle}`)
         .limit(1)
         .maybeSingle();
@@ -98,7 +99,7 @@ export default function FeedProfile() {
           handle: player.social_handle ?? `@${player.name}`,
           accent: player.card_color_primary ?? LEAGUE_ACCENT,
           avatar_url: player.avatar_url,
-          subtitle: `${player.position1 ?? ""} · ${player.rating} OVR`,
+          subtitle: `${player.position1 ?? ""} · ${computeOVR(player)} OVR`,
         };
       }
 

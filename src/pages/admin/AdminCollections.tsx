@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { computeOVR } from "@/lib/ovrUtils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -29,7 +30,7 @@ export default function AdminCollections() {
   const { data: allCards = [] } = useQuery({
     queryKey: ["admin-all-cards-lite"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("player_cards").select("id, name, rating").order("name");
+      const { data, error } = await supabase.from("player_cards").select("id, name, rating, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int").order("name");
       if (error) throw error;
       return data;
     },
@@ -42,7 +43,7 @@ export default function AdminCollections() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_collections")
-        .select("id, player_card_id, acquired_at, is_locked, player_cards(name, rating, gem_name)")
+        .select("id, player_card_id, acquired_at, is_locked, player_cards(name, rating, gem_name, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int)")
         .eq("user_id", selectedUserId!)
         .order("acquired_at", { ascending: false });
       if (error) throw error;
@@ -157,7 +158,7 @@ export default function AdminCollections() {
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
                     <PlayerCombobox
-                      players={allCards.map(c => ({ id: c.id, name: `${c.name} (${c.rating}★)` }))}
+                      players={allCards.map(c => ({ id: c.id, name: `${c.name} (${computeOVR(c)}★)` }))}
                       value={addCardId}
                       onValueChange={setAddCardId}
                       placeholder="Search card to add…"
@@ -179,7 +180,7 @@ export default function AdminCollections() {
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm truncate">{item.player_cards?.name ?? "Unknown"}</span>
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
-                              {item.player_cards?.rating ?? 0}★
+                              {item.player_cards ? computeOVR(item.player_cards) : (item.player_cards?.rating ?? 0)}★
                             </Badge>
                             {item.player_cards?.gem_name && (
                               <Badge variant="secondary" className="text-[10px] px-1.5 py-0">

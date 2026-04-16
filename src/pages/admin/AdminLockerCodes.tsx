@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { computeOVR } from "@/lib/ovrUtils";
 import { DataTable, Column } from "@/components/admin/DataTable";
 import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
@@ -43,7 +44,7 @@ export default function AdminLockerCodes() {
   const { data: players = [] } = useQuery({
     queryKey: ["admin-players-list"],
     queryFn: async () => {
-      const { data } = await supabase.from("player_cards").select("id, name, rating").order("name");
+      const { data } = await supabase.from("player_cards").select("id, name, rating, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int").order("name");
       return data ?? [];
     },
   });
@@ -167,7 +168,7 @@ export default function AdminLockerCodes() {
               <Label>Player Card</Label>
               <Select value={form.reward_value.player_card_id ?? ""} onValueChange={(v) => setForm(f => ({ ...f, reward_value: { player_card_id: v } }))}>
                 <SelectTrigger><SelectValue placeholder="Select card…" /></SelectTrigger>
-                <SelectContent>{players.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.rating})</SelectItem>)}</SelectContent>
+                <SelectContent>{players.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({computeOVR(p)})</SelectItem>)}</SelectContent>
               </Select>
             </div>
           )}

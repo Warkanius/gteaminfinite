@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { computeOVR } from "@/lib/ovrUtils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -217,7 +218,7 @@ export default function AdminStarterPacks() {
                 <SelectContent>
                   {availablePlayers.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.name} ({p.rating} OVR)
+                      {p.name} ({computeOVR(p)} OVR)
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -255,7 +256,7 @@ export default function AdminStarterPacks() {
                         </Badge>
                       )}
                       <span className="text-xs text-muted-foreground">
-                        {card?.rating} OVR
+                        {card ? computeOVR(card) : "?"} OVR
                       </span>
                     </div>
                     <Button
