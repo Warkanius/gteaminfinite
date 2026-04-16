@@ -260,6 +260,7 @@ export function resolveStatRoll(
   stars: number,
   dice: number[],
   difficultyStars?: number,
+  cpuDifficultyBoost?: number,
 ): StatRollResult {
   const diceCount = dice.length;
   const diceTotal = dice.reduce((a, b) => a + b, 0);
@@ -279,6 +280,11 @@ export function resolveStatRoll(
   if (difficultyStars != null) {
     const diffMod = getDifficultyModifier(stars, difficultyStars);
     rollResult = Math.max(0, Math.round(rollResult * diffMod));
+  }
+
+  // Apply CPU-side difficulty boost (passed only for CPU cards)
+  if (cpuDifficultyBoost != null && cpuDifficultyBoost !== 1) {
+    rollResult = Math.max(0, Math.round(rollResult * cpuDifficultyBoost));
   }
 
   const pointMultiplier = getPointMultiplier(stat);
