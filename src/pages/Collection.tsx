@@ -88,28 +88,32 @@ export default function Collection() {
   const teamMap = useMemo(() => Object.fromEntries(teams.map((t: any) => [t.id, t.name])), [teams]);
 
   // Group by player_card_id for duplicate counting & dedup display
-  const { groupedCards, duplicateMap, lockMap, collectionIdMap, sourceMap } = useMemo(() => {
+  const { groupedCards, duplicateMap, lockMap, collectionIdMap, sourceMap, sellableCountMap } = useMemo(() => {
     const dupMap: Record<string, number> = {};
     const lockMap: Record<string, boolean> = {};
     const colIdMap: Record<string, string> = {};
     const srcMap: Record<string, string> = {};
+    const sellableMap: Record<string, number> = {};
+    const NON_SELLABLE = new Set(["gem_market", "collection_reward", "starter_pack", "locker_code"]);
 
     for (const entry of rawCollection as any[]) {
       const pcId = entry.player_card_id;
       dupMap[pcId] = (dupMap[pcId] || 0) + 1;
       if (entry.is_locked) lockMap[pcId] = true;
 
-      // For quicksell: prefer an unlocked standard_pack entry
+      // Count unlocked + sellable copies (excludes reward sources)
+      const isSellable = !entry.is_locked && !NON_SELLABLE.has(entry.source ?? "standard_pack");
+      if (isSellable) sellableMap[pcId] = (sellableMap[pcId] || 0) + 1;
+
+      // For quicksell: always prefer an unlocked SELLABLE entry over anything else
       const currentBest = colIdMap[pcId];
       if (!currentBest) {
         colIdMap[pcId] = entry.id;
       } else {
         const currentEntry = (rawCollection as any[]).find((e: any) => e.id === currentBest);
-        const currentIsIdeal = currentEntry && !currentEntry.is_locked && currentEntry.source === "standard_pack";
-        const newIsIdeal = !entry.is_locked && entry.source === "standard_pack";
-        if (!currentIsIdeal && newIsIdeal) {
-          colIdMap[pcId] = entry.id;
-        } else if (!currentIsIdeal && !entry.is_locked && currentEntry?.is_locked) {
+        const currentIsSellable = currentEntry && !currentEntry.is_locked && !NON_SELLABLE.has(currentEntry.source ?? "standard_pack");
+        const newIsSellable = isSellable;
+        if (!currentIsSellable && newIsSellable) {
           colIdMap[pcId] = entry.id;
         }
       }
@@ -127,7 +131,7 @@ export default function Collection() {
       grouped.push(pc);
     }
 
-    return { groupedCards: grouped, duplicateMap: dupMap, lockMap, collectionIdMap: colIdMap, sourceMap: srcMap };
+    return { groupedCards: grouped, duplicateMap: dupMap, lockMap, collectionIdMap: colIdMap, sourceMap: srcMap, sellableCountMap: sellableMap };
   }, [rawCollection]);
 
   // Set of player_card_ids user owns
@@ -475,8 +479,9 @@ export default function Collection() {
         badges={selectedBadges}
         traits={selectedTraits}
         duplicateCount={selectedCardId ? (duplicateMap[selectedCardId] ?? 1) : 1}
+        sellableCount={selectedCardId ? (sellableCountMap[selectedCardId] ?? 0) : 0}
         isLocked={selectedCardId ? !!lockMap[selectedCardId] : false}
-        canSell={selectedCardId ? (sourceMap[selectedCardId] === "standard_pack") : false}
+        canSell={selectedCardId ? (sellableCountMap[selectedCardId] ?? 0) > 0 : false}
         onToggleLock={() => toggleLockMutation.mutate()}
         onQuicksell={() => quicksellMutation.mutate()}
         quicksellLoading={quicksellMutation.isPending}

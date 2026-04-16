@@ -37,6 +37,7 @@ interface CardDetailProps {
   badges?: { name: string; tier: string }[];
   traits?: { name: string; tier: string; target_stat?: string | null }[];
   duplicateCount?: number;
+  sellableCount?: number;
   isLocked?: boolean;
   canSell?: boolean;
   onToggleLock?: () => void;
@@ -57,7 +58,7 @@ const TIER_COLORS: Record<string, string> = {
   actolytrene: "hsl(var(--gem-actolytrene))",
 };
 
-export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [], duplicateCount = 1, isLocked, canSell = false, onToggleLock, onQuicksell, quicksellLoading }: CardDetailProps) {
+export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [], duplicateCount = 1, sellableCount = 0, isLocked, canSell = false, onToggleLock, onQuicksell, quicksellLoading }: CardDetailProps) {
   const { user } = useAuth();
 
   if (!card) return null;
@@ -68,7 +69,9 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
   const positions = [card.position1, card.position2].filter(Boolean).join(" / ");
 
   const statKeys = Object.keys(STAT_LABELS) as (keyof typeof STAT_LABELS)[];
-  const canQuicksell = canSell && !isLocked;
+  const canQuicksell = canSell && sellableCount > 0;
+  const sellingDuplicate = duplicateCount > 1 && sellableCount > 0;
+  const remainingAfterSell = Math.max(0, duplicateCount - 1);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -91,7 +94,11 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
             {card.gem_name && <Badge variant="outline" className="border-foreground/30">{card.gem_name}</Badge>}
             {teamName && <Badge variant="secondary">{teamName}</Badge>}
             {card.is_collection_reward && <Badge className="bg-gem-gold/20 text-foreground">Collection Reward</Badge>}
-            {duplicateCount > 1 && <Badge variant="secondary">×{duplicateCount} owned</Badge>}
+            {duplicateCount > 1 && (
+              <Badge className="bg-foreground/15 text-foreground border border-foreground/30">
+                ×{duplicateCount} owned{sellableCount > 0 && sellableCount < duplicateCount ? ` (${sellableCount} sellable)` : ""}
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -148,14 +155,21 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
           )}
           {onQuicksell && canSell && (
             <Button
-              variant="outline"
+              variant={sellingDuplicate ? "default" : "outline"}
               size="sm"
               onClick={onQuicksell}
               disabled={!canQuicksell || quicksellLoading}
               className="gap-1.5 ml-auto"
+              title={sellingDuplicate ? `Sell 1 duplicate, keep ${remainingAfterSell}` : undefined}
             >
               <Coins className="w-3.5 h-3.5" />
-              {quicksellLoading ? "Selling…" : canQuicksell ? "Quicksell" : "Locked"}
+              {quicksellLoading
+                ? "Selling…"
+                : !canQuicksell
+                ? "Locked"
+                : sellingDuplicate
+                ? `Sell 1 Duplicate (Keep ${remainingAfterSell})`
+                : "Quicksell"}
             </Button>
           )}
         </div>
