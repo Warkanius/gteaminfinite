@@ -356,7 +356,7 @@ export default function AdminPlayers() {
 
   const columns: Column<PlayerCard>[] = [
     { key: "name", label: "Name", sortable: true },
-    { key: "rating", label: "OVR", sortable: true, render: (r) => String(r.rating) },
+    { key: "rating", label: "OVR", sortable: true, render: (r) => computeOVR(r) },
     { key: "gem_tier_id", label: "Gem Tier", render: (r) => gemTierMap[r.gem_tier_id ?? ""] ?? "—" },
     { key: "position1", label: "Pos", render: (r) => [r.position1, r.position2].filter(Boolean).join("/") || "—" },
     { key: "team_id", label: "Team", render: (r) => teamMap[r.team_id ?? ""] ?? "—" },

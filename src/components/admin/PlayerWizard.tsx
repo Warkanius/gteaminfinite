@@ -306,8 +306,8 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
     return true;
   };
 
-  const ovrValue = result ? (STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length).toFixed(1) : "0.0";
-  const ovrStars = result ? Math.round(STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length) : 0;
+  const ovrValue = result ? computeOVR(result.stats) : "0.0";
+  const ovrStars = result ? computeStars(result.stats) : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
