@@ -207,6 +207,7 @@ export default function AdminPlayers() {
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["admin-players"] });
+      qc.invalidateQueries({ queryKey: ["evo-paths"] });
       setDialogOpen(false);
       if (evoSourceId && result?.wasInsert) {
         const sourceName = players.find(p => p.id === evoSourceId)?.name ?? "source";
@@ -253,7 +254,12 @@ export default function AdminPlayers() {
 
   async function createEvoForm(player: PlayerCard) {
     const data = await loadPlayerData(player);
-    setForm({ ...data, name: player.name, id: undefined });
+    // Auto-bump tier to next one
+    const currentTierIdx = gemTiers.findIndex(t => t.id === player.gem_tier_id);
+    const nextTier = currentTierIdx >= 0 && currentTierIdx < gemTiers.length - 1
+      ? gemTiers[currentTierIdx + 1]
+      : null;
+    setForm({ ...data, name: player.name, id: undefined, gem_tier_id: nextTier?.id ?? player.gem_tier_id ?? null });
     setEditId(null);
     setEvoSourceId(player.id);
     setGeneratorText("");
