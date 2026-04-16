@@ -140,25 +140,26 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
 
   const allRevealed = revealIndex >= cpuLineup.length && cpuLineup.length > 0;
 
-  const playerLineup = Array.from(selectedIds).map(id => {
-    const card = collection?.find(c => c.player_card_id === id)?.player_cards as any;
-    if (!card) return null;
-    // Overlay run stats: use player_cards.run_* if they exist, otherwise convert star stats
-    return {
-      ...card,
-      stat_3pt: card.run_stat_3pt ?? starStatToRunStat(card.stat_3pt),
-      stat_mid: card.run_stat_mid ?? starStatToRunStat(card.stat_mid),
-      stat_fin: card.run_stat_fin ?? starStatToRunStat(card.stat_fin),
-      stat_dnk: card.run_stat_dnk ?? starStatToRunStat(card.stat_dnk),
-      stat_stl: card.run_stat_stl ?? starStatToRunStat(card.stat_stl),
-      stat_blk: card.run_stat_blk ?? starStatToRunStat(card.stat_blk),
-      stat_ast: card.run_stat_ast ?? starStatToRunStat(card.stat_ast),
-      stat_reb: card.run_stat_reb ?? starStatToRunStat(card.stat_reb),
-      stat_int: card.run_stat_int ?? starStatToRunStat(card.stat_int),
-      _runRating: card.run_rating ?? starStatToRunStat(card.rating),
-      rating: card.run_rating ? runRatingToStars(card.run_rating) : card.rating,
-    };
+  // Original cards for display (consistent card art)
+  const selectedCards = Array.from(selectedIds).map(id => {
+    return collection?.find(c => c.player_card_id === id)?.player_cards as any;
   }).filter(Boolean);
+
+  // Run-stat overlaid cards for game logic only
+  const playerLineup = selectedCards.map(card => ({
+    ...card,
+    stat_3pt: card.run_stat_3pt ?? starStatToRunStat(card.stat_3pt),
+    stat_mid: card.run_stat_mid ?? starStatToRunStat(card.stat_mid),
+    stat_fin: card.run_stat_fin ?? starStatToRunStat(card.stat_fin),
+    stat_dnk: card.run_stat_dnk ?? starStatToRunStat(card.stat_dnk),
+    stat_stl: card.run_stat_stl ?? starStatToRunStat(card.stat_stl),
+    stat_blk: card.run_stat_blk ?? starStatToRunStat(card.stat_blk),
+    stat_ast: card.run_stat_ast ?? starStatToRunStat(card.stat_ast),
+    stat_reb: card.run_stat_reb ?? starStatToRunStat(card.stat_reb),
+    stat_int: card.run_stat_int ?? starStatToRunStat(card.stat_int),
+    _runRating: card.run_rating ?? starStatToRunStat(card.rating),
+    rating: card.run_rating ? runRatingToStars(card.run_rating) : card.rating,
+  }));
 
   return (
     <div className="space-y-8">
@@ -171,7 +172,7 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         </div>
 
       <div className="flex gap-3 min-h-[200px] mb-8 overflow-x-auto pb-4">
-          {playerLineup.map((card: any, i) => (
+          {selectedCards.map((card: any, i) => (
             <div key={card.id} className="w-[120px] sm:w-[140px] shrink-0 relative">
               <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold z-10 shadow-lg border-2 border-background">
                 {i + 1}
@@ -181,7 +182,7 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
               </div>
             </div>
           ))}
-          {Array.from({ length: 3 - playerLineup.length }).map((_, i) => (
+          {Array.from({ length: 3 - selectedCards.length }).map((_, i) => (
             <div key={`empty-${i}`} className="w-[120px] sm:w-[140px] shrink-0 h-44 sm:h-48 border-2 border-dashed border-border/50 rounded-lg flex items-center justify-center text-muted-foreground text-sm font-semibold opacity-50">
               Empty Slot
             </div>
