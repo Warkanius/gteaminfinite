@@ -332,38 +332,51 @@ export function applyRerolls(
 }
 
 /**
- * Apply bonus badges: add partial/full bonus dice value to the roll total.
- * Gold/Diamond tiers also get rerolls on the bonus itself.
+ * Apply bonus badges (e.g. Walking Bucket): add flat bonus to the roll.
+ * - 5v5: dice value bonus, with potential rerolls.
+ * - Runs: flat +5 per tier, applies to any scoring stat (3PT/MID/FIN/DNK/INT).
+ *   If the badge has no `affected_stat` set, it applies to all scoring stats.
  */
 export function applyBonusBadge(
   stat: StatKey,
   badges: CardBadge[],
+  mode: "5v5" | "runs" = "5v5",
 ): { bonusValue: number; activations: BadgeActivation[] } {
   const activations: BadgeActivation[] = [];
-  const badge = bestBadge(badges, stat, "bonus");
+
+  // In Runs, allow bonus badges with no affected_stat (Walking Bucket-style)
+  // to apply to any scoring stat.
+  const SCORING: StatKey[] = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_int"];
+  let badge: CardBadge | null = bestBadge(badges, stat, "bonus");
+  if (!badge && mode === "runs" && SCORING.includes(stat)) {
+    const candidates = badges.filter(
+      (b) => b.effect_type === "bonus" && (!b.affected_stat || b.affected_stat.trim() === ""),
+    );
+    if (candidates.length > 0) {
+      badge = candidates.reduce((a, b) => (TIER_ORDER[b.tier] > TIER_ORDER[a.tier] ? b : a));
+    }
+  }
   if (!badge) return { bonusValue: 0, activations };
 
-  let baseBonus = bonusTypeDiceValue(badge.tier);
-  const rerolls = bonusTypeRerolls(badge.tier);
+  let baseBonus = bonusTypeDiceValue(badge.tier, mode);
+  const rerolls = bonusTypeRerolls(badge.tier, mode);
 
-  // For tiers with rerolls, roll a d6 and potentially reroll
   if (rerolls > 0) {
     let bestRoll = rollDice(1).dice[0];
     for (let i = 0; i < rerolls; i++) {
       const newRoll = rollDice(1).dice[0];
       if (newRoll > bestRoll) bestRoll = newRoll;
     }
-    // Scale the bonus by the roll (e.g., 0.5 * best_d6_roll / 6)
     baseBonus = Math.round(baseBonus * bestRoll) / 6 + baseBonus;
   }
 
-  const roundedBonus = Math.round(baseBonus * 10) / 10;
+  const roundedBonus = mode === "runs" ? Math.round(baseBonus) : Math.round(baseBonus * 10) / 10;
 
   activations.push({
     badgeName: badge.name,
     abbreviation: badge.abbreviation,
     tier: badge.tier,
-    effect: `+${roundedBonus} bonus dice`,
+    effect: mode === "runs" ? `+${roundedBonus} to roll` : `+${roundedBonus} bonus dice`,
   });
 
   return { bonusValue: roundedBonus, activations };
