@@ -3,6 +3,7 @@ import { PlayerCard } from "@/components/cards/PlayerCard";
 import { Button } from "@/components/ui/button";
 import { ArrowUp, ArrowDown } from "lucide-react";
 import type { GameCard } from "@/pages/Play";
+import { computeOVR } from "@/lib/ovrUtils";
 
 interface MatchupArrangeProps {
   userLineup: GameCard[];
@@ -72,7 +73,7 @@ export function MatchupArrange({ userLineup, cpuLineup, gemTierMap, onConfirm }:
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{userCard.name}</p>
-                    <p className="text-xs text-muted-foreground">{userCard.rating}★</p>
+                    <p className="text-xs text-muted-foreground">{computeOVR(userCard)}★</p>
                   </div>
                 </div>
               </div>
@@ -84,7 +85,7 @@ export function MatchupArrange({ userLineup, cpuLineup, gemTierMap, onConfirm }:
                 <div className="flex items-center gap-2 justify-end">
                   <div className="min-w-0 text-right">
                     <p className="text-sm font-medium truncate">{cpuCard?.name ?? "???"}</p>
-                    <p className="text-xs text-muted-foreground">{cpuCard?.rating ?? 0}★</p>
+                    <p className="text-xs text-muted-foreground">{cpuCard ? computeOVR(cpuCard) : "0.0"}★</p>
                   </div>
                   <div className="w-12 h-16 shrink-0">
                     {cpuCard && <PlayerCard card={cpuCard} gemTier={gemTierMap[cpuCard.gem_tier_id ?? ""]} className="w-full h-full" />}
