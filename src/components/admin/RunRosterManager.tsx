@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
@@ -500,7 +499,7 @@ export function RunRosterManager({ runId }: Props) {
             No players in roster yet. Use the tools below to add players.
           </div>
         ) : (
-          <ScrollArea className="max-h-[50vh]">
+          <div className="max-h-[50vh] overflow-y-auto">
             <div className="divide-y divide-border/30">
               {rosterPlayers.map(({ id, player_card_id, run_rating, card }) => (
                 <div
@@ -543,7 +542,7 @@ export function RunRosterManager({ runId }: Props) {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         )}
       </div>
 
@@ -578,7 +577,7 @@ export function RunRosterManager({ runId }: Props) {
             Key: 1★=20 · 2★=40 · 3★=60 · 4★=80 · 5★=100 · 6★=120. Adjust values before confirming.
           </p>
 
-          <ScrollArea className="max-h-[50vh]">
+          <div className="max-h-[50vh] overflow-y-auto">
             <div className="space-y-1">
               <div className="grid grid-cols-[1fr_repeat(6,48px)_auto] gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sticky top-0 bg-primary/5 z-10">
                 <span>Player</span>
@@ -628,7 +627,6 @@ export function RunRosterManager({ runId }: Props) {
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={async () => {
                       const removedId = p.id;
                       setPendingPlayers((prev) => prev.filter((x) => x.id !== removedId));
-                      // Delete orphan card
                       await supabase.from("player_cards").delete().eq("id", removedId);
                       qc.invalidateQueries({ queryKey: ["admin-all-players-lite"] });
                     }}>
@@ -642,7 +640,7 @@ export function RunRosterManager({ runId }: Props) {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </div>
       )}
 
@@ -748,7 +746,7 @@ export function RunRosterManager({ runId }: Props) {
           </div>
 
           {/* Available Player List */}
-          <ScrollArea className="h-[280px] border rounded-md">
+          <div className="h-[280px] overflow-y-auto border rounded-md">
             {isLoading ? (
               <div className="flex items-center justify-center py-12 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…

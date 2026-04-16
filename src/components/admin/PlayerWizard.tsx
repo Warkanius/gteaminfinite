@@ -306,6 +306,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
     return true;
   };
 
+  const ovrValue = result ? (STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length).toFixed(1) : "0.0";
   const ovrStars = result ? Math.round(STAT_KEYS.reduce((s, k) => s + (result.stats[k] ?? 0), 0) / STAT_KEYS.length) : 0;
 
   return (
@@ -571,7 +572,7 @@ export function PlayerWizard({ open, onOpenChange, onAccept, gemTiers, players, 
             </div>
 
             <div className="text-center text-2xl font-mono font-bold">
-              OVR {"⭐".repeat(Math.min(ovrStars, 6))}{ovrStars > 6 ? ` +${ovrStars - 6}🔥` : ""}
+              OVR {ovrValue} {"⭐".repeat(Math.min(ovrStars, 6))}{ovrStars > 6 ? ` +${ovrStars - 6}🔥` : ""}
             </div>
 
             {/* Badges — editable */}
