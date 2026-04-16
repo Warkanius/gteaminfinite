@@ -613,9 +613,15 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
                   lastPlay.kind === "make" && lastPlay.side === "cpu" && "border-destructive/60 text-destructive",
                   lastPlay.kind === "miss" && "border-muted-foreground/40 text-muted-foreground",
                   lastPlay.kind === "rebound" && "border-accent text-accent-foreground",
+                  lastPlay.kind === "steal" && "border-primary/60 text-primary",
+                  lastPlay.kind === "block" && "border-destructive/60 text-destructive",
                 )}
               >
-                {lastPlay.kind === "make" ? "✅ Make" : lastPlay.kind === "miss" ? "❌ Miss" : `🏀 Reb ${lastPlay.side === "player" ? "(You)" : "(CPU)"}`}
+                {lastPlay.kind === "make" ? "✅ Make"
+                  : lastPlay.kind === "miss" ? "❌ Miss"
+                  : lastPlay.kind === "steal" ? `🛡️ Steal ${lastPlay.side === "player" ? "(You)" : "(CPU)"}`
+                  : lastPlay.kind === "block" ? `🚫 Block ${lastPlay.side === "player" ? "(You)" : "(CPU)"}`
+                  : `🏀 Reb ${lastPlay.side === "player" ? "(You)" : "(CPU)"}`}
               </Badge>
             )}
           </div>
