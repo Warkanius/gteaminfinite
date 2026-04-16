@@ -152,7 +152,7 @@ export function resolveTraitBoosts(
 
     const statForCheck = trait.condition_type === "low_stat" ? statValue : undefined;
 
-    if (conditionMet(trait.condition_type, context, opponentRating, cardRating, statForCheck, cardAvgStat)) {
+    if (conditionMet(trait.condition_type, context, opponentRating, cardRating, statForCheck, cardAvgStat, mode)) {
       const boost = boostPerTier(trait.tier, mode);
       adjusted += boost;
       activations.push({
