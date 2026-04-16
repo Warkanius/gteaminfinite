@@ -469,17 +469,16 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     });
     setTimeout(() => setPhase("result"), 900);
   };
+
+  /** Player contests CPU's shot */
   const handleContestShot = () => {
     setPhase("rolling");
     const shooter = cpuLineup[cpuShooterIdx];
-    const offRating = shooter._runRating ?? 60;
 
     const defStat = getDefenseStat(cpuStat);
     const defenderIdx = isInsideStat(cpuStat) ? 2 : cpuShooterIdx;
     const defender = playerLineup[defenderIdx];
-    const defRating = defender._runRating ?? 60;
 
-    // Apply trait boosts to CPU offense
     const cpuShooterTraits = traitMap[shooter.id] ?? [];
     const cpuShooterTeammateTraits = getTeammateTraits(traitMap, cpuLineup, shooter.id);
     const cpuShooterAvg = computeCardAvgStat(shooter);
@@ -491,18 +490,16 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
       cpuStat, cpuOffTraitResult.adjustedStat, cpuShooterTeammateTraits, "runs",
     );
 
-    // Badge effects for CPU offense (with trait-adjusted stat)
     const shooterBadges = badgeMap[shooter.id] ?? [];
     const defenderBadges = badgeMap[defender.id] ?? [];
     const shooterTeammateBadges = getTeammateBadges(badgeMap, cpuLineup, shooter.id);
 
-    const offDiceRaw = rollDice(getRunDiceCount(offRating)).dice;
+    const offDiceRaw = rollForStat(cpuOffTeammateTraitResult.adjustedStat);
     const offBadge = resolveBadgeEffects(
       cpuStat, cpuOffTeammateTraitResult.adjustedStat, offDiceRaw,
       shooterBadges, defenderBadges, shooterTeammateBadges, "runs",
     );
 
-    // Apply trait boosts to player defense
     const defTraitsC = traitMap[defender.id] ?? [];
     const defTeammateTraitsC = getTeammateTraits(traitMap, playerLineup, defender.id);
     const defAvgC = computeCardAvgStat(defender);
@@ -514,10 +511,9 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
       defStat, defTraitResultC.adjustedStat, defTeammateTraitsC, "runs",
     );
 
-    // Badge effects for player defense (with trait-adjusted stat)
     const defBadgesOwn = badgeMap[defender.id] ?? [];
     const defTeammateBadges = getTeammateBadges(badgeMap, playerLineup, defender.id);
-    const defDiceRaw = rollDice(getRunDiceCount(defRating)).dice;
+    const defDiceRaw = rollForStat(defTeammateTraitResultC.adjustedStat);
     const defBadge = resolveBadgeEffects(
       defStat, defTeammateTraitResultC.adjustedStat, defDiceRaw,
       defBadgesOwn, shooterBadges, defTeammateBadges, "runs",
@@ -531,8 +527,8 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     ];
 
     const result = resolveRunShotContest(
-      cpuStat, offBadge.adjustedStat, offRating, offBadge.finalDice,
-      defStat, defBadge.adjustedStat, defRating, defBadge.finalDice,
+      cpuStat, offBadge.adjustedStat, offBadge.finalDice,
+      defStat, defBadge.adjustedStat, defBadge.finalDice,
       offBadge.totalBonus, defBadge.totalBonus,
     );
     setLastContest(result);
@@ -557,7 +553,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
         logBadgeActivations(allActivations);
         const newPScore = baseP;
         let newCScore = baseC;
-        if (result.made) {
+        if (result.outcome === "make") {
           const pts = result.points;
           newCScore += pts;
           setCpuScore(newCScore);
@@ -568,6 +564,18 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
           setPhase("choose");
           const winner = checkWinner(newPScore, newCScore);
           if (winner) handleGameEnd(winner, newPScore, newCScore);
+        } else if (result.outcome === "steal") {
+          // Player defender stole CPU's pass — player keeps possession
+          addLog({ msg: `🛡️ ${defender.name} STEALS from CPU! (${result.defenseRoll} vs ${result.offenseRoll}, gap ${result.gap}) → Your ball`, type: "rebound" });
+          setLastPlay({ kind: "steal", side: "player" });
+          setPossession("player");
+          setPendingContest(null);
+          setPhase("choose");
+        } else if (result.outcome === "block") {
+          addLog({ msg: `🚫 ${defender.name} BLOCKS CPU ${shooter.name}! (${result.defenseRoll} vs ${result.offenseRoll}, gap ${result.gap}) → Rebound...`, type: "miss" });
+          setLastPlay({ kind: "block", side: "player" });
+          setPendingContest(null);
+          resolveRebound(newPScore, newCScore);
         } else {
           addLog({ msg: `🛡️ ${defender.name} stops CPU ${shooter.name} on ${STAT_LABELS[capturedCpuStat]}! (${result.defenseRoll} vs ${result.offenseRoll}) → Rebound...`, type: "miss" });
           setLastPlay({ kind: "miss", side: "cpu" });
