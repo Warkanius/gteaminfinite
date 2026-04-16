@@ -230,7 +230,7 @@ export default function GemMarket() {
                           <p className="text-xs text-muted-foreground italic">{card.gem_name}</p>
                         )}
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>{card.rating} OVR</span>
+                          <span>{computeOVR(card)} OVR</span>
                           {card.position1 && <span>• {card.position1}</span>}
                           {card.position2 && <span>/ {card.position2}</span>}
                         </div>
