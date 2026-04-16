@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Wand2, ChevronDown, Trash2, Plus, Save, Loader2, Layers } from "lucide-react";
+import { Wand2, ChevronDown, Trash2, Plus, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { generateSingleEvoStep, type EvoStep, type CompoundChallenge } from "@/lib/evoGenerator";
 import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
