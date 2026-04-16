@@ -520,7 +520,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
                     : "opacity-60 hover:opacity-90"
                 }`}
               >
-                <PlayerCard card={card} />
+                <PlayerCard card={card._displayCard ?? card} gemTier={(card._displayCard ?? card).gem_tiers} />
                 <p className="text-center text-xs font-semibold mt-1">Slot {idx + 1}</p>
               </div>
             ))}
@@ -564,13 +564,16 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
           <div className="flex gap-6 justify-center items-start">
             <div className="text-center w-28 sm:w-32">
               <p className="text-xs font-semibold text-destructive mb-1">CPU Shooter</p>
-              <PlayerCard card={cCard} />
+              <PlayerCard card={cCard._displayCard ?? cCard} gemTier={(cCard._displayCard ?? cCard).gem_tiers} />
               <p className="text-xs mt-1 font-mono">{STAT_LABELS[cpuStat]}: {cCard[cpuStat]}</p>
             </div>
             <div className="text-center text-lg font-display text-muted-foreground self-center">VS</div>
             <div className="text-center w-28 sm:w-32">
               <p className="text-xs font-semibold text-primary mb-1">Your Defender</p>
-              <PlayerCard card={playerLineup[isInsideStat(cpuStat) ? 2 : cpuShooterIdx]} />
+              {(() => {
+                const def = playerLineup[isInsideStat(cpuStat) ? 2 : cpuShooterIdx];
+                return <PlayerCard card={def._displayCard ?? def} gemTier={(def._displayCard ?? def).gem_tiers} />;
+              })()}
               <p className="text-xs mt-1 font-mono">
                 {STAT_LABELS[getDefenseStat(cpuStat)]}: {playerLineup[isInsideStat(cpuStat) ? 2 : cpuShooterIdx][getDefenseStat(cpuStat)]}
               </p>

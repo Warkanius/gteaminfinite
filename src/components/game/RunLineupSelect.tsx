@@ -7,7 +7,7 @@ import { RevealCard, RevealCardHandle } from "@/components/packs/RevealCard";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Dices } from "lucide-react";
-import { runRatingToStars, starStatToRunStat } from "@/lib/gameEngine";
+import { starStatToRunStat } from "@/lib/gameEngine";
 import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 import { fetchTraitsForCards, type CardTrait } from "@/lib/traitEngine";
 
@@ -52,12 +52,12 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         .select(`*, player_cards(*, gem_tiers(*))`)
         .eq("run_id", runId);
       if (error) throw error;
-      // Map to card-like objects with run stats overlaid
+      // Map to objects carrying both display + game representations
       return (data ?? []).map((rp) => {
-        const base = rp.player_cards as any;
-        return {
-          ...base,
-          // Keep raw numerical values for game logic
+        const displayCard = rp.player_cards as any;
+        const gameCard = {
+          ...displayCard,
+          // Raw numerical run-stat values for game engine
           stat_3pt: rp.run_stat_3pt,
           stat_mid: rp.run_stat_mid,
           stat_fin: rp.run_stat_fin,
@@ -67,10 +67,11 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
           stat_ast: rp.run_stat_ast,
           stat_reb: rp.run_stat_reb,
           stat_int: rp.run_stat_int,
-          // Keep raw run_rating for game engine, convert for display
           _runRating: rp.run_rating,
-          rating: runRatingToStars(rp.run_rating),
+          // Preserve untouched display card for UI rendering
+          _displayCard: displayCard,
         };
+        return { displayCard, gameCard };
       });
     },
     enabled: !!runId,
@@ -103,7 +104,6 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
     setIsRolling(true);
     
     // Simulate 4d6 (range 4 to 24) to pick 3 unique opponents
-    // We map 4-24 to 0-20 to match array indexes (or wrap around using modulo)
     const picks: any[] = [];
     const usedIndexes = new Set<number>();
     
@@ -140,13 +140,13 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
 
   const allRevealed = revealIndex >= cpuLineup.length && cpuLineup.length > 0;
 
-  // Original cards for display (consistent card art)
-  const selectedCards = Array.from(selectedIds).map(id => {
+  // Original cards for display (consistent card art, real star stats, gem_tiers preserved)
+  const selectedDisplayCards = Array.from(selectedIds).map(id => {
     return collection?.find(c => c.player_card_id === id)?.player_cards as any;
   }).filter(Boolean);
 
-  // Run-stat overlaid cards for game logic only
-  const playerLineup = selectedCards.map(card => ({
+  // Run-stat overlaid cards for game logic only — carry _displayCard for downstream rendering
+  const playerGameLineup = selectedDisplayCards.map((card: any) => ({
     ...card,
     stat_3pt: card.run_stat_3pt ?? starStatToRunStat(card.stat_3pt),
     stat_mid: card.run_stat_mid ?? starStatToRunStat(card.stat_mid),
@@ -158,7 +158,7 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
     stat_reb: card.run_stat_reb ?? starStatToRunStat(card.stat_reb),
     stat_int: card.run_stat_int ?? starStatToRunStat(card.stat_int),
     _runRating: card.run_rating ?? starStatToRunStat(card.rating),
-    rating: card.run_rating ? runRatingToStars(card.run_rating) : card.rating,
+    _displayCard: card,
   }));
 
   return (
@@ -172,17 +172,17 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         </div>
 
       <div className="flex gap-3 min-h-[200px] mb-8 overflow-x-auto pb-4">
-          {selectedCards.map((card: any, i) => (
+          {selectedDisplayCards.map((card: any, i) => (
             <div key={card.id} className="w-[120px] sm:w-[140px] shrink-0 relative">
               <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold z-10 shadow-lg border-2 border-background">
                 {i + 1}
               </div>
               <div onClick={() => handleCardClick(card.id)} className="cursor-pointer">
-                <PlayerCard card={card} />
+                <PlayerCard card={card} gemTier={card.gem_tiers} />
               </div>
             </div>
           ))}
-          {Array.from({ length: 3 - selectedCards.length }).map((_, i) => (
+          {Array.from({ length: 3 - selectedDisplayCards.length }).map((_, i) => (
             <div key={`empty-${i}`} className="w-[120px] sm:w-[140px] shrink-0 h-44 sm:h-48 border-2 border-dashed border-border/50 rounded-lg flex items-center justify-center text-muted-foreground text-sm font-semibold opacity-50">
               Empty Slot
             </div>
@@ -203,14 +203,14 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
           <div className="space-y-6 border-t border-border/50 pt-6">
             <h2 className="font-display text-2xl tracking-wider">CPU Lineup (4d6 Roll)</h2>
             <div className="flex gap-3 min-h-[200px] overflow-x-auto pb-4">
-              {cpuLineup.map((card, idx) => (
+              {cpuLineup.map((entry: any, idx) => (
                 <div key={`cpu-${idx}`} className="w-[120px] sm:w-[140px] shrink-0 relative">
                   <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center font-bold z-10 shadow-lg border-2 border-background">
                     {idx + 1}
                   </div>
                   <RevealCard
                     ref={el => revealRefs.current[idx] = el}
-                    card={card}
+                    card={entry.displayCard}
                   />
                 </div>
               ))}
@@ -220,12 +220,16 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
                 className="w-full font-display text-lg tracking-wider bg-gem-diamond hover:bg-gem-diamond/90 text-black" 
                 size="lg"
                 onClick={async () => {
-                  const allCardIds = [...playerLineup.map((c: any) => c.id), ...cpuLineup.map((c: any) => c.id)];
+                  const cpuGameLineup = cpuLineup.map((e: any) => e.gameCard);
+                  const allCardIds = [
+                    ...playerGameLineup.map((c: any) => c.id),
+                    ...cpuGameLineup.map((c: any) => c.id),
+                  ];
                   const [badgeMap, traitMap] = await Promise.all([
                     fetchBadgesForCards(supabase, allCardIds),
                     fetchTraitsForCards(supabase, allCardIds),
                   ]);
-                  onLineupConfirmed(playerLineup, cpuLineup, badgeMap, traitMap);
+                  onLineupConfirmed(playerGameLineup, cpuGameLineup, badgeMap, traitMap);
                 }}
               >
                 START GAUNTLET
@@ -248,7 +252,7 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
               return (
                 <div key={card.id} className="relative w-full transition-transform hover:-translate-y-1">
                   <div onClick={() => handleCardClick(card.id)} className="cursor-pointer">
-                    <PlayerCard card={card} />
+                    <PlayerCard card={card} gemTier={card.gem_tiers} />
                   </div>
                   {isSelected && (
                     <div className="absolute inset-0 bg-background/50 rounded-lg flex items-center justify-center border-4 border-primary">
