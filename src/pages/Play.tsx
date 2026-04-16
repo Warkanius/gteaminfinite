@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
-import { useLocation } from "react-router-dom";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { LineupSelect } from "@/components/game/LineupSelect";
