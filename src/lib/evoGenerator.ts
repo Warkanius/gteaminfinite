@@ -55,99 +55,101 @@ const BASE_TARGETS: Record<string, number[]> = {
   stat_game_count: [3, 5, 10, 15, 20],
 };
 
+/**
+ * Generate a single next evo step based on the card's current tier, stats, and badges.
+ * Returns null if there's no next tier to evolve to.
+ */
+export function generateSingleEvoStep(
+  currentTierId: string | null,
+  allTiers: GemTier[],
+  existingBadges: { badge_id: string; tier: string }[],
+  cardStats: Record<string, number>,
+  existingStepCount: number,
+): EvoStep | null {
+  const sortedTiers = [...allTiers].sort((a, b) => a.sort_order - b.sort_order);
+  if (sortedTiers.length < 2) return null;
+
+  const currentIdx = currentTierId
+    ? sortedTiers.findIndex((t) => t.id === currentTierId)
+    : -1;
+
+  // The "from" tier for the next step: if we already have steps, advance from the last step's to_tier
+  const fromIdx = currentIdx >= 0 ? currentIdx + existingStepCount : existingStepCount;
+  const toIdx = fromIdx + 1;
+
+  if (fromIdx < 0 || toIdx >= sortedTiers.length) return null;
+
+  const fromTier = sortedTiers[fromIdx];
+  const toTier = sortedTiers[toIdx];
+  const stepNum = existingStepCount;
+
+  // Pick a challenge type that relates to the card's strongest stats
+  const sortedStats = [...STAT_KEYS]
+    .map(k => ({ key: k, val: cardStats[k] ?? 0 }))
+    .sort((a, b) => b.val - a.val);
+
+  const topStats = sortedStats.slice(0, 4);
+  const challengeIdx = stepNum % CHALLENGE_TYPES.length;
+  const challengeType = CHALLENGE_TYPES[challengeIdx];
+  const targets = BASE_TARGETS[challengeType];
+  const target = targets[Math.min(stepNum, targets.length - 1)];
+
+  // Stat boosts: boost the card's weaker stats more to round them out
+  const boostCount = 3 + (stepNum > 2 ? 1 : 0);
+  const weakStats = sortedStats.slice(-boostCount).map(s => s.key);
+  const statBoosts: Record<string, number> = {};
+  for (const stat of weakStats) {
+    const boost = stepNum >= 3 ? 2 : 1;
+    const currentVal = cardStats[stat] ?? 0;
+    if (currentVal + boost <= 99) {
+      statBoosts[stat] = boost;
+    }
+  }
+
+  // Badge upgrades — upgrade one existing badge
+  const TIERS_ORDER = ["base", "gold", "hof", "diamond", "actolytrene"];
+  const newBadges: { badge_id: string; tier: string }[] = [];
+  if (existingBadges.length > 0) {
+    const badge = existingBadges[stepNum % existingBadges.length];
+    const currentTierIdx = TIERS_ORDER.indexOf(badge.tier);
+    if (currentTierIdx < TIERS_ORDER.length - 1) {
+      newBadges.push({ badge_id: badge.badge_id, tier: TIERS_ORDER[currentTierIdx + 1] });
+    }
+  }
+
+  // Pick a stat challenge based on the card's top stats (playstyle-aware)
+  const isStatChallenge = ["total_stat", "single_game_stat", "stat_game_count"].includes(challengeType);
+  const challengeStat = isStatChallenge ? topStats[stepNum % topStats.length].key : null;
+
+  return {
+    from_tier_id: fromTier.id,
+    to_tier_id: toTier.id,
+    step_order: existingStepCount + 1,
+    challenge_description: CHALLENGE_TEMPLATES[challengeType](target, challengeStat ?? undefined),
+    challenge_type: challengeType,
+    challenge_target: target,
+    challenge_stat: challengeStat,
+    stat_boosts: statBoosts,
+    new_badges: newBadges,
+    evolves_to_card_id: null,
+    compound_challenges: [],
+  };
+}
+
+// Keep legacy function for backward compat but it's no longer used by the UI
 export function generateEvoPath(
   currentTierId: string | null,
   allTiers: GemTier[],
   existingBadges: { badge_id: string; tier: string }[],
   cardStats: Record<string, number>,
 ): EvoStep[] {
-  const sortedTiers = [...allTiers].sort((a, b) => a.sort_order - b.sort_order);
-  if (sortedTiers.length < 2) return [];
-
-  const currentIdx = currentTierId
-    ? sortedTiers.findIndex((t) => t.id === currentTierId)
-    : -1;
-
-  const startIdx = currentIdx >= 0 ? currentIdx : 0;
   const steps: EvoStep[] = [];
-
-  for (let i = startIdx; i < sortedTiers.length - 1; i++) {
-    const fromTier = sortedTiers[i];
-    const toTier = sortedTiers[i + 1];
-    const stepNum = i - startIdx;
-    const challengeIdx = stepNum % CHALLENGE_TYPES.length;
-    const challengeType = CHALLENGE_TYPES[challengeIdx];
-    const targets = BASE_TARGETS[challengeType];
-    const target = targets[Math.min(stepNum, targets.length - 1)];
-
-    // Stat boosts: pick 3-4 random stats and boost by 1-2
-    const boostCount = 3 + (stepNum > 2 ? 1 : 0);
-    const shuffledStats = [...STAT_KEYS].sort(() => Math.random() - 0.5);
-    const statBoosts: Record<string, number> = {};
-    for (let s = 0; s < boostCount; s++) {
-      const stat = shuffledStats[s];
-      const boost = stepNum >= 3 ? 2 : 1;
-      const currentVal = cardStats[stat] ?? 0;
-      if (currentVal + boost <= 99) {
-        statBoosts[stat] = boost;
-      }
-    }
-
-    // Badge upgrades
-    const TIERS_ORDER = ["base", "gold", "hof", "diamond", "actolytrene"];
-    const newBadges: { badge_id: string; tier: string }[] = [];
-    if (existingBadges.length > 0 && stepNum < existingBadges.length) {
-      const badge = existingBadges[stepNum % existingBadges.length];
-      const currentTierIdx = TIERS_ORDER.indexOf(badge.tier);
-      if (currentTierIdx < TIERS_ORDER.length - 1) {
-        newBadges.push({ badge_id: badge.badge_id, tier: TIERS_ORDER[currentTierIdx + 1] });
-      }
-    }
-
-    const isStatChallenge = ["total_stat", "single_game_stat", "stat_game_count"].includes(challengeType);
-    const challengeStat = isStatChallenge ? shuffledStats[0] : null;
-
-    // For later steps (3+), generate compound challenges
-    const compoundChallenges: CompoundChallenge[] = [];
-    if (stepNum >= 3) {
-      // Pick 2-3 different challenge types
-      const compoundCount = stepNum >= 4 ? 3 : 2;
-      const usedTypes = new Set<string>();
-      const compoundStats = [...STAT_KEYS].sort(() => Math.random() - 0.5);
-      
-      for (let c = 0; c < compoundCount; c++) {
-        const cType = CHALLENGE_TYPES[(challengeIdx + c) % CHALLENGE_TYPES.length];
-        if (usedTypes.has(cType)) continue;
-        usedTypes.add(cType);
-        const cTargets = BASE_TARGETS[cType];
-        const cTarget = cTargets[Math.min(stepNum, cTargets.length - 1)];
-        const cIsStatChallenge = ["total_stat", "single_game_stat", "stat_game_count"].includes(cType);
-        const cStat = cIsStatChallenge ? compoundStats[c % compoundStats.length] : null;
-        compoundChallenges.push({
-          type: cType,
-          stat: cStat,
-          target: cTarget,
-          description: CHALLENGE_TEMPLATES[cType](cTarget, cStat ?? undefined),
-        });
-      }
-    }
-
-    steps.push({
-      from_tier_id: fromTier.id,
-      to_tier_id: toTier.id,
-      step_order: stepNum + 1,
-      challenge_description: compoundChallenges.length > 0
-        ? compoundChallenges.map(c => c.description).join(" AND ")
-        : CHALLENGE_TEMPLATES[challengeType](target, challengeStat ?? undefined),
-      challenge_type: challengeType,
-      challenge_target: target,
-      challenge_stat: challengeStat,
-      stat_boosts: statBoosts,
-      new_badges: newBadges,
-      evolves_to_card_id: null,
-      compound_challenges: compoundChallenges,
-    });
+  let count = 0;
+  while (true) {
+    const step = generateSingleEvoStep(currentTierId, allTiers, existingBadges, cardStats, count);
+    if (!step) break;
+    steps.push(step);
+    count++;
   }
-
   return steps;
 }

@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Wand2, ChevronDown, Trash2, Plus, Save, Loader2, Layers } from "lucide-react";
 import { toast } from "sonner";
-import { generateEvoPath, type EvoStep, type CompoundChallenge } from "@/lib/evoGenerator";
+import { generateSingleEvoStep, type EvoStep, type CompoundChallenge } from "@/lib/evoGenerator";
 import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
+import { computeOVR } from "@/lib/ovrUtils";
 
 const CHALLENGE_TYPES = ["points_scored", "games_won", "total_stat", "single_game_stat", "stat_game_count"];
 const STAT_KEYS = ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"];
@@ -52,7 +53,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
   const { data: allPlayers = [] } = useQuery({
     queryKey: ["all-player-cards-combo"],
     queryFn: async () => {
-      const { data } = await supabase.from("player_cards").select("id, name").order("name");
+      const { data } = await supabase.from("player_cards").select("id, name, gem_tier_id, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int").order("name");
       return data ?? [];
     },
   });
@@ -76,10 +77,14 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
     }
   }, [existingSteps]);
 
-  function autoGenerate() {
-    const generated = generateEvoPath(playerGemTierId, gemTiers, playerBadges, playerStats);
-    setSteps(generated);
-    toast.success(`Generated ${generated.length} evo steps`);
+  function autoGenerateNextStep() {
+    const step = generateSingleEvoStep(playerGemTierId, gemTiers, playerBadges, playerStats, steps.length);
+    if (!step) {
+      toast.error("No next tier to evolve to");
+      return;
+    }
+    setSteps(s => [...s, step]);
+    toast.success(`Generated step ${step.step_order}: ${tierMap[step.from_tier_id ?? ""] ?? "?"} → ${tierMap[step.to_tier_id] ?? "?"}`);
   }
 
   function addStep() {
@@ -155,6 +160,12 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
 
   const tierMap = Object.fromEntries(gemTiers.map(t => [t.id, t.name]));
 
+  const comboPlayers = allPlayers.map(p => ({
+    id: p.id,
+    name: p.name,
+    detail: `${tierMap[p.gem_tier_id ?? ""] ?? "No Tier"} — ${computeOVR(p)}`,
+  }));
+
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="bg-muted/30 p-4 rounded-lg border space-y-3">
       <CollapsibleTrigger className="flex items-center justify-between w-full">
@@ -166,8 +177,8 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-4 pt-2">
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={autoGenerate} className="gap-1">
-            <Wand2 className="h-3.5 w-3.5" /> Auto-Generate
+          <Button size="sm" variant="outline" onClick={autoGenerateNextStep} className="gap-1">
+            <Wand2 className="h-3.5 w-3.5" /> Generate Next Step
           </Button>
           <Button size="sm" variant="outline" onClick={addStep} className="gap-1">
             <Plus className="h-3.5 w-3.5" /> Add Step
@@ -296,7 +307,7 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
                 <div className="space-y-1">
                   <Label className="text-xs">Evolves To (Target Card)</Label>
                   <PlayerCombobox
-                    players={allPlayers}
+                    players={comboPlayers}
                     value={step.evolves_to_card_id ?? ""}
                     onValueChange={(v) => updateStep(idx, { evolves_to_card_id: v || null } as any)}
                     placeholder="Select evolved card…"

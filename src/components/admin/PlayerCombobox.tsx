@@ -19,6 +19,7 @@ import {
 interface PlayerOption {
   id: string;
   name: string;
+  detail?: string;
 }
 
 interface PlayerComboboxProps {
@@ -49,7 +50,7 @@ export function PlayerCombobox({
           className={cn("w-full justify-between font-normal", className)}
         >
           <span className="truncate">
-            {selected ? selected.name : placeholder}
+            {selected ? (selected.detail ? `${selected.name} (${selected.detail})` : selected.name) : placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -63,7 +64,7 @@ export function PlayerCombobox({
               {players.map((player) => (
                 <CommandItem
                   key={player.id}
-                  value={player.name}
+                  value={`${player.name} ${player.detail ?? ""}`}
                   onSelect={() => {
                     onValueChange(player.id);
                     setOpen(false);
@@ -75,7 +76,10 @@ export function PlayerCombobox({
                       value === player.id ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {player.name}
+                  <span>{player.name}</span>
+                  {player.detail && (
+                    <span className="ml-1 text-xs text-muted-foreground">({player.detail})</span>
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>
