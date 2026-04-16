@@ -7,8 +7,9 @@ import { RunContestResult } from "@/components/game/RunContestResult";
 import { cn } from "@/lib/utils";
 import {
   SCORING_STATS, STAT_LABELS, STATS, type StatKey,
-  rollDice, getRunDiceCount, getDefenseStat, isInsideStat,
+  rollDice, getDefenseStat, isInsideStat,
   resolveRunShotContest, pickRebounderSlot, resolveRunReboundRoll,
+  runStatToStars, getStatDiceCount,
   type ShotContestResult, type CardGameResult,
 } from "@/lib/gameEngine";
 import {
@@ -35,7 +36,7 @@ interface Props {
 
 type Phase = "choose" | "rolling" | "result" | "rebound-rolling" | "rebound-result" | "done";
 type Possession = "player" | "cpu";
-type LastPlay = null | { kind: "make" | "miss" | "rebound"; side: "player" | "cpu" };
+type LastPlay = null | { kind: "make" | "miss" | "rebound" | "steal" | "block"; side: "player" | "cpu" };
 
 interface PendingContest {
   kind: "shot" | "rebound";
@@ -64,7 +65,7 @@ interface CardAccum {
 export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, onGameComplete }: Props) {
   const { user } = useAuth();
   const targetScore = run.target_score;
-  const runsContext = { isHome: false, isAway: true, isKeyGame: false };
+  const runsContext = { isHome: false, isAway: true, isKeyGame: false, isHomeHeroEligible: false, isRankUpGame: false };
 
   /** Grant a pack reward (random_standard, random_standard_box, or specific ID) */
   const grantPackReward = async (userId: string, packReward: string, rewardParts: string[], source: string) => {
