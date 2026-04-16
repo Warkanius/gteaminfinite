@@ -190,12 +190,20 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
 
   const handleStart = async () => {
     let cpuCards: GameCard[];
-    if (dominationGameId && domCpuLineup && domCpuLineup.length > 0) {
+    if (dominationGameId) {
+      if (!domCpuLineup || domCpuLineup.length === 0) {
+        toast.error("Opponent roster not ready — try again in a moment");
+        return;
+      }
       cpuCards = domCpuLineup;
-    } else if (challengeTeamId && challengeCpuLineup && challengeCpuLineup.length > 0) {
+    } else if (challengeTeamId) {
+      if (!challengeCpuLineup || challengeCpuLineup.length === 0) {
+        toast.error("Opponent roster not ready — try again in a moment");
+        return;
+      }
       cpuCards = challengeCpuLineup;
     } else {
-      // Random CPU
+      // Random CPU (only when not domination/challenge)
       const pool = allCards.filter((c) => !selectedIds.has(c.id));
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
       cpuCards = shuffled.slice(0, 5);
@@ -208,6 +216,11 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
     ]);
     onConfirm(selectedCards, cpuCards, badgeMap, traitMap);
   };
+
+  const opponentLoading =
+    (!!dominationGameId && (domCpuLoading || domCpuLineup === undefined)) ||
+    (!!challengeTeamId && (challengeCpuLoading || challengeCpuLineup === undefined));
+  const startDisabled = selectedIds.size !== 5 || opponentLoading;
 
   if (isLoading) {
     return (
