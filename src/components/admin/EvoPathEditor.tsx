@@ -25,9 +25,10 @@ interface Props {
   playerGemTierId: string | null;
   playerStats: Record<string, number>;
   playerBadges: { badge_id: string; tier: string }[];
+  onStepsChange?: (steps: (EvoStep & { id?: string })[]) => void;
 }
 
-export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBadges }: Props) {
+export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBadges, onStepsChange }: Props) {
   const qc = useQueryClient();
   const [steps, setSteps] = useState<(EvoStep & { id?: string })[]>([]);
   const [open, setOpen] = useState(false);
