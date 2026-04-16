@@ -105,18 +105,20 @@ export function pickRebounderSlot(): number {
   return 0; // slot 1
 }
 
-/** Resolve a rebound roll using combined (REB + BLK) / 2 stat */
+/** Resolve a rebound roll using combined (REB + BLK) / 2 stat — pure stat-driven */
 export function resolveRunReboundRoll(
   reb: number,
   blk: number,
-  runRating: number,
   dice: number[],
 ): number {
-  const combinedStat = (reb + blk) / 2;
-  const modifier = getRunModifier(runRating);
-  const diceTotal = dice.reduce((a, b) => a + b, 0);
-  return Math.round(diceTotal * modifier * (combinedStat / 60));
+  const combined = (reb + blk) / 2;
+  const stars = runStatToStars(combined);
+  const modifier = getStatModifier(stars);
+  return Math.round(dice.reduce((a, b) => a + b, 0) * modifier);
 }
+
+/** Outcome of a Runs shot contest */
+export type RunShotOutcome = "make" | "rebound" | "steal" | "block";
 
 /** Resolve a shot contest: offense stat roll vs defense counter stat roll */
 export interface ShotContestResult {
@@ -130,97 +132,66 @@ export interface ShotContestResult {
   defenseModifier: number;
   offenseStat: StatKey;
   defenseStat: StatKey;
+  outcome: RunShotOutcome;
+  gap: number;
 }
 
-/** Offensive advantage applied to all Runs shots (~+15%) — pushes overall make rate to ~60%. */
-export const RUNS_OFFENSE_ADVANTAGE = 1.15;
-/** Defense roll cannot drop below this fraction of offense roll. */
-export const RUNS_DEFENSE_MIN_RATIO = 0.5;
-/** Defense roll cannot exceed this fraction of offense roll (caps lucky stops on mismatches). */
-export const RUNS_DEFENSE_MAX_RATIO = 1.5;
-/** Per-point stat-gap bonus added to offense roll (favours obvious mismatches). */
-export const RUNS_STATGAP_BONUS_PER_POINT = 0.04;
-/** Threshold (offense stat − defense stat) above which the stat-gap bonus kicks in. */
-export const RUNS_STATGAP_THRESHOLD = 15;
+/** Defense must beat offense by this much to trigger a steal (perimeter) or block (inside). */
+export const RUNS_TURNOVER_GAP = 7;
 
+/**
+ * Pure stat-driven shot contest. No `run_rating`, no offense advantage, no clamps.
+ * Stars derived from each player's individual stat value via runStatToStars.
+ *
+ * @param offenseStatValue Already adjusted by traits + badges (debuffs/boosts).
+ * @param defenseStatValue Already adjusted by traits + badges.
+ * @param offenseBonus Flat bonus added to offense roll (e.g. Walking Bucket).
+ * @param defenseBonus Flat bonus added to defense roll.
+ */
 export function resolveRunShotContest(
   offenseStat: StatKey,
   offenseStatValue: number,
-  offRating: number,
   offDice: number[],
   defenseStat: StatKey,
   defenseStatValue: number,
-  defRating: number,
   defDice: number[],
   offenseBonus: number = 0,
   defenseBonus: number = 0,
 ): ShotContestResult {
-  const offMod = getRunModifier(offRating);
-  const defMod = getRunModifier(defRating);
+  const offStars = runStatToStars(offenseStatValue);
+  const defStars = runStatToStars(defenseStatValue);
+  const offMod = getStatModifier(offStars);
+  const defMod = getStatModifier(defStars);
+
   const offTotal = offDice.reduce((a, b) => a + b, 0);
   const defTotal = defDice.reduce((a, b) => a + b, 0);
 
-  // Base rolls
-  const baseOffense = offTotal * offMod * (offenseStatValue / 60);
-  const baseDefense = defTotal * defMod * (defenseStatValue / 60);
-
-  // Stat-gap bonus: when shooter's stat meaningfully exceeds defender's counter-stat,
-  // add a flat +N% per point of gap above the threshold.
-  const gap = offenseStatValue - defenseStatValue;
-  const gapBonus = gap > RUNS_STATGAP_THRESHOLD
-    ? 1 + (gap - RUNS_STATGAP_THRESHOLD) * RUNS_STATGAP_BONUS_PER_POINT
-    : 1;
-
-  // Offense gets the universal advantage + the stat-gap multiplier + badge bonus
-  let offenseRoll = Math.round(baseOffense * RUNS_OFFENSE_ADVANTAGE * gapBonus) + Math.round(offenseBonus);
-  let defenseRoll = Math.round(baseDefense) + Math.round(defenseBonus);
-
-  // Clamp defense roll into a band around offense (prevents lucky-roll shutdowns
-  // on obvious mismatches AND prevents trivially easy makes).
-  const minDef = Math.round(offenseRoll * RUNS_DEFENSE_MIN_RATIO);
-  const maxDef = Math.round(offenseRoll * RUNS_DEFENSE_MAX_RATIO);
-  defenseRoll = Math.min(Math.max(defenseRoll, minDef), maxDef);
+  const offenseRoll = Math.round(offTotal * offMod) + Math.round(offenseBonus);
+  const defenseRoll = Math.round(defTotal * defMod) + Math.round(defenseBonus);
 
   const made = offenseRoll > defenseRoll;
+  const gap = defenseRoll - offenseRoll;
   const points = made ? getPointMultiplier(offenseStat) : 0;
 
+  let outcome: RunShotOutcome;
+  if (made) outcome = "make";
+  else if (gap >= RUNS_TURNOVER_GAP) outcome = isInsideStat(offenseStat) ? "block" : "steal";
+  else outcome = "rebound";
+
   return {
-    offenseRoll,
-    defenseRoll,
-    made,
-    points,
-    offenseDice: offDice,
-    defenseDice: defDice,
-    offenseModifier: offMod,
-    defenseModifier: defMod,
-    offenseStat,
-    defenseStat,
+    offenseRoll, defenseRoll, made, points,
+    offenseDice: offDice, defenseDice: defDice,
+    offenseModifier: offMod, defenseModifier: defMod,
+    offenseStat, defenseStat, outcome, gap,
   };
 }
 
-/** Resolve a stat roll using the Runs 0–120 numerical scale */
-export function resolveRunStatRoll(
-  stat: StatKey,
-  statValue: number,
-  runRating: number,
-  dice: number[],
-): StatRollResult {
-  const diceCount = dice.length;
-  const diceTotal = dice.reduce((a, b) => a + b, 0);
-  const isDoubles = diceCount === 2 && dice[0] === dice[1];
-  const baseModifier = getRunModifier(runRating);
-  // 120-rated doubles = 3.5x modifier bonus
-  const modifier = (runRating >= 120 && isDoubles) ? 3.5 : baseModifier;
-  const rollResult = Math.round(diceTotal * modifier);
-  const pointMultiplier = getPointMultiplier(stat);
-  const points = rollResult * pointMultiplier;
-  const stars = runRatingToStars(runRating);
-
-  return {
-    stat, statValue, stars, diceCount, dice, diceTotal,
-    isDoubles, modifier, rollResult, pointMultiplier, points, matchBonus: false,
-  };
-}
+/** @deprecated Use rollStatBundle / resolveRunShotContest. Kept only to avoid import errors. */
+export function getRunDiceCount(_: number): 1 | 2 { return 1; }
+/** @deprecated */
+export function getRunModifier(_: number): number { return 1; }
+/** @deprecated */
+export function runRatingToStars(_: number): number { return 0; }
 
 /** Point multiplier per stat type (like real basketball) */
 export function getPointMultiplier(stat: StatKey): number {
