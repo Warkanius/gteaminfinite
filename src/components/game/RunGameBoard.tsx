@@ -3,6 +3,8 @@ import { PlayerCard } from "@/components/cards/PlayerCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ActivationLogEntry } from "@/components/game/ActivationBanner";
+import { RunContestResult } from "@/components/game/RunContestResult";
+import { cn } from "@/lib/utils";
 import {
   SCORING_STATS, STAT_LABELS, STATS, type StatKey,
   rollDice, getRunDiceCount, getDefenseStat, isInsideStat,
