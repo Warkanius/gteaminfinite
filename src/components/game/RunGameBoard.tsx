@@ -98,6 +98,9 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
   const [selectedStat, setSelectedStat] = useState<StatKey>("stat_3pt");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [lastContest, setLastContest] = useState<ShotContestResult | null>(null);
+  const [pendingContest, setPendingContest] = useState<PendingContest | null>(null);
+  const [possessions, setPossessions] = useState(0);
+  const [lastPlay, setLastPlay] = useState<LastPlay>(null);
   const [cpuShooterIdx, setCpuShooterIdx] = useState(0);
   const [cpuStat, setCpuStat] = useState<StatKey>("stat_3pt");
 
