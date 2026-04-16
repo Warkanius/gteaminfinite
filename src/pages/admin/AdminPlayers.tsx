@@ -73,6 +73,7 @@ export default function AdminPlayers() {
   const [badgeSearch, setBadgeSearch] = useState("");
   const [pendingBadgeId, setPendingBadgeId] = useState<string | null>(null);
   const [evoSourceId, setEvoSourceId] = useState<string | null>(null);
+  const [pendingEvoSteps, setPendingEvoSteps] = useState<any[]>([]);
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["admin-players"],
