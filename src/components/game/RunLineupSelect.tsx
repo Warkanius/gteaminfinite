@@ -104,7 +104,6 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
     setIsRolling(true);
     
     // Simulate 4d6 (range 4 to 24) to pick 3 unique opponents
-    // We map 4-24 to 0-20 to match array indexes (or wrap around using modulo)
     const picks: any[] = [];
     const usedIndexes = new Set<number>();
     
@@ -141,13 +140,13 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
 
   const allRevealed = revealIndex >= cpuLineup.length && cpuLineup.length > 0;
 
-  // Original cards for display (consistent card art)
-  const selectedCards = Array.from(selectedIds).map(id => {
+  // Original cards for display (consistent card art, real star stats, gem_tiers preserved)
+  const selectedDisplayCards = Array.from(selectedIds).map(id => {
     return collection?.find(c => c.player_card_id === id)?.player_cards as any;
   }).filter(Boolean);
 
-  // Run-stat overlaid cards for game logic only
-  const playerLineup = selectedCards.map(card => ({
+  // Run-stat overlaid cards for game logic only — carry _displayCard for downstream rendering
+  const playerGameLineup = selectedDisplayCards.map((card: any) => ({
     ...card,
     stat_3pt: card.run_stat_3pt ?? starStatToRunStat(card.stat_3pt),
     stat_mid: card.run_stat_mid ?? starStatToRunStat(card.stat_mid),
@@ -159,7 +158,7 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
     stat_reb: card.run_stat_reb ?? starStatToRunStat(card.stat_reb),
     stat_int: card.run_stat_int ?? starStatToRunStat(card.stat_int),
     _runRating: card.run_rating ?? starStatToRunStat(card.rating),
-    rating: card.run_rating ? runRatingToStars(card.run_rating) : card.rating,
+    _displayCard: card,
   }));
 
   return (
