@@ -134,7 +134,7 @@ export default function AdminPlayers() {
   const saveMut = useMutation({
     mutationFn: async () => {
       const { badges, traits, ...cardData } = form;
-      const rating = Math.round(STAT_KEYS.reduce((s, k) => s + (Number((cardData as any)[k]) || 0), 0) / STAT_KEYS.length);
+      const rating = Math.floor(STAT_KEYS.reduce((s, k) => s + (Number((cardData as any)[k]) || 0), 0) / STAT_KEYS.length);
       const payload = { ...cardData, rating } as any;
       delete payload.id; delete payload.created_at; delete payload.updated_at;
 
@@ -228,7 +228,7 @@ export default function AdminPlayers() {
 
   async function createEvoForm(player: PlayerCard) {
     const data = await loadPlayerData(player);
-    setForm({ ...data, name: `${player.name} Evo`, id: undefined });
+    setForm({ ...data, name: player.name, id: undefined });
     setEditId(null);
     setEvoSourceId(player.id);
     setGeneratorText("");

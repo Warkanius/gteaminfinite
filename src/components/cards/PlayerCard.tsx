@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/cards/StarRating";
 import { Shield, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { computeStars } from "@/lib/ovrUtils";
 
 interface PlayerCardProps {
   card: CardData & {
@@ -45,7 +46,7 @@ export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked
     >
       {/* Star rating */}
       <div className="absolute top-2 right-2 flex items-center gap-1">
-        <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="md" />
+        <StarRating rating={computeStars(card)} glowColor={bg(visuals.glow)} size="md" />
       </div>
 
       {/* Badge count */}
