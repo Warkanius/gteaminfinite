@@ -88,29 +88,35 @@ function bonusDiceValue(tier: BadgeTier): number {
   return map[tier];
 }
 
-/** Bonus-type badge: flat dice bonus per tier */
-function bonusTypeDiceValue(tier: BadgeTier): number {
+/** Bonus-type badge: flat dice bonus per tier (5v5 = dice value, Runs = flat +5 per tier) */
+function bonusTypeDiceValue(tier: BadgeTier, mode: "5v5" | "runs" = "5v5"): number {
+  if (mode === "runs") {
+    // Walking Bucket etc.: +5 per tier added to scoring rolls.
+    const map: Record<BadgeTier, number> = { base: 5, gold: 10, hof: 15, diamond: 20, actolytrene: 25 };
+    return map[tier];
+  }
   const map: Record<BadgeTier, number> = { base: 0.5, gold: 0.5, hof: 0.5, diamond: 1, actolytrene: 1.5 };
   return map[tier];
 }
 
-/** Bonus-type badge: number of rerolls on the bonus dice (gold+) */
-function bonusTypeRerolls(tier: BadgeTier): number {
+/** Bonus-type badge: rerolls on the bonus dice (5v5 only) */
+function bonusTypeRerolls(tier: BadgeTier, mode: "5v5" | "runs" = "5v5"): number {
+  if (mode === "runs") return 0;
   const map: Record<BadgeTier, number> = { base: 0, gold: 1, hof: 2, diamond: 0, actolytrene: 0 };
   return map[tier];
 }
 
-/** Debuff: how much to subtract from opponent stat (star-based for 5v5, raw for Runs) */
+/** Debuff: subtract from opponent stat. Runs = flat ±5 per tier (per screenshot). */
 export function debuffAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
   const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
-  const runMap: Record<BadgeTier, number> = { base: 20, gold: 40, hof: 60, diamond: 80, actolytrene: 100 };
+  const runMap: Record<BadgeTier, number> = { base: 5, gold: 10, hof: 15, diamond: 20, actolytrene: 25 };
   return mode === "runs" ? runMap[tier] : starMap[tier];
 }
 
-/** Floor General boost per tier (star-based for 5v5) */
+/** Floor General boost per tier. Runs = flat +5 per tier (per screenshot). */
 function boostAmount(tier: BadgeTier, mode: "5v5" | "runs"): number {
   const starMap: Record<BadgeTier, number> = { base: 1, gold: 2, hof: 3, diamond: 4, actolytrene: 5 };
-  const runMap: Record<BadgeTier, number> = { base: 10, gold: 20, hof: 30, diamond: 40, actolytrene: 50 };
+  const runMap: Record<BadgeTier, number> = { base: 5, gold: 10, hof: 15, diamond: 20, actolytrene: 25 };
   return mode === "runs" ? runMap[tier] : starMap[tier];
 }
 
