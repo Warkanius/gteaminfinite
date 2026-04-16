@@ -14,6 +14,7 @@ import { PlayerQuickEdit } from "@/components/admin/PlayerQuickEdit";
 import { toast } from "sonner";
 import { RUN_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
 import { generateFromProfile, ARCHETYPE_LIST, type WizardProfile } from "@/lib/archetypeEngine";
+import { computeOVR } from "@/lib/ovrUtils";
 
 interface Props {
   runId: string;
@@ -522,7 +523,7 @@ export function RunRosterManager({ runId }: Props) {
                       >
                         <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
                       </button>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{card!.rating}★</Badge>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{computeOVR(card!)}★</Badge>
                     </div>
                     <div className="text-xs text-muted-foreground flex gap-2 mt-0.5">
                       {card!.position1 && <span>{card!.position1}{card!.position2 ? ` / ${card!.position2}` : ""}</span>}
@@ -634,7 +635,7 @@ export function RunRosterManager({ runId }: Props) {
                     </Button>
                   </div>
                   <div className="flex items-center gap-2 pl-1">
-                    <span className="text-[10px] text-muted-foreground w-12 shrink-0">{p.rating}★ OVR</span>
+                    <span className="text-[10px] text-muted-foreground w-14 shrink-0">{computeOVR(p)}★ OVR</span>
                     <Slider min={0} max={6} step={1} value={[p.rating]} onValueChange={([v]) => updatePendingStarRating(p.id, v)} className="flex-1 max-w-[160px]" />
                   </div>
                 </div>
@@ -782,7 +783,7 @@ export function RunRosterManager({ runId }: Props) {
                         >
                           <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
                         </button>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{player.rating}★</Badge>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{computeOVR(player)}★</Badge>
                       </div>
                       <div className="text-xs text-muted-foreground flex gap-2">
                         {player.position1 && <span>{player.position1}{player.position2 ? ` / ${player.position2}` : ""}</span>}
