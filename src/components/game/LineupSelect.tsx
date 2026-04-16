@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { PlayerCard } from "@/components/cards/PlayerCard";
@@ -58,7 +59,7 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
   });
 
   // For domination: fetch fixed CPU lineup
-  const { data: domCpuLineup } = useQuery({
+  const { data: domCpuLineup, isLoading: domCpuLoading } = useQuery({
     queryKey: ["domination-cpu-lineup", dominationGameId],
     enabled: !!dominationGameId,
     queryFn: async () => {
@@ -73,7 +74,7 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
   });
 
   // For challenge: fetch CPU from team_players
-  const { data: challengeCpuLineup } = useQuery({
+  const { data: challengeCpuLineup, isLoading: challengeCpuLoading } = useQuery({
     queryKey: ["challenge-cpu-lineup", challengeTeamId],
     enabled: !!challengeTeamId,
     queryFn: async () => {
@@ -189,12 +190,20 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
 
   const handleStart = async () => {
     let cpuCards: GameCard[];
-    if (dominationGameId && domCpuLineup && domCpuLineup.length > 0) {
+    if (dominationGameId) {
+      if (!domCpuLineup || domCpuLineup.length === 0) {
+        toast.error("Opponent roster not ready — try again in a moment");
+        return;
+      }
       cpuCards = domCpuLineup;
-    } else if (challengeTeamId && challengeCpuLineup && challengeCpuLineup.length > 0) {
+    } else if (challengeTeamId) {
+      if (!challengeCpuLineup || challengeCpuLineup.length === 0) {
+        toast.error("Opponent roster not ready — try again in a moment");
+        return;
+      }
       cpuCards = challengeCpuLineup;
     } else {
-      // Random CPU
+      // Random CPU (only when not domination/challenge)
       const pool = allCards.filter((c) => !selectedIds.has(c.id));
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
       cpuCards = shuffled.slice(0, 5);
@@ -207,6 +216,11 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
     ]);
     onConfirm(selectedCards, cpuCards, badgeMap, traitMap);
   };
+
+  const opponentLoading =
+    (!!dominationGameId && (domCpuLoading || domCpuLineup === undefined)) ||
+    (!!challengeTeamId && (challengeCpuLoading || challengeCpuLineup === undefined));
+  const startDisabled = selectedIds.size !== 5 || opponentLoading;
 
   if (isLoading) {
     return (
@@ -275,9 +289,14 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
         })}
       </div>
 
-      <Button onClick={handleStart} disabled={selectedIds.size !== 5} className="w-full sm:w-auto">
-        Start Game ({selectedIds.size}/5)
-      </Button>
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button onClick={handleStart} disabled={startDisabled} className="w-full sm:w-auto">
+          Start Game ({selectedIds.size}/5)
+        </Button>
+        {opponentLoading && (
+          <span className="text-sm text-muted-foreground">Loading opponent…</span>
+        )}
+      </div>
 
       {/* Card grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">

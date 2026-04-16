@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
-import { useLocation } from "react-router-dom";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { LineupSelect } from "@/components/game/LineupSelect";
@@ -60,7 +60,15 @@ interface GameState {
 
 export default function Play() {
   const location = useLocation();
+  const navigate = useNavigate();
   const gameState = (location.state as GameState) ?? {};
+  const hasState = !!location.state;
+
+  useEffect(() => {
+    if (!hasState) {
+      navigate("/game-hub", { replace: true });
+    }
+  }, [hasState, navigate]);
 
   const [phase, setPhase] = useState<Phase>("lineup");
   const [userLineup, setUserLineup] = useState<GameCard[]>([]);
