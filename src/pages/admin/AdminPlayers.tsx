@@ -163,6 +163,30 @@ export default function AdminPlayers() {
         );
       }
 
+      // Save evo paths together with the player
+      if (editId && cardId) {
+        await supabase.from("evo_paths").delete().eq("player_card_id", cardId);
+        if (pendingEvoSteps.length > 0) {
+          const { error: evoErr } = await supabase.from("evo_paths").insert(
+            pendingEvoSteps.map((s: any) => ({
+              player_card_id: cardId,
+              from_tier_id: s.from_tier_id || null,
+              to_tier_id: s.to_tier_id || null,
+              step_order: s.step_order,
+              challenge_description: s.challenge_description,
+              challenge_type: s.challenge_type,
+              challenge_target: s.challenge_target,
+              challenge_stat: s.challenge_stat || null,
+              stat_boosts: s.stat_boosts,
+              new_badges: s.new_badges,
+              evolves_to_card_id: s.evolves_to_card_id || null,
+              compound_challenges: s.compound_challenges,
+            } as any))
+          );
+          if (evoErr) throw evoErr;
+        }
+      }
+
       // Auto-link evo path if creating an evo form
       if (!editId && evoSourceId && cardId) {
         const { data: evoStep } = await supabase
