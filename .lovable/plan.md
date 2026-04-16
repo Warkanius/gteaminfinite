@@ -1,52 +1,35 @@
 
 
-## Problem Diagnosis
+## Bug confirmed (Domination roster mismatch)
 
-The user reported three concrete issues with The Runs:
-1. **"Too many possessions back and forth with no make"** — math is too defense-favoured
-2. **"In 5v5 we see badge effects and dice rolls — in The Runs we do not"** — Runs jumps straight from "SHOOT" button → result text in the log, no contest visualization
-3. **Possession flow is confusing** — hard to tell what's happening turn-to-turn
+**Root cause**: Race condition in `LineupSelect.tsx` `handleStart`. When a user clicks "Start Game" on a domination match before `domCpuLineup` finishes loading, the code falls through to the **random CPU branch** because the `dominationGameId && domCpuLineup && domCpuLineup.length > 0` guard fails when `domCpuLineup` is `undefined`. It then pulls 5 random players from the cached `allCards` query (cached from any prior 5v5 visit) — which is how the user ended up with Akashi/Hayama/Mibuchi/Nebuya/Mayuzumi in a "Shutoku" game. The match is then logged as Shutoku because the opponent name comes from props, not from the actual CPU cards.
 
-### Why misses chain so often
-The current `resolveRunShotContest` is symmetrical: `offenseRoll = diceTotal × (rating/40) × (statValue/60) + badgeBonus`. With equal cards, that's a coin-flip. After a miss, the rebound is *also* a coin-flip. After a defensive rebound, the CPU shoots — another coin-flip. So 3+ empty possessions in a row is very common (12.5% chance of a miss → defensive board → CPU miss alone, and chains compound from there).
+**Verified in DB**: Most recent Shutoku game (`a0707a78`, game_order 5) has Midorima/Takao/Otsobo/Miyaji/Kimura assigned in `domination_game_players`, but the `game_logs.player_stats` for that match shows the Rakuzan roster as the CPU side.
 
-## Fix: Three Targeted Changes
+## Fix
 
-### 1. Rebalance scoring math (less stalemate)
+### `src/components/game/LineupSelect.tsx`
+1. **Block the Start button until the right CPU lineup has loaded**:
+   - When `dominationGameId` is set, disable Start until `domCpuLineup !== undefined`.
+   - When `challengeTeamId` is set, disable Start until `challengeCpuLineup !== undefined`.
+   - Add a small "Loading opponent…" hint next to the button while waiting.
+2. **Hard-fail in `handleStart` instead of silently falling through**:
+   - If `dominationGameId` is set but `domCpuLineup` is empty/undefined, show a toast (`"Opponent roster not ready — try again in a moment"`) and return. Same for challenge.
+   - Random-CPU branch should only run when neither `dominationGameId` nor `challengeTeamId` is set.
+3. **Disable the cached random pool from leaking in**:
+   - Add `dominationGameId/challengeTeamId` into the `allCards` query key, or skip even reading it when those are set. Cleanest: keep `enabled: !dominationGameId && !challengeTeamId` and rewrite the random branch behind an explicit `else if (!dominationGameId && !challengeTeamId)` guard.
 
-In `src/lib/gameEngine.ts` → `resolveRunShotContest`:
-- Add an **offensive advantage**: shots tilted slightly toward the shooter (offense gets +15% on roll). Real basketball averages ~50% FG, but Runs has rebounds chaining empty possessions, so we need ~60% make rate per shot.
-- Add a **stat-gap floor**: when shooter's stat is meaningfully higher than defender's counter-stat (e.g. 90 FIN vs 50 BLK), guarantee ~75%+ make rate by adding a stat-differential bonus.
-- Cap defensive variance by clamping defenseRoll to `[0.5×offenseRoll, 1.5×offenseRoll]` so a CPU lucky-roll doesn't shut down obvious mismatches.
+### `src/pages/Play.tsx` (defensive)
+- If `location.state` is missing entirely (page refresh on `/play/match`), redirect to `/domination` or show "Pick a game first" instead of starting an unconfigured 5v5.
 
-### 2. Add contest visualization (parity with 5v5)
+### Out of scope
+- Empty Rakuzan slot at game_order 7 (separate admin cleanup — flag in chat).
+- Duplicate Takao handling (next pass, per your "Domination first" choice).
 
-Insert a "rolling" / "result" phase between SHOOT and the next possession, mirroring how `GameBoard.tsx` uses `<DiceRoll>` and `<StatResult>`:
-- After SHOOT/CONTEST: brief animated dice roll showing both sides' dice
-- Then a result panel showing: shooter card, defender card, both rolls, badges/traits that activated, and MADE/MISSED verdict
-- "Next Possession" button to continue (auto-advance after 3s)
-- Same UI used for the Rebound contest
-
-This reuses `<DiceRoll>`, `<ActivationBanner>`, and a new lightweight `<RunContestResult>` panel.
-
-### 3. Clearer possession flow
-
-- Big possession indicator banner above the action area: "🏀 YOUR BALL — Pick Shot" / "🛡️ CPU HAS THE BALL — Contest Their Shot"
-- Mini "Possessions: 7" + "Last play: ✅ MAKE / ❌ MISS / 🏀 REB" chip on the scoreboard
-- Pulse animation on whoever has the ball
-
-## Files Changed
+## Files touched
 
 | File | Change |
 |---|---|
-| `src/lib/gameEngine.ts` | Rebalance `resolveRunShotContest`: offense advantage, stat-gap floor, defense-roll clamp |
-| `src/components/game/RunGameBoard.tsx` | Add `rolling` and `result` phases; show DiceRoll + contest result panel + activations between SHOOT and next possession; add possession banner + last-play chip |
-| `src/components/game/RunContestResult.tsx` | New component — visualizes shooter vs defender, dice, badges/traits, verdict |
-
-## Out of Scope (not changing)
-
-- Manual pick flow (user wants to keep it)
-- Target score / win-by-2 rules
-- 4d6 opponent roll selection
-- The display-card / game-card split (already fixed)
+| `src/components/game/LineupSelect.tsx` | Disable Start while expected CPU lineup is loading; fail loudly instead of falling through to random; only run random branch when no dominationGameId/challengeTeamId |
+| `src/pages/Play.tsx` | Bail out if `location.state` is missing on `/play/match` |
 
