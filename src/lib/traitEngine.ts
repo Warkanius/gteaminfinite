@@ -37,6 +37,10 @@ export interface GameContext {
   isHome: boolean;
   isAway: boolean;
   isKeyGame: boolean;
+  /** Runs only: Home Hero requires legend status (high overall) AND a home game */
+  isHomeHeroEligible?: boolean;
+  /** Runs only: Prime Time only fires on rank-up games */
+  isRankUpGame?: boolean;
 }
 
 // ─── Tier scaling ───
@@ -64,13 +68,18 @@ function conditionMet(
   cardRating?: number,
   statValue?: number,
   cardAvgStat?: number,
+  mode: "5v5" | "runs" = "5v5",
 ): boolean {
   switch (conditionType) {
     case "home":
+      // In Runs, Home Hero requires legend status AND a home game.
+      if (mode === "runs") return context.isHome && !!context.isHomeHeroEligible;
       return context.isHome;
     case "away":
       return context.isAway;
     case "key_game":
+      // In Runs, Prime Time only on rank-up games.
+      if (mode === "runs") return !!context.isRankUpGame;
       return context.isKeyGame;
     case "underdog":
       return opponentRating != null && cardRating != null && opponentRating > cardRating;
