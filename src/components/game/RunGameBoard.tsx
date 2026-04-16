@@ -576,10 +576,26 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
           <p className="text-5xl font-display font-bold text-primary">{playerScore}</p>
         </div>
         <div className="text-center space-y-1.5">
-          <Badge variant={possession === "player" ? "default" : "destructive"} className="text-xs uppercase tracking-wider">
-            {possession === "player" ? "🏀 Your Possession" : "🛡️ CPU Possession"}
-          </Badge>
           <p className="text-xs font-bold uppercase text-muted-foreground">Target: {targetScore} • Win by 2</p>
+          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+            <Badge variant="outline" className="text-[10px] uppercase tracking-wider px-1.5 py-0">
+              Poss: {possessions}
+            </Badge>
+            {lastPlay && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] uppercase tracking-wider px-1.5 py-0",
+                  lastPlay.kind === "make" && lastPlay.side === "player" && "border-primary/60 text-primary",
+                  lastPlay.kind === "make" && lastPlay.side === "cpu" && "border-destructive/60 text-destructive",
+                  lastPlay.kind === "miss" && "border-muted-foreground/40 text-muted-foreground",
+                  lastPlay.kind === "rebound" && "border-accent text-accent-foreground",
+                )}
+              >
+                {lastPlay.kind === "make" ? "✅ Make" : lastPlay.kind === "miss" ? "❌ Miss" : `🏀 Reb ${lastPlay.side === "player" ? "(You)" : "(CPU)"}`}
+              </Badge>
+            )}
+          </div>
         </div>
         <div className="text-center space-y-1">
           <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">CPU</p>
@@ -587,11 +603,23 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
         </div>
       </div>
 
+      {/* Possession Banner */}
+      {phase === "choose" && (
+        <div
+          className={cn(
+            "rounded-xl border-2 p-3 text-center font-display tracking-wider animate-pulse",
+            possession === "player"
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-destructive/50 bg-destructive/10 text-destructive",
+          )}
+        >
+          {possession === "player" ? "🏀 YOUR BALL — Pick Your Shot" : "🛡️ CPU HAS THE BALL — Contest Their Shot"}
+        </div>
+      )}
+
       {/* Game Area */}
       {possession === "player" && phase === "choose" && (
         <div className="space-y-4">
-          <h3 className="font-display text-lg">🏀 Your Possession — Pick Shooter & Shot</h3>
-          
           {/* Shooter Selection */}
           <div className="flex gap-3 justify-center">
             {playerLineup.map((card: any, idx: number) => (
@@ -643,8 +671,6 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
 
       {possession === "cpu" && phase === "choose" && (
         <div className="space-y-4">
-          <h3 className="font-display text-lg text-destructive">🛡️ CPU Possession — Contest the Shot</h3>
-          
           <div className="flex gap-6 justify-center items-start">
             <div className="text-center w-28 sm:w-32">
               <p className="text-xs font-semibold text-destructive mb-1">CPU Shooter</p>
@@ -674,11 +700,36 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
         </div>
       )}
 
-      {phase === "rolling" && (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <span className="ml-3 font-display text-lg">Resolving...</span>
-        </div>
+      {/* Shot contest visualization (rolling → result) */}
+      {(phase === "rolling" || phase === "result") && pendingContest && (
+        <RunContestResult
+          kind={pendingContest.kind}
+          shooter={pendingContest.shooter}
+          defender={pendingContest.defender}
+          offenseStat={pendingContest.offenseStat}
+          defenseStat={pendingContest.defenseStat}
+          contest={pendingContest.contest}
+          activations={pendingContest.activations}
+          rolling={phase === "rolling"}
+          shooterSide={pendingContest.shooterSide}
+          onContinue={pendingContest.applyOutcome}
+        />
+      )}
+
+      {/* Rebound visualization */}
+      {(phase === "rebound-rolling" || phase === "rebound-result") && pendingContest && (
+        <RunContestResult
+          kind="rebound"
+          shooter={pendingContest.shooter}
+          defender={pendingContest.defender}
+          offenseStat={pendingContest.offenseStat}
+          defenseStat={pendingContest.defenseStat}
+          contest={pendingContest.contest}
+          activations={pendingContest.activations}
+          rolling={phase === "rebound-rolling"}
+          shooterSide={pendingContest.shooterSide}
+          onContinue={pendingContest.applyOutcome}
+        />
       )}
 
       {phase === "done" && (
