@@ -94,7 +94,11 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
             {card.gem_name && <Badge variant="outline" className="border-foreground/30">{card.gem_name}</Badge>}
             {teamName && <Badge variant="secondary">{teamName}</Badge>}
             {card.is_collection_reward && <Badge className="bg-gem-gold/20 text-foreground">Collection Reward</Badge>}
-            {duplicateCount > 1 && <Badge variant="secondary">×{duplicateCount} owned</Badge>}
+            {duplicateCount > 1 && (
+              <Badge className="bg-foreground/15 text-foreground border border-foreground/30">
+                ×{duplicateCount} owned{sellableCount > 0 && sellableCount < duplicateCount ? ` (${sellableCount} sellable)` : ""}
+              </Badge>
+            )}
           </div>
         </div>
 
