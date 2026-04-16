@@ -59,7 +59,7 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
   });
 
   // For domination: fetch fixed CPU lineup
-  const { data: domCpuLineup } = useQuery({
+  const { data: domCpuLineup, isLoading: domCpuLoading } = useQuery({
     queryKey: ["domination-cpu-lineup", dominationGameId],
     enabled: !!dominationGameId,
     queryFn: async () => {
@@ -74,7 +74,7 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
   });
 
   // For challenge: fetch CPU from team_players
-  const { data: challengeCpuLineup } = useQuery({
+  const { data: challengeCpuLineup, isLoading: challengeCpuLoading } = useQuery({
     queryKey: ["challenge-cpu-lineup", challengeTeamId],
     enabled: !!challengeTeamId,
     queryFn: async () => {
