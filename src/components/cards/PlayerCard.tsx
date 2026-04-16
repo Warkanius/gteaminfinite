@@ -59,8 +59,14 @@ export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked
 
       {/* Duplicate count */}
       {!!duplicateCount && duplicateCount > 1 && (
-        <div className="absolute bottom-2 right-2 flex items-center rounded-full bg-background/70 backdrop-blur-sm px-1.5 py-0.5">
-          <span className="text-[10px] font-bold text-foreground/90">×{duplicateCount}</span>
+        <div
+          className="absolute bottom-2 right-2 flex items-center rounded-full px-2 py-0.5 border border-foreground/30 shadow-md"
+          style={{
+            background: `linear-gradient(135deg, ${bg(visuals.glow)}, ${bg(visuals.primary)})`,
+          }}
+          title={`${duplicateCount} copies owned`}
+        >
+          <span className="text-[11px] font-bold text-foreground drop-shadow">×{duplicateCount}</span>
         </div>
       )}
 
