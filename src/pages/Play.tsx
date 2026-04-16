@@ -60,7 +60,15 @@ interface GameState {
 
 export default function Play() {
   const location = useLocation();
+  const navigate = useNavigate();
   const gameState = (location.state as GameState) ?? {};
+  const hasState = !!location.state;
+
+  useEffect(() => {
+    if (!hasState) {
+      navigate("/game-hub", { replace: true });
+    }
+  }, [hasState, navigate]);
 
   const [phase, setPhase] = useState<Phase>("lineup");
   const [userLineup, setUserLineup] = useState<GameCard[]>([]);
