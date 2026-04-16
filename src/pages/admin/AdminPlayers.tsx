@@ -775,6 +775,7 @@ export default function AdminPlayers() {
               playerGemTierId={form.gem_tier_id ?? null}
               playerStats={Object.fromEntries(STAT_KEYS.map(k => [k, Number((form as any)[k]) || 0]))}
               playerBadges={form.badges}
+              onStepsChange={setPendingEvoSteps}
             />
           )}
         </div>
