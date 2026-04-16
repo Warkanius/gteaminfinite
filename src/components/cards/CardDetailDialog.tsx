@@ -155,14 +155,21 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
           )}
           {onQuicksell && canSell && (
             <Button
-              variant="outline"
+              variant={sellingDuplicate ? "default" : "outline"}
               size="sm"
               onClick={onQuicksell}
               disabled={!canQuicksell || quicksellLoading}
               className="gap-1.5 ml-auto"
+              title={sellingDuplicate ? `Sell 1 duplicate, keep ${remainingAfterSell}` : undefined}
             >
               <Coins className="w-3.5 h-3.5" />
-              {quicksellLoading ? "Selling…" : canQuicksell ? "Quicksell" : "Locked"}
+              {quicksellLoading
+                ? "Selling…"
+                : !canQuicksell
+                ? "Locked"
+                : sellingDuplicate
+                ? `Sell 1 Duplicate (Keep ${remainingAfterSell})`
+                : "Quicksell"}
             </Button>
           )}
         </div>
