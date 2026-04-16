@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dice5 } from "lucide-react";
 import {
   STATS, STAT_LABELS, getStatDiceCount, resolveStatRoll, buildCardResult,
-  rollDice, type StatRollResult, type CardGameResult, type StatKey,
+  rollDice, getCpuDifficultyModifier, type StatRollResult, type CardGameResult, type StatKey,
 } from "@/lib/gameEngine";
 import {
   resolveBadgeEffects, applyRerolls, getPendingReroll, resolveRerollChoice,
@@ -179,9 +179,10 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
       uResult.points = uResult.rollResult * uResult.pointMultiplier;
     }
 
+    const cpuBoost = difficultyStars != null ? getCpuDifficultyModifier(difficultyStars) : undefined;
     const cResult = resolveStatRoll(
       currentStat, cpuBadgeResult.adjustedStat, cpuStars,
-      cpuBadgeResult.finalDice,
+      cpuBadgeResult.finalDice, undefined, cpuBoost,
     );
     if (cpuBadgeResult.totalBonus > 0) {
       cResult.rollResult += Math.round(cpuBadgeResult.totalBonus);
