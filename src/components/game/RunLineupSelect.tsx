@@ -7,7 +7,7 @@ import { RevealCard, RevealCardHandle } from "@/components/packs/RevealCard";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Dices } from "lucide-react";
-import { runRatingToStars, starStatToRunStat } from "@/lib/gameEngine";
+import { starStatToRunStat } from "@/lib/gameEngine";
 import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 import { fetchTraitsForCards, type CardTrait } from "@/lib/traitEngine";
 
@@ -252,7 +252,7 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
               return (
                 <div key={card.id} className="relative w-full transition-transform hover:-translate-y-1">
                   <div onClick={() => handleCardClick(card.id)} className="cursor-pointer">
-                    <PlayerCard card={card} />
+                    <PlayerCard card={card} gemTier={card.gem_tiers} />
                   </div>
                   {isSelected && (
                     <div className="absolute inset-0 bg-background/50 rounded-lg flex items-center justify-center border-4 border-primary">
