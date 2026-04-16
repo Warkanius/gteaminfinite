@@ -58,7 +58,7 @@ const TIER_COLORS: Record<string, string> = {
   actolytrene: "hsl(var(--gem-actolytrene))",
 };
 
-export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [], duplicateCount = 1, isLocked, canSell = false, onToggleLock, onQuicksell, quicksellLoading }: CardDetailProps) {
+export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, badges = [], traits = [], duplicateCount = 1, sellableCount = 0, isLocked, canSell = false, onToggleLock, onQuicksell, quicksellLoading }: CardDetailProps) {
   const { user } = useAuth();
 
   if (!card) return null;
@@ -69,7 +69,9 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
   const positions = [card.position1, card.position2].filter(Boolean).join(" / ");
 
   const statKeys = Object.keys(STAT_LABELS) as (keyof typeof STAT_LABELS)[];
-  const canQuicksell = canSell && !isLocked;
+  const canQuicksell = canSell && sellableCount > 0;
+  const sellingDuplicate = duplicateCount > 1 && sellableCount > 0;
+  const remainingAfterSell = Math.max(0, duplicateCount - 1);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
