@@ -136,6 +136,17 @@ export interface ShotContestResult {
   defenseStat: StatKey;
 }
 
+/** Offensive advantage applied to all Runs shots (~+15%) — pushes overall make rate to ~60%. */
+export const RUNS_OFFENSE_ADVANTAGE = 1.15;
+/** Defense roll cannot drop below this fraction of offense roll. */
+export const RUNS_DEFENSE_MIN_RATIO = 0.5;
+/** Defense roll cannot exceed this fraction of offense roll (caps lucky stops on mismatches). */
+export const RUNS_DEFENSE_MAX_RATIO = 1.5;
+/** Per-point stat-gap bonus added to offense roll (favours obvious mismatches). */
+export const RUNS_STATGAP_BONUS_PER_POINT = 0.04;
+/** Threshold (offense stat − defense stat) above which the stat-gap bonus kicks in. */
+export const RUNS_STATGAP_THRESHOLD = 15;
+
 export function resolveRunShotContest(
   offenseStat: StatKey,
   offenseStatValue: number,
@@ -152,11 +163,28 @@ export function resolveRunShotContest(
   const defMod = getRunModifier(defRating);
   const offTotal = offDice.reduce((a, b) => a + b, 0);
   const defTotal = defDice.reduce((a, b) => a + b, 0);
-  
-  // Scale by stat value (normalized to ~60 as midpoint), then add badge bonus
-  const offenseRoll = Math.round(offTotal * offMod * (offenseStatValue / 60)) + Math.round(offenseBonus);
-  const defenseRoll = Math.round(defTotal * defMod * (defenseStatValue / 60)) + Math.round(defenseBonus);
-  
+
+  // Base rolls
+  const baseOffense = offTotal * offMod * (offenseStatValue / 60);
+  const baseDefense = defTotal * defMod * (defenseStatValue / 60);
+
+  // Stat-gap bonus: when shooter's stat meaningfully exceeds defender's counter-stat,
+  // add a flat +N% per point of gap above the threshold.
+  const gap = offenseStatValue - defenseStatValue;
+  const gapBonus = gap > RUNS_STATGAP_THRESHOLD
+    ? 1 + (gap - RUNS_STATGAP_THRESHOLD) * RUNS_STATGAP_BONUS_PER_POINT
+    : 1;
+
+  // Offense gets the universal advantage + the stat-gap multiplier + badge bonus
+  let offenseRoll = Math.round(baseOffense * RUNS_OFFENSE_ADVANTAGE * gapBonus) + Math.round(offenseBonus);
+  let defenseRoll = Math.round(baseDefense) + Math.round(defenseBonus);
+
+  // Clamp defense roll into a band around offense (prevents lucky-roll shutdowns
+  // on obvious mismatches AND prevents trivially easy makes).
+  const minDef = Math.round(offenseRoll * RUNS_DEFENSE_MIN_RATIO);
+  const maxDef = Math.round(offenseRoll * RUNS_DEFENSE_MAX_RATIO);
+  defenseRoll = Math.min(Math.max(defenseRoll, minDef), maxDef);
+
   const made = offenseRoll > defenseRoll;
   const points = made ? getPointMultiplier(offenseStat) : 0;
 
