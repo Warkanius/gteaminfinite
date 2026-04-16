@@ -88,16 +88,22 @@ export default function Collection() {
   const teamMap = useMemo(() => Object.fromEntries(teams.map((t: any) => [t.id, t.name])), [teams]);
 
   // Group by player_card_id for duplicate counting & dedup display
-  const { groupedCards, duplicateMap, lockMap, collectionIdMap, sourceMap } = useMemo(() => {
+  const { groupedCards, duplicateMap, lockMap, collectionIdMap, sourceMap, sellableCountMap } = useMemo(() => {
     const dupMap: Record<string, number> = {};
     const lockMap: Record<string, boolean> = {};
     const colIdMap: Record<string, string> = {};
     const srcMap: Record<string, string> = {};
+    const sellableMap: Record<string, number> = {};
+    const NON_SELLABLE = new Set(["gem_market", "collection_reward", "starter_pack", "locker_code"]);
 
     for (const entry of rawCollection as any[]) {
       const pcId = entry.player_card_id;
       dupMap[pcId] = (dupMap[pcId] || 0) + 1;
       if (entry.is_locked) lockMap[pcId] = true;
+
+      // Count unlocked + sellable copies (excludes reward sources)
+      const isSellable = !entry.is_locked && !NON_SELLABLE.has(entry.source ?? "standard_pack");
+      if (isSellable) sellableMap[pcId] = (sellableMap[pcId] || 0) + 1;
 
       // For quicksell: prefer an unlocked standard_pack entry
       const currentBest = colIdMap[pcId];
@@ -127,7 +133,7 @@ export default function Collection() {
       grouped.push(pc);
     }
 
-    return { groupedCards: grouped, duplicateMap: dupMap, lockMap, collectionIdMap: colIdMap, sourceMap: srcMap };
+    return { groupedCards: grouped, duplicateMap: dupMap, lockMap, collectionIdMap: colIdMap, sourceMap: srcMap, sellableCountMap: sellableMap };
   }, [rawCollection]);
 
   // Set of player_card_ids user owns
