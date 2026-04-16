@@ -52,12 +52,12 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
         .select(`*, player_cards(*, gem_tiers(*))`)
         .eq("run_id", runId);
       if (error) throw error;
-      // Map to card-like objects with run stats overlaid
+      // Map to objects carrying both display + game representations
       return (data ?? []).map((rp) => {
-        const base = rp.player_cards as any;
-        return {
-          ...base,
-          // Keep raw numerical values for game logic
+        const displayCard = rp.player_cards as any;
+        const gameCard = {
+          ...displayCard,
+          // Raw numerical run-stat values for game engine
           stat_3pt: rp.run_stat_3pt,
           stat_mid: rp.run_stat_mid,
           stat_fin: rp.run_stat_fin,
@@ -67,10 +67,11 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
           stat_ast: rp.run_stat_ast,
           stat_reb: rp.run_stat_reb,
           stat_int: rp.run_stat_int,
-          // Keep raw run_rating for game engine, convert for display
           _runRating: rp.run_rating,
-          rating: runRatingToStars(rp.run_rating),
+          // Preserve untouched display card for UI rendering
+          _displayCard: displayCard,
         };
+        return { displayCard, gameCard };
       });
     },
     enabled: !!runId,
