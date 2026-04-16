@@ -336,7 +336,7 @@ export default function AdminPlayers() {
     }
   }
 
-  const overallRating = Math.round(STAT_KEYS.reduce((s, k) => s + (Number((form as any)[k]) || 0), 0) / STAT_KEYS.length);
+  const overallRating = (STAT_KEYS.reduce((s, k) => s + (Number((form as any)[k]) || 0), 0) / STAT_KEYS.length).toFixed(1);
 
   // Mr. Versatile is a Signature Trait — check form.traits for it
   const mrVersatileExtra = useMemo(() => {
@@ -711,6 +711,7 @@ export default function AdminPlayers() {
             <div className="space-y-2">
               {form.traits.map((ft, i) => {
                 const trait = allTraits.find((t) => t.id === ft.trait_id);
+                const needsTargetStat = trait && trait.condition_type !== "passive";
                 return (
                   <div key={i} className="flex items-center gap-2 bg-muted/50 rounded p-2">
                     <span className="flex-1 text-sm">{trait?.name ?? ft.trait_id}</span>
@@ -718,7 +719,16 @@ export default function AdminPlayers() {
                       <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>{BADGE_TIERS.map((t) => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent>
                     </Select>
-                    <Input placeholder="Target stat" className="w-24" value={ft.target_stat ?? ""} onChange={(e) => setForm((f) => ({ ...f, traits: f.traits.map((tr, j) => j === i ? { ...tr, target_stat: e.target.value || null } : tr) }))} />
+                    {needsTargetStat && (
+                      <Select value={ft.target_stat ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, traits: f.traits.map((tr, j) => j === i ? { ...tr, target_stat: v || null } : tr) }))}>
+                        <SelectTrigger className="w-24"><SelectValue placeholder="Stat…" /></SelectTrigger>
+                        <SelectContent>
+                          {STAT_KEYS.map((s) => (
+                            <SelectItem key={s} value={s}>{STAT_LABELS[s]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <Button size="icon" variant="ghost" onClick={() => setForm((f) => ({ ...f, traits: f.traits.filter((_, j) => j !== i) }))}><X className="h-3 w-3" /></Button>
                   </div>
                 );
