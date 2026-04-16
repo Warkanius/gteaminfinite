@@ -237,11 +237,20 @@ export interface StatRollResult {
 /**
  * Get difficulty modifier for a player based on their star rating vs game difficulty.
  * Returns a multiplier (e.g. 1.2 = +20% boost, 0.8 = -20% penalty).
- * ±10% per star of difference. Only applied to user cards in domination.
+ * ±10% per star of difference. Applied to USER cards (compares user star vs difficulty).
  */
 export function getDifficultyModifier(playerStars: number, difficultyStars: number): number {
   const diff = playerStars - difficultyStars;
   return 1 + diff * 0.1;
+}
+
+/**
+ * Get CPU difficulty modifier — opponents get STRONGER as difficulty rises.
+ * Difficulty stars represent the opponent's effective level. Each star above 1 adds +10%.
+ * E.g. 2★ difficulty → CPU rolls ×1.1, 5★ difficulty → CPU rolls ×1.4.
+ */
+export function getCpuDifficultyModifier(difficultyStars: number): number {
+  return 1 + Math.max(0, difficultyStars - 1) * 0.1;
 }
 
 /** Calculate a single stat roll result given dice values (tabletop rules) */
