@@ -78,6 +78,11 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
     }
   }, [existingSteps]);
 
+  // Notify parent whenever steps change
+  useEffect(() => {
+    onStepsChange?.(steps);
+  }, [steps, onStepsChange]);
+
   function autoGenerateNextStep() {
     const step = generateSingleEvoStep(playerGemTierId, gemTiers, playerBadges, playerStats, steps.length);
     if (!step) {
