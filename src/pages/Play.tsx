@@ -158,6 +158,7 @@ export default function Play() {
           gemReward={gameState.gemReward}
           cardRewardId={gameState.cardRewardId}
           challengeId={gameState.challengeId}
+          dominationGameId={gameState.dominationGameId}
         />
       )}
     </div>

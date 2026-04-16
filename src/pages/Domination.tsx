@@ -42,12 +42,13 @@ export default function Domination() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("game_logs")
-        .select("opponent_name")
+        .select("domination_game_id")
         .eq("user_id", user!.id)
         .eq("won", true)
-        .eq("mode", "domination");
+        .eq("mode", "domination")
+        .not("domination_game_id", "is", null);
       if (error) throw error;
-      return (data ?? []).map((d) => d.opponent_name);
+      return (data ?? []).map((d) => d.domination_game_id).filter(Boolean) as string[];
     },
   });
 
@@ -65,7 +66,7 @@ export default function Domination() {
 
   const isUnlocked = (road: DominationGame[], index: number) => {
     if (index === 0) return true;
-    return wonSet.has(road[index - 1].opponent_name);
+    return wonSet.has(road[index - 1].id);
   };
 
   const handlePlay = (game: DominationGame) => {

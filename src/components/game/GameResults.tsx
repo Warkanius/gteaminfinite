@@ -21,6 +21,7 @@ interface GameResultsProps {
   gemReward?: number;
   cardRewardId?: string;
   challengeId?: string;
+  dominationGameId?: string;
 }
 
 interface PulledCard {
@@ -37,7 +38,7 @@ interface PulledCard {
   gem_tiers?: { color?: string; name?: string } | null;
 }
 
-export function GameResults({ result, onPlayAgain, coinReward, opponentName, mode = "5v5", packReward, gemReward, cardRewardId, challengeId }: GameResultsProps) {
+export function GameResults({ result, onPlayAgain, coinReward, opponentName, mode = "5v5", packReward, gemReward, cardRewardId, challengeId, dominationGameId }: GameResultsProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
@@ -58,6 +59,7 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
         cpu_score: result.cpuTotal,
         won,
         player_stats: [...result.userCards, ...result.cpuCards] as any,
+        domination_game_id: dominationGameId ?? null,
       }).select("id").single();
 
       if (gameLog) {
