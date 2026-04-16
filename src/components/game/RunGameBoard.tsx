@@ -263,6 +263,7 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     setTimeout(() => onGameComplete(), 2500);
   };
 
+  /** Kick off a rebound contest with full visualization. */
   const resolveRebound = (newPScore: number, newCScore: number) => {
     const playerRebSlot = pickRebounderSlot();
     const cpuRebSlot = pickRebounderSlot();
@@ -278,30 +279,54 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     const pRebRoll = resolveRunReboundRoll(pRebounder.stat_reb, pRebounder.stat_blk, pRating, pDice);
     const cRebRoll = resolveRunReboundRoll(cRebounder.stat_reb, cRebounder.stat_blk, cRating, cDice);
 
-    const rebWinner: Possession = pRebRoll >= cRebRoll ? "player" : "cpu";
-    addLog({
-      msg: `🏀 Rebound: ${pRebounder.name} (${pRebRoll}) vs ${cRebounder.name} (${cRebRoll}) → ${rebWinner === "player" ? "Your ball" : "CPU ball"}`,
-      type: "rebound",
-    });
+    const playerWins = pRebRoll >= cRebRoll;
+    const rebWinner: Possession = playerWins ? "player" : "cpu";
 
-    // Accumulate rebound stat for user rebounder
+    const contest: ShotContestResult = {
+      offenseRoll: pRebRoll,
+      defenseRoll: cRebRoll,
+      made: playerWins,
+      points: 0,
+      offenseDice: pDice,
+      defenseDice: cDice,
+      offenseModifier: 1,
+      defenseModifier: 1,
+      offenseStat: "stat_reb",
+      defenseStat: "stat_reb",
+    };
+
     accumulateCardStat(pRebounder.id, "stat_reb", pRebRoll, 0);
 
-    setPossession(rebWinner);
-
-    // If CPU gets possession after rebound, set up their shot
-    if (rebWinner === "cpu") {
-      const idx = Math.floor(Math.random() * 3);
-      const stat = SCORING_STATS[Math.floor(Math.random() * SCORING_STATS.length)];
-      setCpuShooterIdx(idx);
-      setCpuStat(stat);
-    }
-
-    setPhase("choose");
-
-    // Check winner after rebound
-    const winner = checkWinner(newPScore, newCScore);
-    if (winner) handleGameEnd(winner, newPScore, newCScore);
+    setPendingContest({
+      kind: "rebound",
+      shooter: pRebounder,
+      defender: cRebounder,
+      offenseStat: "stat_reb",
+      defenseStat: "stat_reb",
+      contest,
+      activations: [],
+      shooterSide: "player",
+      applyOutcome: () => {
+        addLog({
+          msg: `🏀 Rebound: ${pRebounder.name} (${pRebRoll}) vs ${cRebounder.name} (${cRebRoll}) → ${rebWinner === "player" ? "Your ball" : "CPU ball"}`,
+          type: "rebound",
+        });
+        setLastPlay({ kind: "rebound", side: rebWinner });
+        setPossession(rebWinner);
+        if (rebWinner === "cpu") {
+          const idx = Math.floor(Math.random() * 3);
+          const stat = SCORING_STATS[Math.floor(Math.random() * SCORING_STATS.length)];
+          setCpuShooterIdx(idx);
+          setCpuStat(stat);
+        }
+        setPendingContest(null);
+        setPhase("choose");
+        const winner = checkWinner(newPScore, newCScore);
+        if (winner) handleGameEnd(winner, newPScore, newCScore);
+      },
+    });
+    setPhase("rebound-rolling");
+    setTimeout(() => setPhase("rebound-result"), 900);
   };
 
   const logBadgeActivations = (activations: (BadgeActivation | TraitActivation)[]) => {
