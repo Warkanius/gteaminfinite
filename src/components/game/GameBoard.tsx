@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dice5 } from "lucide-react";
 import {
   STATS, STAT_LABELS, getStatDiceCount, resolveStatRoll, buildCardResult,
-  rollDice, type StatRollResult, type CardGameResult, type StatKey,
+  rollDice, getCpuDifficultyModifier, type StatRollResult, type CardGameResult, type StatKey,
 } from "@/lib/gameEngine";
 import {
   resolveBadgeEffects, applyRerolls, getPendingReroll, resolveRerollChoice,
