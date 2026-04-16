@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { computeOVR } from "@/lib/ovrUtils";
 import { DataTable, Column } from "@/components/admin/DataTable";
 import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
@@ -111,7 +112,7 @@ export default function AdminTeams() {
   const { data: allPlayersLite = [] } = useQuery({
     queryKey: ["admin-all-players-lite"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("player_cards").select("id, name, rating").order("name");
+      const { data, error } = await supabase.from("player_cards").select("id, name, rating, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int").order("name");
       if (error) throw error;
       return data;
     },
@@ -121,7 +122,7 @@ export default function AdminTeams() {
   const { data: domGamePlayers = [] } = useQuery({
     queryKey: ["admin-dom-game-players"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("domination_game_players").select("*, player_cards(id, name, rating)");
+      const { data, error } = await supabase.from("domination_game_players").select("*, player_cards(id, name, rating, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int)");
       if (error) throw error;
       return data;
     },
@@ -131,7 +132,7 @@ export default function AdminTeams() {
   const { data: teamPlayers = [], refetch: refetchTeamPlayers } = useQuery({
     queryKey: ["admin-team-players"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("team_players").select("*, player_cards(id, name, rating)").order("slot");
+      const { data, error } = await supabase.from("team_players").select("*, player_cards(id, name, rating, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int)").order("slot");
       if (error) throw error;
       return data;
     },
@@ -736,7 +737,7 @@ export default function AdminTeams() {
                         onClick={() => setQuickEditPlayerId(tp.player_card_id)}
                         title="Click to edit player"
                       >
-                        {tp.player_cards?.name ?? "Unknown"} <span className="text-muted-foreground">({tp.player_cards?.rating ?? 0}★)</span>
+                        {tp.player_cards?.name ?? "Unknown"} <span className="text-muted-foreground">({tp.player_cards ? computeOVR(tp.player_cards) : 0}★)</span>
                       </button>
                       <div className="flex gap-1">
                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setQuickEditPlayerId(tp.player_card_id)} title="Edit Player">
@@ -759,7 +760,7 @@ export default function AdminTeams() {
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <PlayerCombobox
-                      players={allPlayersLite.filter(p => !currentTeamRoster.some(tp => tp.player_card_id === p.id)).map(p => ({ id: p.id, name: `${p.name} (${p.rating}★)` }))}
+                      players={allPlayersLite.filter(p => !currentTeamRoster.some(tp => tp.player_card_id === p.id)).map(p => ({ id: p.id, name: `${p.name} (${computeOVR(p)}★)` }))}
                       value={teamSearchPlayerId}
                       onValueChange={setTeamSearchPlayerId}
                       placeholder="Search players…"
