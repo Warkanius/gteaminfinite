@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CardGameResult, StatKey } from "@/lib/gameEngine";
+import { fetchTraitsForCards, getEvolutionMultiplier, type CardTrait } from "@/lib/traitEngine";
 
 export interface CompoundChallenge {
   type: string;
@@ -38,6 +39,9 @@ export async function trackEvoProgress(
     (existingProgress ?? []).map((p) => [p.evo_path_id, p])
   );
 
+  // Fetch traits for Scientist multiplier
+  const traitMap = await fetchTraitsForCards(supabase, cardIds);
+
   const pathsByCard = new Map<string, typeof evoPaths>();
   for (const path of evoPaths) {
     const arr = pathsByCard.get(path.player_card_id) ?? [];
@@ -58,10 +62,13 @@ export async function trackEvoProgress(
     const compounds = (activeStep.compound_challenges as unknown as CompoundChallenge[] | null) ?? [];
     const isCompound = compounds.length > 0;
 
+    const cardTraits = traitMap[card.playerCardId] ?? [];
+    const evoMultiplier = getEvolutionMultiplier(cardTraits);
+
     if (isCompound) {
-      await trackCompoundProgress(userId, card, won, activeStep, compounds, progressMap);
+      await trackCompoundProgress(userId, card, won, activeStep, compounds, progressMap, evoMultiplier);
     } else {
-      await trackSingleProgress(userId, card, won, activeStep, progressMap);
+      await trackSingleProgress(userId, card, won, activeStep, progressMap, evoMultiplier);
     }
   }
 }
@@ -72,9 +79,11 @@ async function trackSingleProgress(
   won: boolean,
   activeStep: any,
   progressMap: Map<string, any>,
+  evoMultiplier: number,
 ) {
-  const increment = computeIncrement(activeStep, card, won);
-  if (increment <= 0) return;
+  const rawIncrement = computeIncrement(activeStep, card, won);
+  if (rawIncrement <= 0) return;
+  const increment = Math.round(rawIncrement * evoMultiplier);
 
   const existing = progressMap.get(activeStep.id);
   const newValue = (existing?.current_value ?? 0) + increment;
@@ -108,6 +117,7 @@ async function trackCompoundProgress(
   activeStep: any,
   compounds: CompoundChallenge[],
   progressMap: Map<string, any>,
+  evoMultiplier: number,
 ) {
   const existing = progressMap.get(activeStep.id);
   const currentCompound: Record<string, number> = (existing?.compound_progress as Record<string, number>) ?? {};
@@ -121,11 +131,12 @@ async function trackCompoundProgress(
     const prev = updatedCompound[key] ?? 0;
     if (prev >= req.target) continue; // already met
 
-    const inc = computeIncrement(
+    const rawInc = computeIncrement(
       { challenge_type: req.type, challenge_target: req.target, challenge_stat: req.stat },
       card,
       won,
     );
+    const inc = Math.round(rawInc * evoMultiplier);
     if (inc > 0) {
       updatedCompound[key] = prev + inc;
       anyChanged = true;

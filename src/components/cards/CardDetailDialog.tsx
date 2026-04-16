@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { StarRating } from "@/components/cards/StarRating";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
+import { computeStars } from "@/lib/ovrUtils";
 import { Lock, Unlock, Coins, CheckCircle, Circle, ArrowRight, Sparkles } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,7 +85,7 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
             <DialogTitle className="text-2xl">{card.name}</DialogTitle>
           </DialogHeader>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="lg" />
+            <StarRating rating={computeStars(card)} glowColor={bg(visuals.glow)} size="lg" />
             {positions && <Badge variant="secondary">{positions}</Badge>}
             {gemTier?.name && <Badge variant="outline" className="border-foreground/30">{gemTier.name}</Badge>}
             {card.gem_name && <Badge variant="outline" className="border-foreground/30">{card.gem_name}</Badge>}

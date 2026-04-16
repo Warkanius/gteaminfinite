@@ -2,6 +2,7 @@ import { useState, forwardRef, useImperativeHandle } from "react";
 import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/cards/StarRating";
+import { computeStars } from "@/lib/ovrUtils";
 import { cn } from "@/lib/utils";
 
 interface RevealCardProps {
@@ -109,7 +110,7 @@ export const RevealCard = forwardRef<RevealCardHandle, RevealCardProps>(
             >
               {/* Star rating */}
               <div className="absolute top-2 right-2">
-                <StarRating rating={card.rating} glowColor={bg(visuals.glow)} size="sm" />
+                <StarRating rating={computeStars(card)} glowColor={bg(visuals.glow)} size="sm" />
               </div>
 
               <h3 className="text-xs font-semibold text-foreground truncate w-full text-center drop-shadow-md">
