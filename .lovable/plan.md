@@ -1,36 +1,39 @@
 
 
-# Display Decimal OVR Everywhere
+# Fix Domination Repeat Opponents
 
 ## Problem
-OVR is displayed as a rounded integer (`rating` field) in most places. The user wants the computed decimal average of 9 stats (e.g., `2.4`) shown consistently everywhere.
+Domination tracks wins by `opponent_name` only (via `game_logs` table). When the same opponent appears multiple times at different difficulties (e.g., Kaijo at game 1 and game 6), winning game 1 marks both as completed.
 
-## Approach
-Create a shared `computeOVR` utility function and use it in all locations. Expand database queries where stats aren't currently fetched.
+## Root Cause
+- `Domination.tsx` queries `game_logs` for `opponent_name` where `won = true`
+- Uses a `Set<string>` of opponent names to check completion
+- No way to distinguish Kaijo (game 1, 1★) from Kaijo (game 6, 3★)
 
-## Utility Function
-**New: `src/lib/ovrUtils.ts`**
-```ts
-const STAT_KEYS = ["stat_3pt","stat_mid","stat_fin","stat_dnk","stat_ast","stat_stl","stat_reb","stat_blk","stat_int"];
-export function computeOVR(card: Record<string, any>): string {
-  const avg = STAT_KEYS.reduce((s, k) => s + (Number(card[k]) || 0), 0) / STAT_KEYS.length;
-  return avg.toFixed(1);
-}
-```
+## Solution
+Track wins by `domination_game_id` instead of `opponent_name`.
 
-## Changes by File
+### 1. Add `domination_game_id` column to `game_logs`
+- New nullable UUID column referencing `domination_games(id)`
+- Nullable so non-domination game logs aren't affected
 
+### 2. Update `GameResults.tsx`
+- Accept `dominationGameId` prop and insert it into `game_logs` when saving
+
+### 3. Update `Domination.tsx`
+- Query wins as `domination_game_id` instead of `opponent_name`
+- Build `wonSet` as `Set<string>` of game IDs
+- Check `wonSet.has(game.id)` instead of `wonSet.has(game.opponent_name)`
+- `isUnlocked` checks `wonSet.has(road[index - 1].id)` instead of opponent name
+
+### 4. Update `Play.tsx` / match routing
+- Pass `dominationGameId` through to `GameResults` from the navigation state
+
+### Files Changed
 | File | Change |
 |---|---|
-| `src/lib/ovrUtils.ts` | New shared utility |
-| `src/pages/admin/AdminPlayers.tsx` | Table column: use `computeOVR(r)` instead of `String(r.rating)` |
-| `src/components/admin/PlayerQuickEdit.tsx` | Compute and display decimal OVR from form stats next to the star slider |
-| `src/pages/admin/AdminTeams.tsx` | Expand `allPlayersLite` query to include stats; expand `team_players` join to include stats; display `computeOVR()` instead of `rating★` in roster and combobox |
-| `src/pages/admin/AdminStarterPacks.tsx` | Expand player queries to include stats; display `computeOVR()` |
-| `src/components/admin/RunRosterManager.tsx` | Stats already fetched — use `computeOVR(p)` instead of `p.rating★ OVR` |
-| `src/components/admin/PlayerWizard.tsx` | Already uses `.toFixed(1)` — import shared util for consistency; update search result labels |
-| `src/components/game/MatchupArrange.tsx` | Use `computeOVR()` for matchup display |
-| `src/pages/FeedProfile.tsx` | Use `computeOVR()` for profile subtitle (needs stats in query) |
-
-All locations will show format like `3.2 OVR` or `3.2★` consistently.
+| Migration | `ALTER TABLE game_logs ADD COLUMN domination_game_id UUID REFERENCES domination_games(id)` |
+| `src/components/game/GameResults.tsx` | Accept + insert `dominationGameId` |
+| `src/pages/Domination.tsx` | Query by `domination_game_id`, check unlocks by game ID |
+| `src/pages/Play.tsx` | Pass `dominationGameId` to GameResults |
 
