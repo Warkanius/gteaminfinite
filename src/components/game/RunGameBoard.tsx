@@ -508,12 +508,12 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
       defBadgesOwn, shooterBadges, defTeammateBadges, "runs",
     );
 
-    logBadgeActivations([
+    const allActivations = [
       ...cpuOffTraitResult.activations, ...cpuOffTeammateTraitResult.activations,
       ...offBadge.activations,
       ...defTraitResultC.activations, ...defTeammateTraitResultC.activations,
       ...defBadge.activations,
-    ]);
+    ];
 
     const result = resolveRunShotContest(
       cpuStat, offBadge.adjustedStat, offRating, offBadge.finalDice,
@@ -522,27 +522,46 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     );
     setLastContest(result);
 
-    let newPScore = playerScore;
-    let newCScore = cpuScore;
+    const baseP = playerScore;
+    const baseC = cpuScore;
 
-    // Accumulate defensive stat for evo tracking (user defender)
     accumulateCardStat(defender.id, defStat, result.defenseRoll, 0);
+    setPossessions(p => p + 1);
+    const capturedCpuStat = cpuStat;
 
-    if (result.made) {
-      const pts = result.points;
-      newCScore += pts;
-      setCpuScore(newCScore);
-      addLog({ msg: `🏀 CPU ${shooter.name} hits ${STAT_LABELS[cpuStat]}! +${pts}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-cpu" });
-      
-      setPossession("player");
-      setPhase("choose");
-
-      const winner = checkWinner(newPScore, newCScore);
-      if (winner) handleGameEnd(winner, newPScore, newCScore);
-    } else {
-      addLog({ msg: `🛡️ ${defender.name} stops CPU ${shooter.name} on ${STAT_LABELS[cpuStat]}! (${result.defenseRoll} vs ${result.offenseRoll}) → Rebound...`, type: "miss" });
-      setTimeout(() => resolveRebound(newPScore, newCScore), 800);
-    }
+    setPendingContest({
+      kind: "shot",
+      shooter,
+      defender,
+      offenseStat: capturedCpuStat,
+      defenseStat: defStat,
+      contest: result,
+      activations: allActivations,
+      shooterSide: "cpu",
+      applyOutcome: () => {
+        logBadgeActivations(allActivations);
+        const newPScore = baseP;
+        let newCScore = baseC;
+        if (result.made) {
+          const pts = result.points;
+          newCScore += pts;
+          setCpuScore(newCScore);
+          addLog({ msg: `🏀 CPU ${shooter.name} hits ${STAT_LABELS[capturedCpuStat]}! +${pts}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-cpu" });
+          setLastPlay({ kind: "make", side: "cpu" });
+          setPossession("player");
+          setPendingContest(null);
+          setPhase("choose");
+          const winner = checkWinner(newPScore, newCScore);
+          if (winner) handleGameEnd(winner, newPScore, newCScore);
+        } else {
+          addLog({ msg: `🛡️ ${defender.name} stops CPU ${shooter.name} on ${STAT_LABELS[capturedCpuStat]}! (${result.defenseRoll} vs ${result.offenseRoll}) → Rebound...`, type: "miss" });
+          setLastPlay({ kind: "miss", side: "cpu" });
+          setPendingContest(null);
+          resolveRebound(newPScore, newCScore);
+        }
+      },
+    });
+    setTimeout(() => setPhase("result"), 900);
   };
 
   const pCard = playerLineup[selectedShooterIdx];
