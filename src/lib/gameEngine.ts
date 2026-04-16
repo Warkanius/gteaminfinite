@@ -66,24 +66,20 @@ export function hasMatchBonus(statValue: number, dice: number[]): boolean {
   return statValue >= 5 && hasMatchingDice(dice);
 }
 
-// ─── Runs Mode helpers (0–120 numerical scale) ───
+// ─── Runs Mode (pure stat-driven tabletop dice) ───
+//
+// The Runs uses individual stat values (0–240+) only. Each stat maps to a
+// 0–12 star band: 0–19=0★, 20–39=1★, 40–59=2★, … 240+=12★. Dice count and
+// modifier come from those stars via getStatDiceCount / getStatModifier.
+// There is NO "Runs OVR" multiplier and no offense-side advantage.
 
-/** Convert run_rating (0–120) to display stars (0–6) for PlayerCard */
-export function runRatingToStars(runRating: number): number {
-  return Math.round(runRating / 20);
+/** Convert a 0–240+ stat value to its 0–12 star band */
+export function runStatToStars(value: number): number {
+  if (!value || value < 0) return 0;
+  return Math.min(12, Math.floor(value / 20));
 }
 
-/** Dice count for Runs: 2 dice if run_rating >= 80, else 1 */
-export function getRunDiceCount(runRating: number): 1 | 2 {
-  return runRating >= 80 ? 2 : 1;
-}
-
-/** Continuous modifier for Runs: run_rating / 40 (80→2.0x, 100→2.5x, 120→3.0x) */
-export function getRunModifier(runRating: number): number {
-  return runRating / 40;
-}
-
-/** Convert a card's star-based stats to run numerical stats (fallback when no run_* columns) */
+/** @deprecated Kept only so the lineup overlay compiles; carries no gameplay meaning */
 export function starStatToRunStat(starStat: number): number {
   return starStat * 20;
 }
