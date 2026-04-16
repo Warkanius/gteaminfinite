@@ -289,9 +289,14 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
         })}
       </div>
 
-      <Button onClick={handleStart} disabled={selectedIds.size !== 5} className="w-full sm:w-auto">
-        Start Game ({selectedIds.size}/5)
-      </Button>
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button onClick={handleStart} disabled={startDisabled} className="w-full sm:w-auto">
+          Start Game ({selectedIds.size}/5)
+        </Button>
+        {opponentLoading && (
+          <span className="text-sm text-muted-foreground">Loading opponent…</span>
+        )}
+      </div>
 
       {/* Card grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
