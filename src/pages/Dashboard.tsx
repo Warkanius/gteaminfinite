@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { computeOVR } from "@/lib/ovrUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -85,7 +86,7 @@ export default function Dashboard() {
         const cardIds = packPlayers.map((pp) => pp.player_card_id);
         const { data: cards } = await supabase
           .from("player_cards")
-          .select("id, name, rating, position1")
+          .select("id, name, rating, position1, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int")
           .in("id", cardIds);
 
         packs.push({ id: pack.id, name: pack.name, players: cards || [] });
@@ -206,7 +207,7 @@ export default function Dashboard() {
                       <div key={p.id} className="flex items-center justify-between text-sm">
                         <span>{p.name}</span>
                         <div className="flex items-center gap-2 text-muted-foreground">
-                          <span>{p.rating} OVR</span>
+                          <span>{computeOVR(p)} OVR</span>
                           {p.position1 && <Badge variant="outline" className="text-xs">{p.position1}</Badge>}
                         </div>
                       </div>
