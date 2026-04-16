@@ -487,6 +487,7 @@ export type Database = {
       game_logs: {
         Row: {
           cpu_score: number
+          domination_game_id: string | null
           id: string
           mode: string
           opponent_name: string | null
@@ -498,6 +499,7 @@ export type Database = {
         }
         Insert: {
           cpu_score?: number
+          domination_game_id?: string | null
           id?: string
           mode?: string
           opponent_name?: string | null
@@ -509,6 +511,7 @@ export type Database = {
         }
         Update: {
           cpu_score?: number
+          domination_game_id?: string | null
           id?: string
           mode?: string
           opponent_name?: string | null
@@ -518,7 +521,15 @@ export type Database = {
           user_score?: number
           won?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "game_logs_domination_game_id_fkey"
+            columns: ["domination_game_id"]
+            isOneToOne: false
+            referencedRelation: "domination_games"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gem_market_listings: {
         Row: {

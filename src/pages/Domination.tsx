@@ -42,12 +42,13 @@ export default function Domination() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("game_logs")
-        .select("opponent_name")
+        .select("domination_game_id")
         .eq("user_id", user!.id)
         .eq("won", true)
-        .eq("mode", "domination");
+        .eq("mode", "domination")
+        .not("domination_game_id", "is", null);
       if (error) throw error;
-      return (data ?? []).map((d) => d.opponent_name);
+      return (data ?? []).map((d) => d.domination_game_id).filter(Boolean) as string[];
     },
   });
 
@@ -65,7 +66,7 @@ export default function Domination() {
 
   const isUnlocked = (road: DominationGame[], index: number) => {
     if (index === 0) return true;
-    return wonSet.has(road[index - 1].opponent_name);
+    return wonSet.has(road[index - 1].id);
   };
 
   const handlePlay = (game: DominationGame) => {
@@ -99,7 +100,7 @@ export default function Domination() {
       {!selectedRoad && (
         <div className="grid gap-4 sm:grid-cols-2">
           {roads.map(([roadName, roadGames]) => {
-            const completed = roadGames.filter((g) => wonSet.has(g.opponent_name)).length;
+            const completed = roadGames.filter((g) => wonSet.has(g.id)).length;
             return (
               <Card
                 key={roadName}
@@ -120,7 +121,7 @@ export default function Domination() {
                         key={g.id}
                         className={cn(
                           "h-2 flex-1 rounded-full",
-                          wonSet.has(g.opponent_name) ? "bg-primary" : "bg-muted"
+                          wonSet.has(g.id) ? "bg-primary" : "bg-muted"
                         )}
                       />
                     ))}
@@ -148,7 +149,7 @@ export default function Domination() {
               .find(([name]) => name === selectedRoad)?.[1]
               .map((game, idx, arr) => {
                 const unlocked = isUnlocked(arr, idx);
-                const beaten = wonSet.has(game.opponent_name);
+                const beaten = wonSet.has(game.id);
 
                 return (
                   <div key={game.id} className="relative flex items-start gap-4 pl-3">
