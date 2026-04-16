@@ -422,9 +422,9 @@ export function resolveBadgeEffects(
   );
   allActivations.push(...rerollActs);
 
-  // 4. Bonus badges
+  // 4. Bonus badges (Walking Bucket etc.)
   const { bonusValue: bonusBadgeVal, activations: bonusActs } = applyBonusBadge(
-    stat, cardBadges,
+    stat, cardBadges, mode,
   );
   allActivations.push(...bonusActs);
 

@@ -49,10 +49,10 @@ const TIER_LEVEL: Record<TraitTier, number> = {
   actolytrene: 5,
 };
 
-/** Boost amount per tier: stars for 5v5, ×20 for runs */
+/** Boost amount per tier: stars for 5v5, flat +5 per tier for runs (per screenshot). */
 function boostPerTier(tier: TraitTier, mode: "5v5" | "runs"): number {
   const level = TIER_LEVEL[tier];
-  return mode === "runs" ? level * 20 : level;
+  return mode === "runs" ? level * 5 : level;
 }
 
 // ─── Condition checkers ───
