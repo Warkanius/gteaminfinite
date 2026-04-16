@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { computeOVR } from "@/lib/ovrUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +38,7 @@ interface MarketCard {
   position1: string | null;
   position2: string | null;
   gem_name: string | null;
+  [key: string]: any;
 }
 
 export default function GemMarket() {
@@ -60,7 +62,7 @@ export default function GemMarket() {
     setLoading(true);
     const [tiersRes, listingsRes, collRes, profileRes] = await Promise.all([
       supabase.from("gem_tiers").select("*").order("sort_order"),
-      supabase.from("gem_market_listings").select("*, player_cards(id, name, rating, position1, position2, gem_name)") as any,
+      supabase.from("gem_market_listings").select("*, player_cards(id, name, rating, position1, position2, gem_name, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int)") as any,
       supabase.from("user_collections").select("player_card_id").eq("user_id", user!.id),
       supabase.from("profiles").select("gems").eq("user_id", user!.id).single(),
     ]);
@@ -83,6 +85,9 @@ export default function GemMarket() {
         position1: pc.position1,
         position2: pc.position2,
         gem_name: pc.gem_name,
+        stat_3pt: pc.stat_3pt, stat_mid: pc.stat_mid, stat_fin: pc.stat_fin,
+        stat_dnk: pc.stat_dnk, stat_stl: pc.stat_stl, stat_blk: pc.stat_blk,
+        stat_ast: pc.stat_ast, stat_reb: pc.stat_reb, stat_int: pc.stat_int,
       };
       if (!grouped[listing.gem_tier_id]) grouped[listing.gem_tier_id] = [];
       grouped[listing.gem_tier_id].push(card);
