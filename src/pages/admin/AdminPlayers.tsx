@@ -22,6 +22,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { resolveCardVisuals } from "@/lib/cardVisuals";
 import { generatePlayer } from "@/lib/archetypeEngine";
 import { cn } from "@/lib/utils";
+import { computeOVR } from "@/lib/ovrUtils";
 import { EvoPathEditor } from "@/components/admin/EvoPathEditor";
 import { BASE_BADGE_SLOTS } from "@/lib/badgeEngine";
 

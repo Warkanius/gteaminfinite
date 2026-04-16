@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { Wand2, ChevronRight, ChevronLeft, RefreshCw, Check, Sparkles, Search, User, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { computeOVR, computeStars } from "@/lib/ovrUtils";
 import { NBA_LEGENDS, ARCHETYPE_LIST, MODIFIER_LIST, generateFromProfile, type WizardProfile, type LegendProfile } from "@/lib/archetypeEngine";
 import type { Tables } from "@/integrations/supabase/types";
 
