@@ -33,8 +33,22 @@ interface Props {
   onGameComplete: () => void;
 }
 
-type Phase = "choose" | "rolling" | "rebound" | "done";
+type Phase = "choose" | "rolling" | "result" | "rebound-rolling" | "rebound-result" | "done";
 type Possession = "player" | "cpu";
+type LastPlay = null | { kind: "make" | "miss" | "rebound"; side: "player" | "cpu" };
+
+interface PendingContest {
+  kind: "shot" | "rebound";
+  shooter: any;
+  defender: any;
+  offenseStat: StatKey;
+  defenseStat: StatKey;
+  contest: ShotContestResult;
+  activations: (BadgeActivation | TraitActivation)[];
+  shooterSide: "player" | "cpu";
+  // Continuation: applies score, updates possession, advances phase, returns winner check
+  applyOutcome: () => void;
+}
 
 interface LogEntry {
   msg: string;
