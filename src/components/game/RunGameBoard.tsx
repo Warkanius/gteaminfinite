@@ -264,6 +264,13 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     setTimeout(() => onGameComplete(), 2500);
   };
 
+  /** Roll dice for a stat using its individual star band. Returns an empty array if 0 stars. */
+  const rollForStat = (statValue: number): number[] => {
+    const stars = runStatToStars(statValue);
+    const count = getStatDiceCount(stars);
+    return count > 0 ? rollDice(count).dice : [];
+  };
+
   /** Kick off a rebound contest with full visualization. */
   const resolveRebound = (newPScore: number, newCScore: number) => {
     const playerRebSlot = pickRebounderSlot();
@@ -271,14 +278,13 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     const pRebounder = playerLineup[playerRebSlot];
     const cRebounder = cpuLineup[cpuRebSlot];
 
-    const pRating = pRebounder._runRating ?? 60;
-    const cRating = cRebounder._runRating ?? 60;
+    const pCombined = (pRebounder.stat_reb + pRebounder.stat_blk) / 2;
+    const cCombined = (cRebounder.stat_reb + cRebounder.stat_blk) / 2;
+    const pDice = rollForStat(pCombined);
+    const cDice = rollForStat(cCombined);
 
-    const pDice = rollDice(getRunDiceCount(pRating)).dice;
-    const cDice = rollDice(getRunDiceCount(cRating)).dice;
-
-    const pRebRoll = resolveRunReboundRoll(pRebounder.stat_reb, pRebounder.stat_blk, pRating, pDice);
-    const cRebRoll = resolveRunReboundRoll(cRebounder.stat_reb, cRebounder.stat_blk, cRating, cDice);
+    const pRebRoll = resolveRunReboundRoll(pRebounder.stat_reb, pRebounder.stat_blk, pDice);
+    const cRebRoll = resolveRunReboundRoll(cRebounder.stat_reb, cRebounder.stat_blk, cDice);
 
     const playerWins = pRebRoll >= cRebRoll;
     const rebWinner: Possession = playerWins ? "player" : "cpu";
@@ -294,6 +300,8 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
       defenseModifier: 1,
       offenseStat: "stat_reb",
       defenseStat: "stat_reb",
+      outcome: "rebound",
+      gap: Math.abs(pRebRoll - cRebRoll),
     };
 
     accumulateCardStat(pRebounder.id, "stat_reb", pRebRoll, 0);
