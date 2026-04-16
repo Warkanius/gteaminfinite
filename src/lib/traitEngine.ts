@@ -37,6 +37,10 @@ export interface GameContext {
   isHome: boolean;
   isAway: boolean;
   isKeyGame: boolean;
+  /** Runs only: Home Hero requires legend status (high overall) AND a home game */
+  isHomeHeroEligible?: boolean;
+  /** Runs only: Prime Time only fires on rank-up games */
+  isRankUpGame?: boolean;
 }
 
 // ─── Tier scaling ───
@@ -49,10 +53,10 @@ const TIER_LEVEL: Record<TraitTier, number> = {
   actolytrene: 5,
 };
 
-/** Boost amount per tier: stars for 5v5, ×20 for runs */
+/** Boost amount per tier: stars for 5v5, flat +5 per tier for runs (per screenshot). */
 function boostPerTier(tier: TraitTier, mode: "5v5" | "runs"): number {
   const level = TIER_LEVEL[tier];
-  return mode === "runs" ? level * 20 : level;
+  return mode === "runs" ? level * 5 : level;
 }
 
 // ─── Condition checkers ───
@@ -64,13 +68,18 @@ function conditionMet(
   cardRating?: number,
   statValue?: number,
   cardAvgStat?: number,
+  mode: "5v5" | "runs" = "5v5",
 ): boolean {
   switch (conditionType) {
     case "home":
+      // In Runs, Home Hero requires legend status AND a home game.
+      if (mode === "runs") return context.isHome && !!context.isHomeHeroEligible;
       return context.isHome;
     case "away":
       return context.isAway;
     case "key_game":
+      // In Runs, Prime Time only on rank-up games.
+      if (mode === "runs") return !!context.isRankUpGame;
       return context.isKeyGame;
     case "underdog":
       return opponentRating != null && cardRating != null && opponentRating > cardRating;
@@ -143,7 +152,7 @@ export function resolveTraitBoosts(
 
     const statForCheck = trait.condition_type === "low_stat" ? statValue : undefined;
 
-    if (conditionMet(trait.condition_type, context, opponentRating, cardRating, statForCheck, cardAvgStat)) {
+    if (conditionMet(trait.condition_type, context, opponentRating, cardRating, statForCheck, cardAvgStat, mode)) {
       const boost = boostPerTier(trait.tier, mode);
       adjusted += boost;
       activations.push({

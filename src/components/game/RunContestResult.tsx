@@ -25,17 +25,27 @@ export function RunContestResult({
   contest, activations, rolling, shooterSide, onContinue,
 }: Props) {
   const made = contest.made;
+  const outcome = contest.outcome;
+  const isSteal = outcome === "steal";
+  const isBlock = outcome === "block";
+
   const verdictColor = kind === "rebound"
-    ? (made ? (shooterSide === "player" ? "text-primary" : "text-destructive") : "text-muted-foreground")
-    : (made
-        ? (shooterSide === "player" ? "text-primary" : "text-destructive")
-        : "text-muted-foreground");
+    ? "text-accent-foreground"
+    : made
+      ? (shooterSide === "player" ? "text-primary" : "text-destructive")
+      : (isSteal || isBlock)
+        ? (shooterSide === "player" ? "text-destructive" : "text-primary")
+        : "text-muted-foreground";
 
   const verdictLabel = kind === "rebound"
     ? (shooterSide === "player" ? "🏀 YOUR REBOUND" : "🏀 CPU REBOUND")
-    : (made
-        ? (shooterSide === "player" ? `✅ MAKE +${contest.points}` : `❌ THEY SCORED +${contest.points}`)
-        : (shooterSide === "player" ? "❌ MISS" : "🛡️ STOP"));
+    : made
+      ? (shooterSide === "player" ? `✅ MAKE +${contest.points}` : `❌ THEY SCORED +${contest.points}`)
+      : isSteal
+        ? (shooterSide === "player" ? `🛡️ STOLEN — CPU ball` : `🛡️ STEAL — Your ball`)
+        : isBlock
+          ? (shooterSide === "player" ? `🚫 BLOCKED` : `🚫 BLOCK — Rebound`)
+          : (shooterSide === "player" ? "❌ MISS" : "🛡️ STOP");
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -54,7 +64,7 @@ export function RunContestResult({
             <PlayerCard card={shooter._displayCard ?? shooter} gemTier={(shooter._displayCard ?? shooter).gem_tiers} />
           </div>
           <p className="text-[11px] font-mono text-center">
-            {STAT_LABELS[offenseStat]} {shooter[offenseStat]}
+            {STAT_LABELS[offenseStat]} {shooter[offenseStat]} ({Math.min(12, Math.floor((shooter[offenseStat] ?? 0) / 20))}★)
           </p>
           <DiceRoll
             rolling={rolling}
@@ -88,7 +98,7 @@ export function RunContestResult({
             <PlayerCard card={defender._displayCard ?? defender} gemTier={(defender._displayCard ?? defender).gem_tiers} />
           </div>
           <p className="text-[11px] font-mono text-center">
-            {STAT_LABELS[defenseStat]} {defender[defenseStat]}
+            {STAT_LABELS[defenseStat]} {defender[defenseStat]} ({Math.min(12, Math.floor((defender[defenseStat] ?? 0) / 20))}★)
           </p>
           <DiceRoll
             rolling={rolling}
@@ -130,7 +140,7 @@ export function RunContestResult({
           className="w-full font-display tracking-wider"
           onClick={onContinue}
         >
-          Next Possession →
+          {isSteal ? "Continue →" : isBlock ? "Go to Rebound →" : "Next Possession →"}
         </Button>
       )}
     </div>
