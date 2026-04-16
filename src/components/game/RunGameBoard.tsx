@@ -390,12 +390,12 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
       defBadgesOwn, shooterBadges, defTeammateBadges, "runs",
     );
 
-    logBadgeActivations([
+    const allActivations = [
       ...offTraitResult.activations, ...offTeammateTraitResult.activations,
       ...offBadge.activations,
       ...defTraitResult.activations, ...defTeammateTraitResult.activations,
       ...defBadge.activations,
-    ]);
+    ];
 
     const result = resolveRunShotContest(
       selectedStat, offBadge.adjustedStat, offRating, offBadge.finalDice,
@@ -404,32 +404,53 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     );
     setLastContest(result);
 
-    let newPScore = playerScore;
-    let newCScore = cpuScore;
+    const baseP = playerScore;
+    const baseC = cpuScore;
 
     // Accumulate offensive stat for evo tracking
     accumulateCardStat(shooter.id, selectedStat, result.offenseRoll, 0);
 
-    if (result.made) {
-      const pts = result.points;
-      newPScore += pts;
-      setPlayerScore(newPScore);
-      addLog({ msg: `🏀 ${shooter.name} hits ${STAT_LABELS[selectedStat]}! +${pts}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-player" });
-      accumulateCardStat(shooter.id, selectedStat, 0, pts);
-      
-      const idx = Math.floor(Math.random() * 3);
-      const stat = SCORING_STATS[Math.floor(Math.random() * SCORING_STATS.length)];
-      setCpuShooterIdx(idx);
-      setCpuStat(stat);
-      setPossession("cpu");
-      setPhase("choose");
+    setPossessions(p => p + 1);
+    const capturedSelectedStat = selectedStat;
 
-      const winner = checkWinner(newPScore, newCScore);
-      if (winner) handleGameEnd(winner, newPScore, newCScore);
-    } else {
-      addLog({ msg: `❌ ${shooter.name} misses ${STAT_LABELS[selectedStat]}! (${result.offenseRoll} vs ${result.defenseRoll}) → Rebound...`, type: "miss" });
-      setTimeout(() => resolveRebound(newPScore, newCScore), 800);
-    }
+    setPendingContest({
+      kind: "shot",
+      shooter,
+      defender,
+      offenseStat: capturedSelectedStat,
+      defenseStat: defStat,
+      contest: result,
+      activations: allActivations,
+      shooterSide: "player",
+      applyOutcome: () => {
+        logBadgeActivations(allActivations);
+        let newPScore = baseP;
+        const newCScore = baseC;
+        if (result.made) {
+          const pts = result.points;
+          newPScore += pts;
+          setPlayerScore(newPScore);
+          addLog({ msg: `🏀 ${shooter.name} hits ${STAT_LABELS[capturedSelectedStat]}! +${pts}pts (${result.offenseRoll} vs ${result.defenseRoll})`, type: "score-player" });
+          accumulateCardStat(shooter.id, capturedSelectedStat, 0, pts);
+          setLastPlay({ kind: "make", side: "player" });
+          const idx = Math.floor(Math.random() * 3);
+          const stat = SCORING_STATS[Math.floor(Math.random() * SCORING_STATS.length)];
+          setCpuShooterIdx(idx);
+          setCpuStat(stat);
+          setPossession("cpu");
+          setPendingContest(null);
+          setPhase("choose");
+          const winner = checkWinner(newPScore, newCScore);
+          if (winner) handleGameEnd(winner, newPScore, newCScore);
+        } else {
+          addLog({ msg: `❌ ${shooter.name} misses ${STAT_LABELS[capturedSelectedStat]}! (${result.offenseRoll} vs ${result.defenseRoll}) → Rebound...`, type: "miss" });
+          setLastPlay({ kind: "miss", side: "player" });
+          setPendingContest(null);
+          resolveRebound(newPScore, newCScore);
+        }
+      },
+    });
+    setTimeout(() => setPhase("result"), 900);
   };
 
   /** Player contests CPU's shot */
