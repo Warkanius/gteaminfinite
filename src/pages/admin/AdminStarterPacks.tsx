@@ -40,7 +40,7 @@ export default function AdminStarterPacks() {
     queryFn: async () => {
       const { data } = await supabase
         .from("player_cards")
-        .select("id, name, rating, position1")
+        .select("id, name, rating, position1, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int")
         .order("name");
       return data ?? [];
     },
