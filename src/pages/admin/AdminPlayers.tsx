@@ -73,6 +73,7 @@ export default function AdminPlayers() {
   const [badgeSearch, setBadgeSearch] = useState("");
   const [pendingBadgeId, setPendingBadgeId] = useState<string | null>(null);
   const [evoSourceId, setEvoSourceId] = useState<string | null>(null);
+  const [pendingEvoSteps, setPendingEvoSteps] = useState<any[]>([]);
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["admin-players"],
@@ -162,6 +163,30 @@ export default function AdminPlayers() {
         );
       }
 
+      // Save evo paths together with the player
+      if (editId && cardId) {
+        await supabase.from("evo_paths").delete().eq("player_card_id", cardId);
+        if (pendingEvoSteps.length > 0) {
+          const { error: evoErr } = await supabase.from("evo_paths").insert(
+            pendingEvoSteps.map((s: any) => ({
+              player_card_id: cardId,
+              from_tier_id: s.from_tier_id || null,
+              to_tier_id: s.to_tier_id || null,
+              step_order: s.step_order,
+              challenge_description: s.challenge_description,
+              challenge_type: s.challenge_type,
+              challenge_target: s.challenge_target,
+              challenge_stat: s.challenge_stat || null,
+              stat_boosts: s.stat_boosts,
+              new_badges: s.new_badges,
+              evolves_to_card_id: s.evolves_to_card_id || null,
+              compound_challenges: s.compound_challenges,
+            } as any))
+          );
+          if (evoErr) throw evoErr;
+        }
+      }
+
       // Auto-link evo path if creating an evo form
       if (!editId && evoSourceId && cardId) {
         const { data: evoStep } = await supabase
@@ -182,6 +207,7 @@ export default function AdminPlayers() {
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["admin-players"] });
+      qc.invalidateQueries({ queryKey: ["evo-paths"] });
       setDialogOpen(false);
       if (evoSourceId && result?.wasInsert) {
         const sourceName = players.find(p => p.id === evoSourceId)?.name ?? "source";
@@ -228,7 +254,12 @@ export default function AdminPlayers() {
 
   async function createEvoForm(player: PlayerCard) {
     const data = await loadPlayerData(player);
-    setForm({ ...data, name: player.name, id: undefined });
+    // Auto-bump tier to next one
+    const currentTierIdx = gemTiers.findIndex(t => t.id === player.gem_tier_id);
+    const nextTier = currentTierIdx >= 0 && currentTierIdx < gemTiers.length - 1
+      ? gemTiers[currentTierIdx + 1]
+      : null;
+    setForm({ ...data, name: player.name, id: undefined, gem_tier_id: nextTier?.id ?? player.gem_tier_id ?? null });
     setEditId(null);
     setEvoSourceId(player.id);
     setGeneratorText("");
@@ -744,6 +775,7 @@ export default function AdminPlayers() {
               playerGemTierId={form.gem_tier_id ?? null}
               playerStats={Object.fromEntries(STAT_KEYS.map(k => [k, Number((form as any)[k]) || 0]))}
               playerBadges={form.badges}
+              onStepsChange={setPendingEvoSteps}
             />
           )}
         </div>
