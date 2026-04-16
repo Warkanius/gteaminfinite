@@ -134,36 +134,6 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
     updateStep(stepIdx, { compound_challenges: step.compound_challenges.filter((_, i) => i !== reqIdx) });
   }
 
-  const saveMut = useMutation({
-    mutationFn: async () => {
-      await supabase.from("evo_paths").delete().eq("player_card_id", playerId);
-      if (steps.length > 0) {
-        const { error } = await supabase.from("evo_paths").insert(
-          steps.map((s) => ({
-            player_card_id: playerId,
-            from_tier_id: s.from_tier_id || null,
-            to_tier_id: s.to_tier_id || null,
-            step_order: s.step_order,
-            challenge_description: s.challenge_description,
-            challenge_type: s.challenge_type,
-            challenge_target: s.challenge_target,
-            challenge_stat: s.challenge_stat || null,
-            stat_boosts: s.stat_boosts,
-            new_badges: s.new_badges,
-            evolves_to_card_id: s.evolves_to_card_id || null,
-            compound_challenges: s.compound_challenges,
-          } as any))
-        );
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["evo-paths", playerId] });
-      toast.success("Evo path saved");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
   const tierMap = Object.fromEntries(gemTiers.map(t => [t.id, t.name]));
 
   const comboPlayers = allPlayers.map(p => ({
@@ -188,10 +158,6 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
           </Button>
           <Button size="sm" variant="outline" onClick={addStep} className="gap-1">
             <Plus className="h-3.5 w-3.5" /> Add Step
-          </Button>
-          <Button size="sm" onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="gap-1 ml-auto">
-            {saveMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Save Path
           </Button>
         </div>
 
