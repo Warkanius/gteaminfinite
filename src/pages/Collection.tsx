@@ -479,8 +479,9 @@ export default function Collection() {
         badges={selectedBadges}
         traits={selectedTraits}
         duplicateCount={selectedCardId ? (duplicateMap[selectedCardId] ?? 1) : 1}
+        sellableCount={selectedCardId ? (sellableCountMap[selectedCardId] ?? 0) : 0}
         isLocked={selectedCardId ? !!lockMap[selectedCardId] : false}
-        canSell={selectedCardId ? (sourceMap[selectedCardId] === "standard_pack") : false}
+        canSell={selectedCardId ? (sellableCountMap[selectedCardId] ?? 0) > 0 : false}
         onToggleLock={() => toggleLockMutation.mutate()}
         onQuicksell={() => quicksellMutation.mutate()}
         quicksellLoading={quicksellMutation.isPending}
