@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { X, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
+import { computeOVR } from "@/lib/ovrUtils";
 
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 const STAT_KEYS = [
@@ -293,7 +294,7 @@ export function PlayerQuickEdit({ playerId, onClose }: PlayerQuickEditProps) {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Overall Star Rating</Label>
-                <span className="font-bold text-sm">{form.rating}★</span>
+                <span className="font-bold text-sm">{form.rating}★ <span className="text-muted-foreground font-normal">({computeOVR(form)} OVR)</span></span>
               </div>
               <Slider
                 min={0}
