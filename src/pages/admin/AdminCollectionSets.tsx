@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DataTable, Column } from "@/components/admin/DataTable";
 import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,28 +13,63 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, Trash2, Plus, X, Search } from "lucide-react";
+import { Pencil, Trash2, Plus, X, Search, Users } from "lucide-react";
 import { toast } from "sonner";
+
+type RewardType = "card" | "coins" | "gems" | "pack";
+
+interface RewardForm {
+  reward_type: RewardType;
+  reward_card_id: string;
+  reward_coins: number;
+  reward_gems: number;
+  reward_pack_id: string;
+}
+
+const EMPTY_REWARD: RewardForm = {
+  reward_type: "card",
+  reward_card_id: "",
+  reward_coins: 0,
+  reward_gems: 0,
+  reward_pack_id: "",
+};
 
 export default function AdminCollectionSets() {
   const qc = useQueryClient();
 
   // ── Collections ──
-  const [collForm, setCollForm] = useState({ name: "", description: "" });
+  const [collForm, setCollForm] = useState<{ name: string; description: string } & RewardForm>({
+    name: "",
+    description: "",
+    ...EMPTY_REWARD,
+  });
   const [collEditId, setCollEditId] = useState<string | null>(null);
   const [collDialogOpen, setCollDialogOpen] = useState(false);
   const [collDeleteId, setCollDeleteId] = useState<string | null>(null);
 
   // ── Sub-Collections ──
-  const [subForm, setSubForm] = useState({ name: "", collection_id: "" });
+  const [subForm, setSubForm] = useState<{ name: string; collection_id: string } & RewardForm>({
+    name: "",
+    collection_id: "",
+    ...EMPTY_REWARD,
+  });
   const [subEditId, setSubEditId] = useState<string | null>(null);
   const [subDialogOpen, setSubDialogOpen] = useState(false);
   const [subDeleteId, setSubDeleteId] = useState<string | null>(null);
 
+  // ── Roster viewer state ──
+  const [rosterTarget, setRosterTarget] = useState<
+    | { type: "collection" | "sub_collection"; id: string; name: string }
+    | null
+  >(null);
+
   const { data: collections = [], isLoading: collLoading } = useQuery({
     queryKey: ["admin-collection-sets"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("collections").select("*").order("name");
+      const { data, error } = await supabase
+        .from("collections")
+        .select("*")
+        .order("name");
       if (error) throw error;
       return data;
     },
@@ -42,25 +78,96 @@ export default function AdminCollectionSets() {
   const { data: subCollections = [], isLoading: subLoading } = useQuery({
     queryKey: ["admin-sub-collection-sets"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sub_collections").select("*, collections(name)").order("name");
+      const { data, error } = await supabase
+        .from("sub_collections")
+        .select("*, collections(name)")
+        .order("name");
       if (error) throw error;
       return data;
     },
   });
 
+  // Roster of players in the currently-viewed collection or sub-collection
+  const { data: rosterPlayers = [], isLoading: rosterLoading } = useQuery({
+    queryKey: ["collection-roster", rosterTarget?.type, rosterTarget?.id],
+    enabled: !!rosterTarget,
+    queryFn: async () => {
+      if (!rosterTarget) return [];
+      const col = rosterTarget.type === "collection" ? "collection_id" : "sub_collection_id";
+      const { data, error } = await supabase
+        .from("player_cards")
+        .select("id, name, rating, position1, is_collection_reward, gem_tier_id, gem_tiers(name, color)")
+        .eq(col, rosterTarget.id)
+        .order("rating", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const removeFromCollectionMut = useMutation({
+    mutationFn: async (cardId: string) => {
+      if (!rosterTarget) return;
+      const update: any = rosterTarget.type === "collection"
+        ? { collection_id: null, sub_collection_id: null, is_collection_reward: false }
+        : { sub_collection_id: null };
+      const { error } = await supabase.from("player_cards").update(update).eq("id", cardId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["collection-roster"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-cards-lite"] });
+      toast.success("Removed");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+
+  // Build payload helper for reward fields
+  const buildRewardPayload = (f: RewardForm) => ({
+    reward_type: f.reward_type,
+    reward_card_id: f.reward_type === "card" && f.reward_card_id ? f.reward_card_id : null,
+    reward_coins: f.reward_type === "coins" ? Number(f.reward_coins) || 0 : 0,
+    reward_gems: f.reward_type === "gems" ? Number(f.reward_gems) || 0 : 0,
+    reward_pack_id: f.reward_type === "pack" && f.reward_pack_id ? f.reward_pack_id : null,
+  });
+
   // Collection mutations
   const saveCollMut = useMutation({
     mutationFn: async () => {
-      const payload = { name: collForm.name, description: collForm.description || null };
+      const reward = buildRewardPayload(collForm);
+      const payload: any = {
+        name: collForm.name,
+        description: collForm.description || null,
+        reward_type: reward.reward_type,
+        reward_coins: reward.reward_coins,
+        reward_gems: reward.reward_gems,
+        reward_pack_id: reward.reward_pack_id,
+      };
       if (collEditId) {
         const { error } = await supabase.from("collections").update(payload).eq("id", collEditId);
         if (error) throw error;
+        // Card reward is stored on player_cards.is_collection_reward + collection_id, handled separately
+        if (reward.reward_type === "card" && reward.reward_card_id) {
+          // Clear any prior card reward for this collection
+          await supabase.from("player_cards").update({ is_collection_reward: false }).eq("collection_id", collEditId).eq("is_collection_reward", true);
+          await supabase.from("player_cards").update({ collection_id: collEditId, sub_collection_id: null, is_collection_reward: true }).eq("id", reward.reward_card_id);
+        } else if (reward.reward_type !== "card") {
+          await supabase.from("player_cards").update({ is_collection_reward: false }).eq("collection_id", collEditId).eq("is_collection_reward", true);
+        }
       } else {
-        const { error } = await supabase.from("collections").insert(payload);
+        const { data, error } = await supabase.from("collections").insert(payload).select("id").single();
         if (error) throw error;
+        if (reward.reward_type === "card" && reward.reward_card_id && data) {
+          await supabase.from("player_cards").update({ collection_id: data.id, sub_collection_id: null, is_collection_reward: true }).eq("id", reward.reward_card_id);
+        }
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-collection-sets"] }); setCollDialogOpen(false); toast.success("Saved"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-collection-sets"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-cards-lite"] });
+      setCollDialogOpen(false);
+      toast.success("Saved");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -73,16 +180,38 @@ export default function AdminCollectionSets() {
   // Sub-collection mutations
   const saveSubMut = useMutation({
     mutationFn: async () => {
-      const payload = { name: subForm.name, collection_id: subForm.collection_id };
+      const reward = buildRewardPayload(subForm);
+      const payload: any = {
+        name: subForm.name,
+        collection_id: subForm.collection_id,
+        reward_type: reward.reward_type,
+        reward_coins: reward.reward_coins,
+        reward_gems: reward.reward_gems,
+        reward_pack_id: reward.reward_pack_id,
+      };
       if (subEditId) {
         const { error } = await supabase.from("sub_collections").update(payload).eq("id", subEditId);
         if (error) throw error;
+        if (reward.reward_type === "card" && reward.reward_card_id) {
+          await supabase.from("player_cards").update({ is_collection_reward: false }).eq("sub_collection_id", subEditId).eq("is_collection_reward", true);
+          await supabase.from("player_cards").update({ collection_id: subForm.collection_id, sub_collection_id: subEditId, is_collection_reward: true }).eq("id", reward.reward_card_id);
+        } else if (reward.reward_type !== "card") {
+          await supabase.from("player_cards").update({ is_collection_reward: false }).eq("sub_collection_id", subEditId).eq("is_collection_reward", true);
+        }
       } else {
-        const { error } = await supabase.from("sub_collections").insert(payload);
+        const { data, error } = await supabase.from("sub_collections").insert(payload).select("id").single();
         if (error) throw error;
+        if (reward.reward_type === "card" && reward.reward_card_id && data) {
+          await supabase.from("player_cards").update({ collection_id: subForm.collection_id, sub_collection_id: data.id, is_collection_reward: true }).eq("id", reward.reward_card_id);
+        }
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-sub-collection-sets"] }); setSubDialogOpen(false); toast.success("Saved"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-sub-collection-sets"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-cards-lite"] });
+      setSubDialogOpen(false);
+      toast.success("Saved");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -253,14 +382,39 @@ export default function AdminCollectionSets() {
             columns={collColumns}
             isLoading={collLoading}
             searchKeys={["name"]}
-            onAdd={() => { setCollForm({ name: "", description: "" }); setCollEditId(null); setCollDialogOpen(true); }}
+            onAdd={() => {
+              setCollForm({ name: "", description: "", ...EMPTY_REWARD });
+              setCollEditId(null);
+              setCollDialogOpen(true);
+            }}
             addLabel="Add Collection"
-            actions={(r) => (
-              <div className="flex gap-1">
-                <Button size="icon" variant="ghost" onClick={() => { setCollForm({ name: r.name, description: r.description ?? "" }); setCollEditId(r.id); setCollDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                <Button size="icon" variant="ghost" onClick={() => setCollDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-              </div>
-            )}
+            actions={(r: any) => {
+              // find the existing card reward (if any) so we can prefill the editor
+              return (
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" title="View players" onClick={() => setRosterTarget({ type: "collection", id: r.id, name: r.name })}><Users className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={async () => {
+                    let rewardCardId = "";
+                    if ((r.reward_type ?? "card") === "card") {
+                      const { data } = await supabase.from("player_cards").select("id").eq("collection_id", r.id).eq("is_collection_reward", true).is("sub_collection_id", null).maybeSingle();
+                      rewardCardId = data?.id ?? "";
+                    }
+                    setCollForm({
+                      name: r.name,
+                      description: r.description ?? "",
+                      reward_type: (r.reward_type ?? "card") as RewardType,
+                      reward_card_id: rewardCardId,
+                      reward_coins: r.reward_coins ?? 0,
+                      reward_gems: r.reward_gems ?? 0,
+                      reward_pack_id: r.reward_pack_id ?? "",
+                    });
+                    setCollEditId(r.id);
+                    setCollDialogOpen(true);
+                  }}><Pencil className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => setCollDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </div>
+              );
+            }}
           />
         </CardContent>
       </Card>
@@ -276,11 +430,33 @@ export default function AdminCollectionSets() {
             columns={subColumns}
             isLoading={subLoading}
             searchKeys={["name"]}
-            onAdd={() => { setSubForm({ name: "", collection_id: collections[0]?.id ?? "" }); setSubEditId(null); setSubDialogOpen(true); }}
+            onAdd={() => {
+              setSubForm({ name: "", collection_id: collections[0]?.id ?? "", ...EMPTY_REWARD });
+              setSubEditId(null);
+              setSubDialogOpen(true);
+            }}
             addLabel="Add Sub-Collection"
-            actions={(r) => (
+            actions={(r: any) => (
               <div className="flex gap-1">
-                <Button size="icon" variant="ghost" onClick={() => { setSubForm({ name: r.name, collection_id: r.collection_id }); setSubEditId(r.id); setSubDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" title="View players" onClick={() => setRosterTarget({ type: "sub_collection", id: r.id, name: r.name })}><Users className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={async () => {
+                  let rewardCardId = "";
+                  if ((r.reward_type ?? "card") === "card") {
+                    const { data } = await supabase.from("player_cards").select("id").eq("sub_collection_id", r.id).eq("is_collection_reward", true).maybeSingle();
+                    rewardCardId = data?.id ?? "";
+                  }
+                  setSubForm({
+                    name: r.name,
+                    collection_id: r.collection_id,
+                    reward_type: (r.reward_type ?? "card") as RewardType,
+                    reward_card_id: rewardCardId,
+                    reward_coins: r.reward_coins ?? 0,
+                    reward_gems: r.reward_gems ?? 0,
+                    reward_pack_id: r.reward_pack_id ?? "",
+                  });
+                  setSubEditId(r.id);
+                  setSubDialogOpen(true);
+                }}><Pencil className="h-4 w-4" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => setSubDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             )}
@@ -480,6 +656,12 @@ export default function AdminCollectionSets() {
         <div className="space-y-3">
           <div className="space-y-1"><Label>Name</Label><Input value={collForm.name} onChange={e => setCollForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Kuroko no Basuke" /></div>
           <div className="space-y-1"><Label>Description</Label><Textarea value={collForm.description} onChange={e => setCollForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <RewardEditor
+            value={collForm}
+            onChange={(patch) => setCollForm(f => ({ ...f, ...patch }))}
+            playerOptions={(allPlayers as any[]).map(p => ({ id: p.id, name: p.name, detail: `${p.rating}` }))}
+            packs={packs as any[]}
+          />
         </div>
       </FormDialog>
 
@@ -493,11 +675,147 @@ export default function AdminCollectionSets() {
               {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          <RewardEditor
+            value={subForm}
+            onChange={(patch) => setSubForm(f => ({ ...f, ...patch }))}
+            playerOptions={(allPlayers as any[]).map(p => ({ id: p.id, name: p.name, detail: `${p.rating}` }))}
+            packs={packs as any[]}
+          />
+        </div>
+      </FormDialog>
+
+      {/* Roster Viewer Dialog */}
+      <FormDialog
+        open={!!rosterTarget}
+        onOpenChange={(o) => !o && setRosterTarget(null)}
+        title={rosterTarget ? `Players in ${rosterTarget.name}` : "Players"}
+        onSave={() => setRosterTarget(null)}
+        saving={false}
+      >
+        <div className="space-y-2">
+          {rosterLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {!rosterLoading && rosterPlayers.length === 0 && (
+            <p className="text-sm text-muted-foreground">No players assigned yet.</p>
+          )}
+          <div className="max-h-[60vh] overflow-y-auto rounded-md border border-border divide-y divide-border">
+            {(rosterPlayers as any[]).map((p) => (
+              <div key={p.id} className="flex items-center gap-2 px-3 py-2">
+                <span
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ background: p.gem_tiers?.color ?? "hsl(var(--muted))" }}
+                />
+                <span className="text-sm flex-1 truncate">{p.name}</span>
+                {p.is_collection_reward && (
+                  <Badge variant="outline" className="text-[10px]">Reward</Badge>
+                )}
+                <Badge variant="secondary" className="text-xs">{p.position1 ?? "—"}</Badge>
+                <Badge variant="outline" className="text-xs">{p.rating}</Badge>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title="Remove from this collection"
+                  onClick={() => removeFromCollectionMut.mutate(p.id)}
+                  disabled={removeFromCollectionMut.isPending}
+                >
+                  <X className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {rosterPlayers.length} {rosterPlayers.length === 1 ? "player" : "players"} assigned
+          </p>
         </div>
       </FormDialog>
 
       <ConfirmDialog open={!!collDeleteId} onOpenChange={(o) => !o && setCollDeleteId(null)} title="Delete Collection" description="This will also delete all sub-collections within it." onConfirm={() => collDeleteId && deleteCollMut.mutate(collDeleteId)} loading={deleteCollMut.isPending} />
       <ConfirmDialog open={!!subDeleteId} onOpenChange={(o) => !o && setSubDeleteId(null)} title="Delete Sub-Collection" description="Permanently delete this sub-collection?" onConfirm={() => subDeleteId && deleteSubMut.mutate(subDeleteId)} loading={deleteSubMut.isPending} />
+    </div>
+  );
+}
+
+// ── Reward editor sub-component ──
+function RewardEditor({
+  value,
+  onChange,
+  playerOptions,
+  packs,
+}: {
+  value: RewardForm;
+  onChange: (patch: Partial<RewardForm>) => void;
+  playerOptions: { id: string; name: string; detail?: string }[];
+  packs: { id: string; name: string }[];
+}) {
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <Label className="text-xs uppercase tracking-wide text-muted-foreground">Completion Reward</Label>
+      <div className="grid grid-cols-4 gap-1">
+        {(["card", "coins", "gems", "pack"] as RewardType[]).map((t) => (
+          <Button
+            key={t}
+            type="button"
+            size="sm"
+            variant={value.reward_type === t ? "default" : "outline"}
+            onClick={() => onChange({ reward_type: t })}
+            className="capitalize"
+          >
+            {t}
+          </Button>
+        ))}
+      </div>
+
+      {value.reward_type === "card" && (
+        <div className="space-y-1">
+          <Label className="text-xs">Reward Player Card</Label>
+          <PlayerCombobox
+            players={playerOptions}
+            value={value.reward_card_id}
+            onValueChange={(v) => onChange({ reward_card_id: v })}
+            placeholder="Pick a player card…"
+          />
+          <p className="text-[11px] text-muted-foreground">Selected card will be tagged as the collection reward.</p>
+        </div>
+      )}
+
+      {value.reward_type === "coins" && (
+        <div className="space-y-1">
+          <Label className="text-xs">Coin amount</Label>
+          <Input
+            type="number"
+            min={0}
+            value={value.reward_coins}
+            onChange={(e) => onChange({ reward_coins: Number(e.target.value) || 0 })}
+          />
+        </div>
+      )}
+
+      {value.reward_type === "gems" && (
+        <div className="space-y-1">
+          <Label className="text-xs">Gem amount</Label>
+          <Input
+            type="number"
+            min={0}
+            value={value.reward_gems}
+            onChange={(e) => onChange({ reward_gems: Number(e.target.value) || 0 })}
+          />
+        </div>
+      )}
+
+      {value.reward_type === "pack" && (
+        <div className="space-y-1">
+          <Label className="text-xs">Pack</Label>
+          <select
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={value.reward_pack_id}
+            onChange={(e) => onChange({ reward_pack_id: e.target.value })}
+          >
+            <option value="">— Select pack —</option>
+            {packs.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
