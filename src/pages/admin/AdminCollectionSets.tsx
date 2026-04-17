@@ -383,14 +383,39 @@ export default function AdminCollectionSets() {
             columns={collColumns}
             isLoading={collLoading}
             searchKeys={["name"]}
-            onAdd={() => { setCollForm({ name: "", description: "" }); setCollEditId(null); setCollDialogOpen(true); }}
+            onAdd={() => {
+              setCollForm({ name: "", description: "", ...EMPTY_REWARD });
+              setCollEditId(null);
+              setCollDialogOpen(true);
+            }}
             addLabel="Add Collection"
-            actions={(r) => (
-              <div className="flex gap-1">
-                <Button size="icon" variant="ghost" onClick={() => { setCollForm({ name: r.name, description: r.description ?? "" }); setCollEditId(r.id); setCollDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                <Button size="icon" variant="ghost" onClick={() => setCollDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-              </div>
-            )}
+            actions={(r: any) => {
+              // find the existing card reward (if any) so we can prefill the editor
+              return (
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" title="View players" onClick={() => setRosterTarget({ type: "collection", id: r.id, name: r.name })}><Users className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={async () => {
+                    let rewardCardId = "";
+                    if ((r.reward_type ?? "card") === "card") {
+                      const { data } = await supabase.from("player_cards").select("id").eq("collection_id", r.id).eq("is_collection_reward", true).is("sub_collection_id", null).maybeSingle();
+                      rewardCardId = data?.id ?? "";
+                    }
+                    setCollForm({
+                      name: r.name,
+                      description: r.description ?? "",
+                      reward_type: (r.reward_type ?? "card") as RewardType,
+                      reward_card_id: rewardCardId,
+                      reward_coins: r.reward_coins ?? 0,
+                      reward_gems: r.reward_gems ?? 0,
+                      reward_pack_id: r.reward_pack_id ?? "",
+                    });
+                    setCollEditId(r.id);
+                    setCollDialogOpen(true);
+                  }}><Pencil className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => setCollDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </div>
+              );
+            }}
           />
         </CardContent>
       </Card>
