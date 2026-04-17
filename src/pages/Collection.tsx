@@ -211,6 +211,59 @@ export default function Collection() {
     return { regular, reward };
   }, [activeCollectionId, activeSubCollectionId, allPlayerCards, ownedCardIds]);
 
+  // Helper: resolve reward info for a collection or sub_collection row
+  type RewardInfo = {
+    rewardType: "card" | "coins" | "gems" | "pack";
+    rewardCardId: string | null;
+    rewardLabel: string;
+    rewardCoins?: number;
+    rewardGems?: number;
+    rewardPackId?: string | null;
+    alreadyClaimed: boolean;
+  };
+
+  const resolveReward = (
+    row: any,
+    scope: "collection" | "sub_collection",
+    rewardCard: any | null,
+  ): RewardInfo => {
+    const rt = (row?.reward_type ?? "card") as RewardInfo["rewardType"];
+    const claimedKey = scope === "sub_collection" ? `sub:${row.id}` : `col:${row.id}`;
+    if (rt === "coins") {
+      return {
+        rewardType: "coins",
+        rewardCardId: null,
+        rewardLabel: `${row.reward_coins ?? 0} Coins`,
+        rewardCoins: row.reward_coins ?? 0,
+        alreadyClaimed: claimedKeys.has(claimedKey),
+      };
+    }
+    if (rt === "gems") {
+      return {
+        rewardType: "gems",
+        rewardCardId: null,
+        rewardLabel: `${row.reward_gems ?? 0} Gems`,
+        rewardGems: row.reward_gems ?? 0,
+        alreadyClaimed: claimedKeys.has(claimedKey),
+      };
+    }
+    if (rt === "pack") {
+      return {
+        rewardType: "pack",
+        rewardCardId: null,
+        rewardLabel: row.packs?.name ? `Pack: ${row.packs.name}` : "Pack reward",
+        rewardPackId: row.reward_pack_id ?? null,
+        alreadyClaimed: claimedKeys.has(claimedKey),
+      };
+    }
+    return {
+      rewardType: "card",
+      rewardCardId: rewardCard?.id ?? null,
+      rewardLabel: rewardCard?.name ?? "Reward card",
+      alreadyClaimed: rewardCard ? ownedCardIds.has(rewardCard.id) : false,
+    };
+  };
+
   // Collection reward completion tracking
   const collectionRewardStatus = useMemo(() => {
     const results: {
@@ -220,12 +273,9 @@ export default function Collection() {
       needed: number;
       owned: number;
       complete: boolean;
-      rewardCardId: string | null;
-      rewardCardName: string | null;
-      alreadyClaimed: boolean;
+      reward: RewardInfo;
     }[] = [];
 
-    // Check sub-collections first
     for (const sc of subCollections as any[]) {
       const cardsInSet = (allPlayerCards as any[]).filter(
         (pc: any) => pc.sub_collection_id === sc.id && !pc.is_collection_reward
@@ -233,26 +283,22 @@ export default function Collection() {
       const rewardCard = (allPlayerCards as any[]).find(
         (pc: any) => pc.sub_collection_id === sc.id && pc.is_collection_reward
       );
-      if (cardsInSet.length === 0 || !rewardCard) continue;
+      const reward = resolveReward(sc, "sub_collection", rewardCard);
+      if (cardsInSet.length === 0) continue;
+      if (reward.rewardType === "card" && !rewardCard) continue;
 
       const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
-      const complete = ownedCount >= cardsInSet.length;
-      const alreadyClaimed = ownedCardIds.has(rewardCard.id);
-
       results.push({
         id: sc.id,
         name: sc.name,
         type: "sub_collection",
         needed: cardsInSet.length,
         owned: ownedCount,
-        complete,
-        rewardCardId: rewardCard.id,
-        rewardCardName: rewardCard.name,
-        alreadyClaimed,
+        complete: ownedCount >= cardsInSet.length,
+        reward,
       });
     }
 
-    // Check collections (top-level, cards directly in collection without sub_collection)
     for (const col of collections as any[]) {
       const cardsInSet = (allPlayerCards as any[]).filter(
         (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && !pc.is_collection_reward
@@ -260,22 +306,19 @@ export default function Collection() {
       const rewardCard = (allPlayerCards as any[]).find(
         (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && pc.is_collection_reward
       );
-      if (cardsInSet.length === 0 || !rewardCard) continue;
+      const reward = resolveReward(col, "collection", rewardCard);
+      if (cardsInSet.length === 0) continue;
+      if (reward.rewardType === "card" && !rewardCard) continue;
 
       const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
-      const complete = ownedCount >= cardsInSet.length;
-      const alreadyClaimed = ownedCardIds.has(rewardCard.id);
-
       results.push({
         id: col.id,
         name: col.name,
         type: "collection",
         needed: cardsInSet.length,
         owned: ownedCount,
-        complete,
-        rewardCardId: rewardCard.id,
-        rewardCardName: rewardCard.name,
-        alreadyClaimed,
+        complete: ownedCount >= cardsInSet.length,
+        reward,
       });
     }
 
