@@ -431,11 +431,33 @@ export default function AdminCollectionSets() {
             columns={subColumns}
             isLoading={subLoading}
             searchKeys={["name"]}
-            onAdd={() => { setSubForm({ name: "", collection_id: collections[0]?.id ?? "" }); setSubEditId(null); setSubDialogOpen(true); }}
+            onAdd={() => {
+              setSubForm({ name: "", collection_id: collections[0]?.id ?? "", ...EMPTY_REWARD });
+              setSubEditId(null);
+              setSubDialogOpen(true);
+            }}
             addLabel="Add Sub-Collection"
-            actions={(r) => (
+            actions={(r: any) => (
               <div className="flex gap-1">
-                <Button size="icon" variant="ghost" onClick={() => { setSubForm({ name: r.name, collection_id: r.collection_id }); setSubEditId(r.id); setSubDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" title="View players" onClick={() => setRosterTarget({ type: "sub_collection", id: r.id, name: r.name })}><Users className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={async () => {
+                  let rewardCardId = "";
+                  if ((r.reward_type ?? "card") === "card") {
+                    const { data } = await supabase.from("player_cards").select("id").eq("sub_collection_id", r.id).eq("is_collection_reward", true).maybeSingle();
+                    rewardCardId = data?.id ?? "";
+                  }
+                  setSubForm({
+                    name: r.name,
+                    collection_id: r.collection_id,
+                    reward_type: (r.reward_type ?? "card") as RewardType,
+                    reward_card_id: rewardCardId,
+                    reward_coins: r.reward_coins ?? 0,
+                    reward_gems: r.reward_gems ?? 0,
+                    reward_pack_id: r.reward_pack_id ?? "",
+                  });
+                  setSubEditId(r.id);
+                  setSubDialogOpen(true);
+                }}><Pencil className="h-4 w-4" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => setSubDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             )}
