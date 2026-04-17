@@ -66,7 +66,7 @@ export default function Collection() {
   const { data: collections = [] } = useQuery({
     queryKey: ["collections-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("collections").select("*").order("name");
+      const { data } = await supabase.from("collections").select("*, packs:reward_pack_id(id, name)").order("name");
       return data ?? [];
     },
   });
@@ -74,10 +74,32 @@ export default function Collection() {
   const { data: subCollections = [] } = useQuery({
     queryKey: ["sub-collections-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("sub_collections").select("*").order("name");
+      const { data } = await supabase.from("sub_collections").select("*, packs:reward_pack_id(id, name)").order("name");
       return data ?? [];
     },
   });
+
+  // User's claimed non-card collection rewards
+  const { data: claimedRewards = [] } = useQuery({
+    queryKey: ["user-collection-claims", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_collection_claims")
+        .select("collection_id, sub_collection_id")
+        .eq("user_id", user!.id);
+      return data ?? [];
+    },
+  });
+
+  const claimedKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of claimedRewards as any[]) {
+      if (c.sub_collection_id) s.add(`sub:${c.sub_collection_id}`);
+      else if (c.collection_id) s.add(`col:${c.collection_id}`);
+    }
+    return s;
+  }, [claimedRewards]);
 
   // Fetch ALL player cards to compute collection completion + render missing slots
   const { data: allPlayerCards = [] } = useQuery({
@@ -189,6 +211,59 @@ export default function Collection() {
     return { regular, reward };
   }, [activeCollectionId, activeSubCollectionId, allPlayerCards, ownedCardIds]);
 
+  // Helper: resolve reward info for a collection or sub_collection row
+  type RewardInfo = {
+    rewardType: "card" | "coins" | "gems" | "pack";
+    rewardCardId: string | null;
+    rewardLabel: string;
+    rewardCoins?: number;
+    rewardGems?: number;
+    rewardPackId?: string | null;
+    alreadyClaimed: boolean;
+  };
+
+  const resolveReward = (
+    row: any,
+    scope: "collection" | "sub_collection",
+    rewardCard: any | null,
+  ): RewardInfo => {
+    const rt = (row?.reward_type ?? "card") as RewardInfo["rewardType"];
+    const claimedKey = scope === "sub_collection" ? `sub:${row.id}` : `col:${row.id}`;
+    if (rt === "coins") {
+      return {
+        rewardType: "coins",
+        rewardCardId: null,
+        rewardLabel: `${row.reward_coins ?? 0} Coins`,
+        rewardCoins: row.reward_coins ?? 0,
+        alreadyClaimed: claimedKeys.has(claimedKey),
+      };
+    }
+    if (rt === "gems") {
+      return {
+        rewardType: "gems",
+        rewardCardId: null,
+        rewardLabel: `${row.reward_gems ?? 0} Gems`,
+        rewardGems: row.reward_gems ?? 0,
+        alreadyClaimed: claimedKeys.has(claimedKey),
+      };
+    }
+    if (rt === "pack") {
+      return {
+        rewardType: "pack",
+        rewardCardId: null,
+        rewardLabel: row.packs?.name ? `Pack: ${row.packs.name}` : "Pack reward",
+        rewardPackId: row.reward_pack_id ?? null,
+        alreadyClaimed: claimedKeys.has(claimedKey),
+      };
+    }
+    return {
+      rewardType: "card",
+      rewardCardId: rewardCard?.id ?? null,
+      rewardLabel: rewardCard?.name ?? "Reward card",
+      alreadyClaimed: rewardCard ? ownedCardIds.has(rewardCard.id) : false,
+    };
+  };
+
   // Collection reward completion tracking
   const collectionRewardStatus = useMemo(() => {
     const results: {
@@ -198,12 +273,9 @@ export default function Collection() {
       needed: number;
       owned: number;
       complete: boolean;
-      rewardCardId: string | null;
-      rewardCardName: string | null;
-      alreadyClaimed: boolean;
+      reward: RewardInfo;
     }[] = [];
 
-    // Check sub-collections first
     for (const sc of subCollections as any[]) {
       const cardsInSet = (allPlayerCards as any[]).filter(
         (pc: any) => pc.sub_collection_id === sc.id && !pc.is_collection_reward
@@ -211,26 +283,22 @@ export default function Collection() {
       const rewardCard = (allPlayerCards as any[]).find(
         (pc: any) => pc.sub_collection_id === sc.id && pc.is_collection_reward
       );
-      if (cardsInSet.length === 0 || !rewardCard) continue;
+      const reward = resolveReward(sc, "sub_collection", rewardCard);
+      if (cardsInSet.length === 0) continue;
+      if (reward.rewardType === "card" && !rewardCard) continue;
 
       const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
-      const complete = ownedCount >= cardsInSet.length;
-      const alreadyClaimed = ownedCardIds.has(rewardCard.id);
-
       results.push({
         id: sc.id,
         name: sc.name,
         type: "sub_collection",
         needed: cardsInSet.length,
         owned: ownedCount,
-        complete,
-        rewardCardId: rewardCard.id,
-        rewardCardName: rewardCard.name,
-        alreadyClaimed,
+        complete: ownedCount >= cardsInSet.length,
+        reward,
       });
     }
 
-    // Check collections (top-level, cards directly in collection without sub_collection)
     for (const col of collections as any[]) {
       const cardsInSet = (allPlayerCards as any[]).filter(
         (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && !pc.is_collection_reward
@@ -238,41 +306,100 @@ export default function Collection() {
       const rewardCard = (allPlayerCards as any[]).find(
         (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && pc.is_collection_reward
       );
-      if (cardsInSet.length === 0 || !rewardCard) continue;
+      const reward = resolveReward(col, "collection", rewardCard);
+      if (cardsInSet.length === 0) continue;
+      if (reward.rewardType === "card" && !rewardCard) continue;
 
       const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
-      const complete = ownedCount >= cardsInSet.length;
-      const alreadyClaimed = ownedCardIds.has(rewardCard.id);
-
       results.push({
         id: col.id,
         name: col.name,
         type: "collection",
         needed: cardsInSet.length,
         owned: ownedCount,
-        complete,
-        rewardCardId: rewardCard.id,
-        rewardCardName: rewardCard.name,
-        alreadyClaimed,
+        complete: ownedCount >= cardsInSet.length,
+        reward,
       });
     }
 
     return results;
   }, [collections, subCollections, allPlayerCards, ownedCardIds]);
 
-  // Claim collection reward
+  // Claim collection reward (handles card / coins / gems / pack)
   const claimRewardMutation = useMutation({
-    mutationFn: async (rewardCardId: string) => {
-      const { error } = await supabase.from("user_collections").insert({
+    mutationFn: async (params: {
+      rewardType: "card" | "coins" | "gems" | "pack";
+      rewardCardId?: string | null;
+      coins?: number;
+      gems?: number;
+      packId?: string | null;
+      collectionId?: string | null;
+      subCollectionId?: string | null;
+    }) => {
+      const { rewardType, rewardCardId, coins, gems, packId, collectionId, subCollectionId } = params;
+
+      if (rewardType === "card") {
+        if (!rewardCardId) throw new Error("Missing reward card");
+        const { error } = await supabase.from("user_collections").insert({
+          user_id: user!.id,
+          player_card_id: rewardCardId,
+          source: "collection_reward",
+        });
+        if (error) throw error;
+        return { rewardType };
+      }
+
+      // Non-card reward: requires a target collection/sub_collection to mark claimed
+      if (!collectionId && !subCollectionId) throw new Error("Missing claim target");
+
+      // Insert claim record first (unique index prevents double-claim)
+      const { error: claimErr } = await supabase.from("user_collection_claims").insert({
         user_id: user!.id,
-        player_card_id: rewardCardId,
-        source: "collection_reward",
+        collection_id: subCollectionId ? null : collectionId,
+        sub_collection_id: subCollectionId ?? null,
+        reward_type: rewardType,
       });
-      if (error) throw error;
+      if (claimErr) throw claimErr;
+
+      if (rewardType === "coins" || rewardType === "gems") {
+        const { data: profile, error: pErr } = await supabase
+          .from("profiles")
+          .select("id, coins, gems")
+          .eq("user_id", user!.id)
+          .single();
+        if (pErr || !profile) throw new Error("Profile not found");
+
+        const update: any = {};
+        if (rewardType === "coins") update.coins = (profile.coins ?? 0) + (coins ?? 0);
+        if (rewardType === "gems") update.gems = (profile.gems ?? 0) + (gems ?? 0);
+
+        const { error: upErr } = await supabase.from("profiles").update(update).eq("id", profile.id);
+        if (upErr) throw upErr;
+        return { rewardType, amount: rewardType === "coins" ? coins : gems };
+      }
+
+      if (rewardType === "pack") {
+        if (!packId) throw new Error("Missing pack");
+        const { error } = await supabase.from("user_pack_inventory").insert({
+          user_id: user!.id,
+          pack_id: packId,
+          source: "collection_reward",
+        });
+        if (error) throw error;
+        return { rewardType };
+      }
+
+      throw new Error(`Unknown reward type: ${rewardType}`);
     },
-    onSuccess: () => {
-      toast.success("Collection reward claimed!");
+    onSuccess: (data: any) => {
+      if (data?.rewardType === "coins") toast.success(`Claimed ${data.amount} coins!`);
+      else if (data?.rewardType === "gems") toast.success(`Claimed ${data.amount} gems!`);
+      else if (data?.rewardType === "pack") toast.success("Pack added to your inventory!");
+      else toast.success("Collection reward claimed!");
       queryClient.invalidateQueries({ queryKey: ["user-collection"] });
+      queryClient.invalidateQueries({ queryKey: ["user-collection-claims"] });
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.invalidateQueries({ queryKey: ["user-pack-inventory"] });
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to claim reward");
@@ -387,7 +514,7 @@ export default function Collection() {
   const bg = (c: string) => isHsl(c) ? `hsl(${c})` : c;
 
   // Claimable rewards
-  const claimableRewards = collectionRewardStatus.filter((r) => r.complete && !r.alreadyClaimed);
+  const claimableRewards = collectionRewardStatus.filter((r) => r.complete && !r.reward.alreadyClaimed);
 
   return (
     <div className="space-y-6">
@@ -444,17 +571,25 @@ export default function Collection() {
                     </div>
                     <Progress value={pct} className="h-1.5" />
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Reward: {r.rewardCardName}
+                      Reward: {r.reward.rewardLabel}
                     </p>
                   </div>
-                  {r.alreadyClaimed ? (
+                  {r.reward.alreadyClaimed ? (
                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
                   ) : r.complete ? (
                     <Button
                       size="sm"
                       variant="default"
                       className="shrink-0 text-xs"
-                      onClick={() => claimRewardMutation.mutate(r.rewardCardId!)}
+                      onClick={() => claimRewardMutation.mutate({
+                        rewardType: r.reward.rewardType,
+                        rewardCardId: r.reward.rewardCardId,
+                        coins: r.reward.rewardCoins,
+                        gems: r.reward.rewardGems,
+                        packId: r.reward.rewardPackId,
+                        collectionId: r.type === "collection" ? r.id : null,
+                        subCollectionId: r.type === "sub_collection" ? r.id : null,
+                      })}
                       disabled={claimRewardMutation.isPending}
                     >
                       Claim
@@ -592,16 +727,20 @@ export default function Collection() {
 
               {/* Active collection page */}
               {activeCollectionId && (() => {
-                const colName = (collections as any[]).find((c) => c.id === activeCollectionId)?.name ?? "";
-                const subName = activeSubCollectionId
-                  ? (subCollections as any[]).find((s) => s.id === activeSubCollectionId)?.name
+                const activeCollection = (collections as any[]).find((c) => c.id === activeCollectionId);
+                const activeSubCollection = activeSubCollectionId
+                  ? (subCollections as any[]).find((s) => s.id === activeSubCollectionId)
                   : null;
+                const colName = activeCollection?.name ?? "";
+                const subName = activeSubCollection?.name ?? null;
                 const totalSlots = activeScopeCards.regular.length;
                 const ownedSlots = activeScopeCards.regular.filter((pc: any) => ownedCardIds.has(pc.id)).length;
                 const pct = totalSlots > 0 ? Math.round((ownedSlots / totalSlots) * 100) : 0;
-                const reward = activeScopeCards.reward;
-                const rewardOwned = reward ? ownedCardIds.has(reward.id) : false;
-                const rewardClaimable = totalSlots > 0 && ownedSlots >= totalSlots && reward && !rewardOwned;
+                const rewardCard = activeScopeCards.reward;
+                const scopeRow = activeSubCollection ?? activeCollection;
+                const scopeKind: "collection" | "sub_collection" = activeSubCollection ? "sub_collection" : "collection";
+                const reward = scopeRow ? resolveReward(scopeRow, scopeKind, rewardCard) : null;
+                const rewardClaimable = !!reward && totalSlots > 0 && ownedSlots >= totalSlots && !reward.alreadyClaimed;
 
                 return (
                   <div className="space-y-5">
@@ -622,23 +761,33 @@ export default function Collection() {
 
                       {reward && (
                         <div className="flex items-center gap-4 pt-2 border-t border-border">
-                          <div className="w-24 sm:w-28 shrink-0">
-                            <PlayerCard
-                              card={reward as any}
-                              gemTier={gemTierMap[reward.gem_tier_id]}
-                              missing={!rewardOwned}
-                              onClick={() => rewardOwned && setSelectedCardId(reward.id)}
-                            />
-                          </div>
+                          {reward.rewardType === "card" && rewardCard ? (
+                            <div className="w-24 sm:w-28 shrink-0">
+                              <PlayerCard
+                                card={rewardCard as any}
+                                gemTier={gemTierMap[rewardCard.gem_tier_id]}
+                                missing={!reward.alreadyClaimed}
+                                onClick={() => reward.alreadyClaimed && setSelectedCardId(rewardCard.id)}
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-24 sm:w-28 shrink-0 aspect-[3/4] rounded-xl border border-border bg-muted/30 flex items-center justify-center">
+                              <span className="text-3xl">
+                                {reward.rewardType === "coins" && "🪙"}
+                                {reward.rewardType === "gems" && "💎"}
+                                {reward.rewardType === "pack" && "📦"}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                               <Gift className="h-3.5 w-3.5" /> Reward
                             </div>
-                            <p className="font-semibold text-sm mt-0.5 truncate">{reward.name}</p>
+                            <p className="font-semibold text-sm mt-0.5 truncate">{reward.rewardLabel}</p>
                             <p className="text-xs text-muted-foreground mt-1">
                               Complete this collection to unlock.
                             </p>
-                            {rewardOwned ? (
+                            {reward.alreadyClaimed ? (
                               <span className="inline-flex items-center gap-1 mt-2 text-xs text-primary font-medium">
                                 <CheckCircle2 className="h-3.5 w-3.5" /> Claimed
                               </span>
@@ -646,7 +795,15 @@ export default function Collection() {
                               <Button
                                 size="sm"
                                 className="mt-2"
-                                onClick={() => claimRewardMutation.mutate(reward.id)}
+                                onClick={() => claimRewardMutation.mutate({
+                                  rewardType: reward.rewardType,
+                                  rewardCardId: reward.rewardCardId,
+                                  coins: reward.rewardCoins,
+                                  gems: reward.rewardGems,
+                                  packId: reward.rewardPackId,
+                                  collectionId: scopeKind === "collection" ? scopeRow.id : null,
+                                  subCollectionId: scopeKind === "sub_collection" ? scopeRow.id : null,
+                                })}
                                 disabled={claimRewardMutation.isPending}
                               >
                                 Claim Reward

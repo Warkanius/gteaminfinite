@@ -318,22 +318,52 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          gem_tier_id: string | null
           id: string
           name: string
+          reward_coins: number
+          reward_gems: number
+          reward_pack_id: string | null
+          reward_type: string
         }
         Insert: {
           created_at?: string
           description?: string | null
+          gem_tier_id?: string | null
           id?: string
           name: string
+          reward_coins?: number
+          reward_gems?: number
+          reward_pack_id?: string | null
+          reward_type?: string
         }
         Update: {
           created_at?: string
           description?: string | null
+          gem_tier_id?: string | null
           id?: string
           name?: string
+          reward_coins?: number
+          reward_gems?: number
+          reward_pack_id?: string | null
+          reward_type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "collections_gem_tier_id_fkey"
+            columns: ["gem_tier_id"]
+            isOneToOne: false
+            referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_reward_pack_id_fkey"
+            columns: ["reward_pack_id"]
+            isOneToOne: false
+            referencedRelation: "packs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       domination_game_players: {
         Row: {
@@ -1476,18 +1506,30 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          reward_coins: number
+          reward_gems: number
+          reward_pack_id: string | null
+          reward_type: string
         }
         Insert: {
           collection_id: string
           created_at?: string
           id?: string
           name: string
+          reward_coins?: number
+          reward_gems?: number
+          reward_pack_id?: string | null
+          reward_type?: string
         }
         Update: {
           collection_id?: string
           created_at?: string
           id?: string
           name?: string
+          reward_coins?: number
+          reward_gems?: number
+          reward_pack_id?: string | null
+          reward_type?: string
         }
         Relationships: [
           {
@@ -1495,6 +1537,13 @@ export type Database = {
             columns: ["collection_id"]
             isOneToOne: false
             referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sub_collections_reward_pack_id_fkey"
+            columns: ["reward_pack_id"]
+            isOneToOne: false
+            referencedRelation: "packs"
             referencedColumns: ["id"]
           },
         ]
@@ -1561,6 +1610,48 @@ export type Database = {
           unlock_cost?: number
         }
         Relationships: []
+      }
+      user_collection_claims: {
+        Row: {
+          claimed_at: string
+          collection_id: string | null
+          id: string
+          reward_type: string
+          sub_collection_id: string | null
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          collection_id?: string | null
+          id?: string
+          reward_type: string
+          sub_collection_id?: string | null
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          collection_id?: string | null
+          id?: string
+          reward_type?: string
+          sub_collection_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_collection_claims_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_collection_claims_sub_collection_id_fkey"
+            columns: ["sub_collection_id"]
+            isOneToOne: false
+            referencedRelation: "sub_collections"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_collections: {
         Row: {
@@ -1775,6 +1866,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      sync_gem_tier_collection: { Args: { p_tier_id: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "player"
