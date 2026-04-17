@@ -1611,6 +1611,48 @@ export type Database = {
         }
         Relationships: []
       }
+      user_collection_claims: {
+        Row: {
+          claimed_at: string
+          collection_id: string | null
+          id: string
+          reward_type: string
+          sub_collection_id: string | null
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          collection_id?: string | null
+          id?: string
+          reward_type: string
+          sub_collection_id?: string | null
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          collection_id?: string | null
+          id?: string
+          reward_type?: string
+          sub_collection_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_collection_claims_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_collection_claims_sub_collection_id_fkey"
+            columns: ["sub_collection_id"]
+            isOneToOne: false
+            referencedRelation: "sub_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_collections: {
         Row: {
           acquired_at: string
