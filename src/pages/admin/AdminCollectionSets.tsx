@@ -58,14 +58,19 @@ export default function AdminCollectionSets() {
   const [subDialogOpen, setSubDialogOpen] = useState(false);
   const [subDeleteId, setSubDeleteId] = useState<string | null>(null);
 
-  // ── Expanded rows (player rosters) ──
-  const [expandedColl, setExpandedColl] = useState<string | null>(null);
-  const [expandedSub, setExpandedSub] = useState<string | null>(null);
+  // ── Roster viewer state ──
+  const [rosterTarget, setRosterTarget] = useState<
+    | { type: "collection" | "sub_collection"; id: string; name: string }
+    | null
+  >(null);
 
   const { data: collections = [], isLoading: collLoading } = useQuery({
     queryKey: ["admin-collection-sets"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("collections").select("*").order("name");
+      const { data, error } = await supabase
+        .from("collections")
+        .select("*")
+        .order("name");
       if (error) throw error;
       return data;
     },
@@ -74,11 +79,49 @@ export default function AdminCollectionSets() {
   const { data: subCollections = [], isLoading: subLoading } = useQuery({
     queryKey: ["admin-sub-collection-sets"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sub_collections").select("*, collections(name)").order("name");
+      const { data, error } = await supabase
+        .from("sub_collections")
+        .select("*, collections(name)")
+        .order("name");
       if (error) throw error;
       return data;
     },
   });
+
+  // Roster of players in the currently-viewed collection or sub-collection
+  const { data: rosterPlayers = [], isLoading: rosterLoading } = useQuery({
+    queryKey: ["collection-roster", rosterTarget?.type, rosterTarget?.id],
+    enabled: !!rosterTarget,
+    queryFn: async () => {
+      if (!rosterTarget) return [];
+      const col = rosterTarget.type === "collection" ? "collection_id" : "sub_collection_id";
+      const { data, error } = await supabase
+        .from("player_cards")
+        .select("id, name, rating, position1, is_collection_reward, gem_tier_id, gem_tiers(name, color)")
+        .eq(col, rosterTarget.id)
+        .order("rating", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const removeFromCollectionMut = useMutation({
+    mutationFn: async (cardId: string) => {
+      if (!rosterTarget) return;
+      const update: any = rosterTarget.type === "collection"
+        ? { collection_id: null, sub_collection_id: null, is_collection_reward: false }
+        : { sub_collection_id: null };
+      const { error } = await supabase.from("player_cards").update(update).eq("id", cardId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["collection-roster"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-cards-lite"] });
+      toast.success("Removed");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
 
   // Build payload helper for reward fields
   const buildRewardPayload = (f: RewardForm) => ({
