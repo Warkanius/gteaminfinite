@@ -657,6 +657,12 @@ export default function AdminCollectionSets() {
         <div className="space-y-3">
           <div className="space-y-1"><Label>Name</Label><Input value={collForm.name} onChange={e => setCollForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Kuroko no Basuke" /></div>
           <div className="space-y-1"><Label>Description</Label><Textarea value={collForm.description} onChange={e => setCollForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <RewardEditor
+            value={collForm}
+            onChange={(patch) => setCollForm(f => ({ ...f, ...patch }))}
+            playerOptions={(allPlayers as any[]).map(p => ({ id: p.id, name: p.name, detail: `${p.rating}` }))}
+            packs={packs as any[]}
+          />
         </div>
       </FormDialog>
 
@@ -670,11 +676,147 @@ export default function AdminCollectionSets() {
               {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          <RewardEditor
+            value={subForm}
+            onChange={(patch) => setSubForm(f => ({ ...f, ...patch }))}
+            playerOptions={(allPlayers as any[]).map(p => ({ id: p.id, name: p.name, detail: `${p.rating}` }))}
+            packs={packs as any[]}
+          />
+        </div>
+      </FormDialog>
+
+      {/* Roster Viewer Dialog */}
+      <FormDialog
+        open={!!rosterTarget}
+        onOpenChange={(o) => !o && setRosterTarget(null)}
+        title={rosterTarget ? `Players in ${rosterTarget.name}` : "Players"}
+        onSave={() => setRosterTarget(null)}
+        saving={false}
+      >
+        <div className="space-y-2">
+          {rosterLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {!rosterLoading && rosterPlayers.length === 0 && (
+            <p className="text-sm text-muted-foreground">No players assigned yet.</p>
+          )}
+          <div className="max-h-[60vh] overflow-y-auto rounded-md border border-border divide-y divide-border">
+            {(rosterPlayers as any[]).map((p) => (
+              <div key={p.id} className="flex items-center gap-2 px-3 py-2">
+                <span
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ background: p.gem_tiers?.color ?? "hsl(var(--muted))" }}
+                />
+                <span className="text-sm flex-1 truncate">{p.name}</span>
+                {p.is_collection_reward && (
+                  <Badge variant="outline" className="text-[10px]">Reward</Badge>
+                )}
+                <Badge variant="secondary" className="text-xs">{p.position1 ?? "—"}</Badge>
+                <Badge variant="outline" className="text-xs">{p.rating}</Badge>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title="Remove from this collection"
+                  onClick={() => removeFromCollectionMut.mutate(p.id)}
+                  disabled={removeFromCollectionMut.isPending}
+                >
+                  <X className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {rosterPlayers.length} {rosterPlayers.length === 1 ? "player" : "players"} assigned
+          </p>
         </div>
       </FormDialog>
 
       <ConfirmDialog open={!!collDeleteId} onOpenChange={(o) => !o && setCollDeleteId(null)} title="Delete Collection" description="This will also delete all sub-collections within it." onConfirm={() => collDeleteId && deleteCollMut.mutate(collDeleteId)} loading={deleteCollMut.isPending} />
       <ConfirmDialog open={!!subDeleteId} onOpenChange={(o) => !o && setSubDeleteId(null)} title="Delete Sub-Collection" description="Permanently delete this sub-collection?" onConfirm={() => subDeleteId && deleteSubMut.mutate(subDeleteId)} loading={deleteSubMut.isPending} />
+    </div>
+  );
+}
+
+// ── Reward editor sub-component ──
+function RewardEditor({
+  value,
+  onChange,
+  playerOptions,
+  packs,
+}: {
+  value: RewardForm;
+  onChange: (patch: Partial<RewardForm>) => void;
+  playerOptions: { id: string; name: string; detail?: string }[];
+  packs: { id: string; name: string }[];
+}) {
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <Label className="text-xs uppercase tracking-wide text-muted-foreground">Completion Reward</Label>
+      <div className="grid grid-cols-4 gap-1">
+        {(["card", "coins", "gems", "pack"] as RewardType[]).map((t) => (
+          <Button
+            key={t}
+            type="button"
+            size="sm"
+            variant={value.reward_type === t ? "default" : "outline"}
+            onClick={() => onChange({ reward_type: t })}
+            className="capitalize"
+          >
+            {t}
+          </Button>
+        ))}
+      </div>
+
+      {value.reward_type === "card" && (
+        <div className="space-y-1">
+          <Label className="text-xs">Reward Player Card</Label>
+          <PlayerCombobox
+            players={playerOptions}
+            value={value.reward_card_id}
+            onValueChange={(v) => onChange({ reward_card_id: v })}
+            placeholder="Pick a player card…"
+          />
+          <p className="text-[11px] text-muted-foreground">Selected card will be tagged as the collection reward.</p>
+        </div>
+      )}
+
+      {value.reward_type === "coins" && (
+        <div className="space-y-1">
+          <Label className="text-xs">Coin amount</Label>
+          <Input
+            type="number"
+            min={0}
+            value={value.reward_coins}
+            onChange={(e) => onChange({ reward_coins: Number(e.target.value) || 0 })}
+          />
+        </div>
+      )}
+
+      {value.reward_type === "gems" && (
+        <div className="space-y-1">
+          <Label className="text-xs">Gem amount</Label>
+          <Input
+            type="number"
+            min={0}
+            value={value.reward_gems}
+            onChange={(e) => onChange({ reward_gems: Number(e.target.value) || 0 })}
+          />
+        </div>
+      )}
+
+      {value.reward_type === "pack" && (
+        <div className="space-y-1">
+          <Label className="text-xs">Pack</Label>
+          <select
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={value.reward_pack_id}
+            onChange={(e) => onChange({ reward_pack_id: e.target.value })}
+          >
+            <option value="">— Select pack —</option>
+            {packs.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
