@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Gift, CheckCircle2 } from "lucide-react";
+import { Search, Gift, CheckCircle2, LayoutGrid, BookOpen } from "lucide-react";
 import { toast } from "sonner";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Collection() {
   const { user } = useAuth();
@@ -19,6 +20,9 @@ export default function Collection() {
   const [posFilter, setPosFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"name" | "rating">("rating");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"all" | "by-collection">("all");
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+  const [activeSubCollectionId, setActiveSubCollectionId] = useState<string | null>(null);
 
   // Fetch raw collection entries
   const { data: rawCollection = [], isLoading } = useQuery({
@@ -75,11 +79,11 @@ export default function Collection() {
     },
   });
 
-  // Fetch ALL player cards to compute collection completion
+  // Fetch ALL player cards to compute collection completion + render missing slots
   const { data: allPlayerCards = [] } = useQuery({
     queryKey: ["all-player-cards-collection"],
     queryFn: async () => {
-      const { data } = await supabase.from("player_cards").select("id, name, collection_id, sub_collection_id, is_collection_reward");
+      const { data } = await supabase.from("player_cards").select("id, name, rating, position1, position2, gem_name, gem_tier_id, card_color_primary, card_color_secondary, card_glow_color, card_animation, collection_id, sub_collection_id, is_collection_reward");
       return data ?? [];
     },
   });
@@ -136,6 +140,54 @@ export default function Collection() {
 
   // Set of player_card_ids user owns
   const ownedCardIds = useMemo(() => new Set(groupedCards.map((c: any) => c.id)), [groupedCards]);
+
+  const ownedCardMap = useMemo(() => Object.fromEntries(groupedCards.map((c: any) => [c.id, c])), [groupedCards]);
+
+  // Collections that have at least one card assigned
+  const populatedCollections = useMemo(() => {
+    const ids = new Set((allPlayerCards as any[]).map((pc) => pc.collection_id).filter(Boolean));
+    return (collections as any[]).filter((c) => ids.has(c.id));
+  }, [collections, allPlayerCards]);
+
+  // Sub-collections under the active collection
+  const activeSubCollections = useMemo(() => {
+    if (!activeCollectionId) return [];
+    const subIds = new Set(
+      (allPlayerCards as any[])
+        .filter((pc) => pc.collection_id === activeCollectionId && pc.sub_collection_id)
+        .map((pc) => pc.sub_collection_id)
+    );
+    return (subCollections as any[]).filter((sc) => sc.collection_id === activeCollectionId && subIds.has(sc.id));
+  }, [activeCollectionId, allPlayerCards, subCollections]);
+
+  // Auto-pick the first populated collection when entering "by-collection" mode
+  useEffect(() => {
+    if (viewMode === "by-collection" && !activeCollectionId && populatedCollections.length > 0) {
+      setActiveCollectionId(populatedCollections[0].id);
+    }
+  }, [viewMode, activeCollectionId, populatedCollections]);
+
+  // Cards belonging to the currently active collection / sub-collection scope
+  const activeScopeCards = useMemo(() => {
+    if (!activeCollectionId) return { regular: [], reward: null as any };
+    let scope = (allPlayerCards as any[]).filter((pc) => pc.collection_id === activeCollectionId);
+    if (activeSubCollectionId) {
+      scope = scope.filter((pc) => pc.sub_collection_id === activeSubCollectionId);
+    } else {
+      // top-level scope: cards directly in collection without sub
+      scope = scope.filter((pc) => !pc.sub_collection_id);
+    }
+    const regular = scope.filter((pc) => !pc.is_collection_reward);
+    const reward = scope.find((pc) => pc.is_collection_reward) ?? null;
+    // owned first (by rating desc), then missing (by rating desc)
+    regular.sort((a: any, b: any) => {
+      const ao = ownedCardIds.has(a.id) ? 1 : 0;
+      const bo = ownedCardIds.has(b.id) ? 1 : 0;
+      if (ao !== bo) return bo - ao;
+      return (b.rating ?? 0) - (a.rating ?? 0);
+    });
+    return { regular, reward };
+  }, [activeCollectionId, activeSubCollectionId, allPlayerCards, ownedCardIds]);
 
   // Collection reward completion tracking
   const collectionRewardStatus = useMemo(() => {
@@ -415,59 +467,227 @@ export default function Collection() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search cards…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={tierFilter} onValueChange={setTierFilter}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Gem Tier" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Tiers</SelectItem>
-            {gemTiers.map((g: any) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={posFilter} onValueChange={setPosFilter}>
-          <SelectTrigger className="w-28"><SelectValue placeholder="Position" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Pos</SelectItem>
-            {POSITIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="rating">By Rating</SelectItem>
-            <SelectItem value="name">By Name</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* View Mode Toggle */}
+      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
+        <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-grid">
+          <TabsTrigger value="all" className="gap-2">
+            <LayoutGrid className="h-4 w-4" /> All Cards
+          </TabsTrigger>
+          <TabsTrigger value="by-collection" className="gap-2">
+            <BookOpen className="h-4 w-4" /> By Collection
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      {/* Grid */}
-      {isLoading ? (
-        <div className="flex justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
-      ) : cards.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground">
-          <p className="text-lg">No cards yet</p>
-          <p className="text-sm mt-1">Open packs to start building your collection!</p>
-        </div>
+      {viewMode === "all" ? (
+        <>
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search cards…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            </div>
+            <Select value={tierFilter} onValueChange={setTierFilter}>
+              <SelectTrigger className="w-36"><SelectValue placeholder="Gem Tier" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tiers</SelectItem>
+                {gemTiers.map((g: any) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={posFilter} onValueChange={setPosFilter}>
+              <SelectTrigger className="w-28"><SelectValue placeholder="Position" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Pos</SelectItem>
+                {POSITIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="rating">By Rating</SelectItem>
+                <SelectItem value="name">By Name</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Grid */}
+          {isLoading ? (
+            <div className="flex justify-center py-20">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : cards.length === 0 ? (
+            <div className="text-center py-20 text-muted-foreground">
+              <p className="text-lg">No cards yet</p>
+              <p className="text-sm mt-1">Open packs to start building your collection!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {cards.map((card: any) => (
+                <PlayerCard
+                  key={card.id}
+                  card={card}
+                  gemTier={gemTierMap[card.gem_tier_id]}
+                  badgeCount={card.player_card_badges?.length ?? 0}
+                  duplicateCount={duplicateMap[card.id] ?? 1}
+                  isLocked={!!lockMap[card.id]}
+                  onClick={() => setSelectedCardId(card.id)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {cards.map((card: any) => (
-            <PlayerCard
-              key={card.id}
-              card={card}
-              gemTier={gemTierMap[card.gem_tier_id]}
-              badgeCount={card.player_card_badges?.length ?? 0}
-              duplicateCount={duplicateMap[card.id] ?? 1}
-              isLocked={!!lockMap[card.id]}
-              onClick={() => setSelectedCardId(card.id)}
-            />
-          ))}
-        </div>
+        <>
+          {populatedCollections.length === 0 ? (
+            <div className="text-center py-20 text-muted-foreground">
+              <p className="text-lg">No collections set up yet</p>
+            </div>
+          ) : (
+            <>
+              {/* Collection tabs */}
+              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+                {populatedCollections.map((c: any) => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setActiveCollectionId(c.id); setActiveSubCollectionId(null); }}
+                    className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium border transition-colors ${
+                      activeCollectionId === c.id
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card text-foreground border-border hover:bg-secondary"
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Sub-collection tabs */}
+              {activeSubCollections.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+                  <button
+                    onClick={() => setActiveSubCollectionId(null)}
+                    className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-medium border transition-colors ${
+                      activeSubCollectionId === null
+                        ? "bg-secondary text-foreground border-foreground/30"
+                        : "bg-transparent text-muted-foreground border-border hover:bg-secondary/60"
+                    }`}
+                  >
+                    Main
+                  </button>
+                  {activeSubCollections.map((sc: any) => (
+                    <button
+                      key={sc.id}
+                      onClick={() => setActiveSubCollectionId(sc.id)}
+                      className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-medium border transition-colors ${
+                        activeSubCollectionId === sc.id
+                          ? "bg-secondary text-foreground border-foreground/30"
+                          : "bg-transparent text-muted-foreground border-border hover:bg-secondary/60"
+                      }`}
+                    >
+                      {sc.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Active collection page */}
+              {activeCollectionId && (() => {
+                const colName = (collections as any[]).find((c) => c.id === activeCollectionId)?.name ?? "";
+                const subName = activeSubCollectionId
+                  ? (subCollections as any[]).find((s) => s.id === activeSubCollectionId)?.name
+                  : null;
+                const totalSlots = activeScopeCards.regular.length;
+                const ownedSlots = activeScopeCards.regular.filter((pc: any) => ownedCardIds.has(pc.id)).length;
+                const pct = totalSlots > 0 ? Math.round((ownedSlots / totalSlots) * 100) : 0;
+                const reward = activeScopeCards.reward;
+                const rewardOwned = reward ? ownedCardIds.has(reward.id) : false;
+                const rewardClaimable = totalSlots > 0 && ownedSlots >= totalSlots && reward && !rewardOwned;
+
+                return (
+                  <div className="space-y-5">
+                    {/* Header w/ reward */}
+                    <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+                      <div>
+                        <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                          <h2 className="text-lg font-bold">
+                            {colName}
+                            {subName && <span className="text-muted-foreground"> → {subName}</span>}
+                          </h2>
+                          <span className="text-sm text-muted-foreground">
+                            {ownedSlots} / {totalSlots} collected ({pct}%)
+                          </span>
+                        </div>
+                        <Progress value={pct} className="h-2 mt-2" />
+                      </div>
+
+                      {reward && (
+                        <div className="flex items-center gap-4 pt-2 border-t border-border">
+                          <div className="w-24 sm:w-28 shrink-0">
+                            <PlayerCard
+                              card={reward as any}
+                              gemTier={gemTierMap[reward.gem_tier_id]}
+                              missing={!rewardOwned}
+                              onClick={() => rewardOwned && setSelectedCardId(reward.id)}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                              <Gift className="h-3.5 w-3.5" /> Reward
+                            </div>
+                            <p className="font-semibold text-sm mt-0.5 truncate">{reward.name}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Complete this collection to unlock.
+                            </p>
+                            {rewardOwned ? (
+                              <span className="inline-flex items-center gap-1 mt-2 text-xs text-primary font-medium">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Claimed
+                              </span>
+                            ) : rewardClaimable ? (
+                              <Button
+                                size="sm"
+                                className="mt-2"
+                                onClick={() => claimRewardMutation.mutate(reward.id)}
+                                disabled={claimRewardMutation.isPending}
+                              >
+                                Claim Reward
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Slot grid */}
+                    {totalSlots === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground text-sm">
+                        No player cards in this collection yet.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {activeScopeCards.regular.map((pc: any) => {
+                          const owned = ownedCardIds.has(pc.id);
+                          const ownedCard = owned ? ownedCardMap[pc.id] : null;
+                          return (
+                            <PlayerCard
+                              key={pc.id}
+                              card={(ownedCard ?? pc) as any}
+                              gemTier={gemTierMap[pc.gem_tier_id]}
+                              badgeCount={ownedCard?.player_card_badges?.length ?? 0}
+                              duplicateCount={duplicateMap[pc.id] ?? (owned ? 1 : 0)}
+                              isLocked={!!lockMap[pc.id]}
+                              missing={!owned}
+                              onClick={() => owned && setSelectedCardId(pc.id)}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+        </>
       )}
 
       <CardDetailDialog
