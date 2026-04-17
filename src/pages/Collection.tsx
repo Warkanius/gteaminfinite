@@ -66,7 +66,7 @@ export default function Collection() {
   const { data: collections = [] } = useQuery({
     queryKey: ["collections-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("collections").select("*").order("name");
+      const { data } = await supabase.from("collections").select("*, packs:reward_pack_id(id, name)").order("name");
       return data ?? [];
     },
   });
@@ -74,10 +74,32 @@ export default function Collection() {
   const { data: subCollections = [] } = useQuery({
     queryKey: ["sub-collections-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("sub_collections").select("*").order("name");
+      const { data } = await supabase.from("sub_collections").select("*, packs:reward_pack_id(id, name)").order("name");
       return data ?? [];
     },
   });
+
+  // User's claimed non-card collection rewards
+  const { data: claimedRewards = [] } = useQuery({
+    queryKey: ["user-collection-claims", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_collection_claims")
+        .select("collection_id, sub_collection_id")
+        .eq("user_id", user!.id);
+      return data ?? [];
+    },
+  });
+
+  const claimedKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of claimedRewards as any[]) {
+      if (c.sub_collection_id) s.add(`sub:${c.sub_collection_id}`);
+      else if (c.collection_id) s.add(`col:${c.collection_id}`);
+    }
+    return s;
+  }, [claimedRewards]);
 
   // Fetch ALL player cards to compute collection completion + render missing slots
   const { data: allPlayerCards = [] } = useQuery({
