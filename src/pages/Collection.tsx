@@ -727,16 +727,20 @@ export default function Collection() {
 
               {/* Active collection page */}
               {activeCollectionId && (() => {
-                const colName = (collections as any[]).find((c) => c.id === activeCollectionId)?.name ?? "";
-                const subName = activeSubCollectionId
-                  ? (subCollections as any[]).find((s) => s.id === activeSubCollectionId)?.name
+                const activeCollection = (collections as any[]).find((c) => c.id === activeCollectionId);
+                const activeSubCollection = activeSubCollectionId
+                  ? (subCollections as any[]).find((s) => s.id === activeSubCollectionId)
                   : null;
+                const colName = activeCollection?.name ?? "";
+                const subName = activeSubCollection?.name ?? null;
                 const totalSlots = activeScopeCards.regular.length;
                 const ownedSlots = activeScopeCards.regular.filter((pc: any) => ownedCardIds.has(pc.id)).length;
                 const pct = totalSlots > 0 ? Math.round((ownedSlots / totalSlots) * 100) : 0;
-                const reward = activeScopeCards.reward;
-                const rewardOwned = reward ? ownedCardIds.has(reward.id) : false;
-                const rewardClaimable = totalSlots > 0 && ownedSlots >= totalSlots && reward && !rewardOwned;
+                const rewardCard = activeScopeCards.reward;
+                const scopeRow = activeSubCollection ?? activeCollection;
+                const scopeKind: "collection" | "sub_collection" = activeSubCollection ? "sub_collection" : "collection";
+                const reward = scopeRow ? resolveReward(scopeRow, scopeKind, rewardCard) : null;
+                const rewardClaimable = !!reward && totalSlots > 0 && ownedSlots >= totalSlots && !reward.alreadyClaimed;
 
                 return (
                   <div className="space-y-5">
@@ -757,23 +761,33 @@ export default function Collection() {
 
                       {reward && (
                         <div className="flex items-center gap-4 pt-2 border-t border-border">
-                          <div className="w-24 sm:w-28 shrink-0">
-                            <PlayerCard
-                              card={reward as any}
-                              gemTier={gemTierMap[reward.gem_tier_id]}
-                              missing={!rewardOwned}
-                              onClick={() => rewardOwned && setSelectedCardId(reward.id)}
-                            />
-                          </div>
+                          {reward.rewardType === "card" && rewardCard ? (
+                            <div className="w-24 sm:w-28 shrink-0">
+                              <PlayerCard
+                                card={rewardCard as any}
+                                gemTier={gemTierMap[rewardCard.gem_tier_id]}
+                                missing={!reward.alreadyClaimed}
+                                onClick={() => reward.alreadyClaimed && setSelectedCardId(rewardCard.id)}
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-24 sm:w-28 shrink-0 aspect-[3/4] rounded-xl border border-border bg-muted/30 flex items-center justify-center">
+                              <span className="text-3xl">
+                                {reward.rewardType === "coins" && "🪙"}
+                                {reward.rewardType === "gems" && "💎"}
+                                {reward.rewardType === "pack" && "📦"}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                               <Gift className="h-3.5 w-3.5" /> Reward
                             </div>
-                            <p className="font-semibold text-sm mt-0.5 truncate">{reward.name}</p>
+                            <p className="font-semibold text-sm mt-0.5 truncate">{reward.rewardLabel}</p>
                             <p className="text-xs text-muted-foreground mt-1">
                               Complete this collection to unlock.
                             </p>
-                            {rewardOwned ? (
+                            {reward.alreadyClaimed ? (
                               <span className="inline-flex items-center gap-1 mt-2 text-xs text-primary font-medium">
                                 <CheckCircle2 className="h-3.5 w-3.5" /> Claimed
                               </span>
@@ -781,7 +795,15 @@ export default function Collection() {
                               <Button
                                 size="sm"
                                 className="mt-2"
-                                onClick={() => claimRewardMutation.mutate(reward.id)}
+                                onClick={() => claimRewardMutation.mutate({
+                                  rewardType: reward.rewardType,
+                                  rewardCardId: reward.rewardCardId,
+                                  coins: reward.rewardCoins,
+                                  gems: reward.rewardGems,
+                                  packId: reward.rewardPackId,
+                                  collectionId: scopeKind === "collection" ? scopeRow.id : null,
+                                  subCollectionId: scopeKind === "sub_collection" ? scopeRow.id : null,
+                                })}
                                 disabled={claimRewardMutation.isPending}
                               >
                                 Claim Reward
