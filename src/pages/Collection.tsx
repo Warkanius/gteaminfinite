@@ -571,17 +571,25 @@ export default function Collection() {
                     </div>
                     <Progress value={pct} className="h-1.5" />
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Reward: {r.rewardCardName}
+                      Reward: {r.reward.rewardLabel}
                     </p>
                   </div>
-                  {r.alreadyClaimed ? (
+                  {r.reward.alreadyClaimed ? (
                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
                   ) : r.complete ? (
                     <Button
                       size="sm"
                       variant="default"
                       className="shrink-0 text-xs"
-                      onClick={() => claimRewardMutation.mutate(r.rewardCardId!)}
+                      onClick={() => claimRewardMutation.mutate({
+                        rewardType: r.reward.rewardType,
+                        rewardCardId: r.reward.rewardCardId,
+                        coins: r.reward.rewardCoins,
+                        gems: r.reward.rewardGems,
+                        packId: r.reward.rewardPackId,
+                        collectionId: r.type === "collection" ? r.id : null,
+                        subCollectionId: r.type === "sub_collection" ? r.id : null,
+                      })}
                       disabled={claimRewardMutation.isPending}
                     >
                       Claim
