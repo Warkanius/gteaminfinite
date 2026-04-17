@@ -363,7 +363,7 @@ export default function Collection() {
       rewardType: "card",
       rewardCardId: rewardCard?.id ?? null,
       rewardLabel: rewardCard?.name ?? "Reward card",
-      alreadyClaimed: rewardCard ? ownedCardIds.has(rewardCard.id) : false,
+      alreadyClaimed: rewardCard ? isOwnedSlot(rewardCard.id) : false,
     };
   };
 
