@@ -232,6 +232,22 @@ export default function Collection() {
 
   const ownedCardMap = useMemo(() => Object.fromEntries(groupedCards.map((c: any) => [c.id, c])), [groupedCards]);
 
+  // Chain-aware ownership: a chain (root) is owned if ANY of its members is owned.
+  const ownedChainRoots = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of groupedCards as any[]) {
+      const root = chainRootOf.get(c.id) ?? c.id;
+      s.add(root);
+    }
+    return s;
+  }, [groupedCards, chainRootOf]);
+
+  // Returns true if this card OR any evo-linked sibling/ancestor/descendant is owned.
+  const isOwnedSlot = (cardId: string) => {
+    const root = chainRootOf.get(cardId) ?? cardId;
+    return ownedChainRoots.has(root);
+  };
+
   // Collections that have at least one card assigned
   const populatedCollections = useMemo(() => {
     const ids = new Set((allPlayerCards as any[]).map((pc) => pc.collection_id).filter(Boolean));
