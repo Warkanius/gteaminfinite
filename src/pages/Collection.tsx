@@ -367,7 +367,7 @@ export default function Collection() {
     };
   };
 
-  // Collection reward completion tracking
+  // Collection reward completion tracking — counts evo chains as a single slot.
   const collectionRewardStatus = useMemo(() => {
     const results: {
       id: string;
@@ -379,10 +379,24 @@ export default function Collection() {
       reward: RewardInfo;
     }[] = [];
 
+    // Dedupe a list of cards down to one entry per evo chain (keyed by chain root id).
+    const dedupeByChain = (cards: any[]) => {
+      const seen = new Set<string>();
+      const out: any[] = [];
+      for (const pc of cards) {
+        const root = chainRootOf.get(pc.id) ?? pc.id;
+        if (seen.has(root)) continue;
+        seen.add(root);
+        out.push({ ...pc, chainRoot: root });
+      }
+      return out;
+    };
+
     for (const sc of subCollections as any[]) {
-      const cardsInSet = (allPlayerCards as any[]).filter(
+      const rawCardsInSet = (allPlayerCards as any[]).filter(
         (pc: any) => pc.sub_collection_id === sc.id && !pc.is_collection_reward
       );
+      const cardsInSet = dedupeByChain(rawCardsInSet);
       const rewardCard = (allPlayerCards as any[]).find(
         (pc: any) => pc.sub_collection_id === sc.id && pc.is_collection_reward
       );
@@ -390,7 +404,7 @@ export default function Collection() {
       if (cardsInSet.length === 0) continue;
       if (reward.rewardType === "card" && !rewardCard) continue;
 
-      const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
+      const ownedCount = cardsInSet.filter((pc: any) => ownedChainRoots.has(pc.chainRoot)).length;
       results.push({
         id: sc.id,
         name: sc.name,
@@ -403,9 +417,10 @@ export default function Collection() {
     }
 
     for (const col of collections as any[]) {
-      const cardsInSet = (allPlayerCards as any[]).filter(
+      const rawCardsInSet = (allPlayerCards as any[]).filter(
         (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && !pc.is_collection_reward
       );
+      const cardsInSet = dedupeByChain(rawCardsInSet);
       const rewardCard = (allPlayerCards as any[]).find(
         (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && pc.is_collection_reward
       );
@@ -413,7 +428,7 @@ export default function Collection() {
       if (cardsInSet.length === 0) continue;
       if (reward.rewardType === "card" && !rewardCard) continue;
 
-      const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
+      const ownedCount = cardsInSet.filter((pc: any) => ownedChainRoots.has(pc.chainRoot)).length;
       results.push({
         id: col.id,
         name: col.name,
@@ -426,7 +441,7 @@ export default function Collection() {
     }
 
     return results;
-  }, [collections, subCollections, allPlayerCards, ownedCardIds]);
+  }, [collections, subCollections, allPlayerCards, ownedChainRoots, chainRootOf]);
 
   // Claim collection reward (handles card / coins / gems / pack)
   const claimRewardMutation = useMutation({
