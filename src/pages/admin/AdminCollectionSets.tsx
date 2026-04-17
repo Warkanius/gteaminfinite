@@ -80,19 +80,52 @@ export default function AdminCollectionSets() {
     },
   });
 
+  // Build payload helper for reward fields
+  const buildRewardPayload = (f: RewardForm) => ({
+    reward_type: f.reward_type,
+    reward_card_id: f.reward_type === "card" && f.reward_card_id ? f.reward_card_id : null,
+    reward_coins: f.reward_type === "coins" ? Number(f.reward_coins) || 0 : 0,
+    reward_gems: f.reward_type === "gems" ? Number(f.reward_gems) || 0 : 0,
+    reward_pack_id: f.reward_type === "pack" && f.reward_pack_id ? f.reward_pack_id : null,
+  });
+
   // Collection mutations
   const saveCollMut = useMutation({
     mutationFn: async () => {
-      const payload = { name: collForm.name, description: collForm.description || null };
+      const reward = buildRewardPayload(collForm);
+      const payload: any = {
+        name: collForm.name,
+        description: collForm.description || null,
+        reward_type: reward.reward_type,
+        reward_coins: reward.reward_coins,
+        reward_gems: reward.reward_gems,
+        reward_pack_id: reward.reward_pack_id,
+      };
       if (collEditId) {
         const { error } = await supabase.from("collections").update(payload).eq("id", collEditId);
         if (error) throw error;
+        // Card reward is stored on player_cards.is_collection_reward + collection_id, handled separately
+        if (reward.reward_type === "card" && reward.reward_card_id) {
+          // Clear any prior card reward for this collection
+          await supabase.from("player_cards").update({ is_collection_reward: false }).eq("collection_id", collEditId).eq("is_collection_reward", true);
+          await supabase.from("player_cards").update({ collection_id: collEditId, sub_collection_id: null, is_collection_reward: true }).eq("id", reward.reward_card_id);
+        } else if (reward.reward_type !== "card") {
+          await supabase.from("player_cards").update({ is_collection_reward: false }).eq("collection_id", collEditId).eq("is_collection_reward", true);
+        }
       } else {
-        const { error } = await supabase.from("collections").insert(payload);
+        const { data, error } = await supabase.from("collections").insert(payload).select("id").single();
         if (error) throw error;
+        if (reward.reward_type === "card" && reward.reward_card_id && data) {
+          await supabase.from("player_cards").update({ collection_id: data.id, sub_collection_id: null, is_collection_reward: true }).eq("id", reward.reward_card_id);
+        }
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-collection-sets"] }); setCollDialogOpen(false); toast.success("Saved"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-collection-sets"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-cards-lite"] });
+      setCollDialogOpen(false);
+      toast.success("Saved");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -105,16 +138,38 @@ export default function AdminCollectionSets() {
   // Sub-collection mutations
   const saveSubMut = useMutation({
     mutationFn: async () => {
-      const payload = { name: subForm.name, collection_id: subForm.collection_id };
+      const reward = buildRewardPayload(subForm);
+      const payload: any = {
+        name: subForm.name,
+        collection_id: subForm.collection_id,
+        reward_type: reward.reward_type,
+        reward_coins: reward.reward_coins,
+        reward_gems: reward.reward_gems,
+        reward_pack_id: reward.reward_pack_id,
+      };
       if (subEditId) {
         const { error } = await supabase.from("sub_collections").update(payload).eq("id", subEditId);
         if (error) throw error;
+        if (reward.reward_type === "card" && reward.reward_card_id) {
+          await supabase.from("player_cards").update({ is_collection_reward: false }).eq("sub_collection_id", subEditId).eq("is_collection_reward", true);
+          await supabase.from("player_cards").update({ collection_id: subForm.collection_id, sub_collection_id: subEditId, is_collection_reward: true }).eq("id", reward.reward_card_id);
+        } else if (reward.reward_type !== "card") {
+          await supabase.from("player_cards").update({ is_collection_reward: false }).eq("sub_collection_id", subEditId).eq("is_collection_reward", true);
+        }
       } else {
-        const { error } = await supabase.from("sub_collections").insert(payload);
+        const { data, error } = await supabase.from("sub_collections").insert(payload).select("id").single();
         if (error) throw error;
+        if (reward.reward_type === "card" && reward.reward_card_id && data) {
+          await supabase.from("player_cards").update({ collection_id: subForm.collection_id, sub_collection_id: data.id, is_collection_reward: true }).eq("id", reward.reward_card_id);
+        }
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-sub-collection-sets"] }); setSubDialogOpen(false); toast.success("Saved"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-sub-collection-sets"] });
+      qc.invalidateQueries({ queryKey: ["admin-all-cards-lite"] });
+      setSubDialogOpen(false);
+      toast.success("Saved");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
