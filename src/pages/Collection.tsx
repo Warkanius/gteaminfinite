@@ -110,6 +110,73 @@ export default function Collection() {
     },
   });
 
+  // Fetch evolution links so we can treat an evo chain as a single collection slot.
+  const { data: evoLinks = [] } = useQuery({
+    queryKey: ["evo-links-collection"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("evo_paths")
+        .select("player_card_id, evolves_to_card_id")
+        .not("evolves_to_card_id", "is", null);
+      return data ?? [];
+    },
+  });
+
+  // Build chain maps:
+  //  - chainRootOf[cardId] = the BASE (root) card of the evo chain it belongs to
+  //  - chainMembersOf[rootId] = ordered list of all card ids in that chain (root first)
+  const { chainRootOf, chainMembersOf } = useMemo(() => {
+    // Forward: parent -> child
+    const childOf = new Map<string, string>();
+    // Reverse: child -> parent
+    const parentOf = new Map<string, string>();
+    for (const link of evoLinks as any[]) {
+      const from = link.player_card_id as string;
+      const to = link.evolves_to_card_id as string;
+      if (!from || !to || from === to) continue;
+      childOf.set(from, to);
+      parentOf.set(to, from);
+    }
+
+    const rootOf = new Map<string, string>();
+    const membersOf = new Map<string, string[]>();
+
+    const findRoot = (id: string): string => {
+      const seen = new Set<string>();
+      let cur = id;
+      while (parentOf.has(cur) && !seen.has(cur)) {
+        seen.add(cur);
+        cur = parentOf.get(cur)!;
+      }
+      return cur;
+    };
+
+    for (const pc of allPlayerCards as any[]) {
+      const root = findRoot(pc.id);
+      rootOf.set(pc.id, root);
+    }
+
+    // Walk forward from each root to collect ordered members
+    const allIds = new Set((allPlayerCards as any[]).map((p: any) => p.id));
+    const visitedRoots = new Set<string>();
+    for (const pc of allPlayerCards as any[]) {
+      const root = rootOf.get(pc.id)!;
+      if (visitedRoots.has(root)) continue;
+      visitedRoots.add(root);
+      const ordered: string[] = [];
+      let cur: string | undefined = root;
+      const seen = new Set<string>();
+      while (cur && allIds.has(cur) && !seen.has(cur)) {
+        ordered.push(cur);
+        seen.add(cur);
+        cur = childOf.get(cur);
+      }
+      membersOf.set(root, ordered);
+    }
+
+    return { chainRootOf: rootOf, chainMembersOf: membersOf };
+  }, [evoLinks, allPlayerCards]);
+
   const gemTierMap = useMemo(() => Object.fromEntries(gemTiers.map((g: any) => [g.id, g])), [gemTiers]);
   const teamMap = useMemo(() => Object.fromEntries(teams.map((t: any) => [t.id, t.name])), [teams]);
 
