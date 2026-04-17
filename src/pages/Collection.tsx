@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Gift, CheckCircle2 } from "lucide-react";
+import { Search, Gift, CheckCircle2, LayoutGrid, BookOpen } from "lucide-react";
 import { toast } from "sonner";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Collection() {
   const { user } = useAuth();
