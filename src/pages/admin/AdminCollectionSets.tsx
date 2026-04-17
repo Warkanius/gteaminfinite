@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DataTable, Column } from "@/components/admin/DataTable";
 import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,23 +13,54 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, Trash2, Plus, X, Search } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Pencil, Trash2, Plus, X, Search, ChevronDown, Users } from "lucide-react";
 import { toast } from "sonner";
+
+type RewardType = "card" | "coins" | "gems" | "pack";
+
+interface RewardForm {
+  reward_type: RewardType;
+  reward_card_id: string;
+  reward_coins: number;
+  reward_gems: number;
+  reward_pack_id: string;
+}
+
+const EMPTY_REWARD: RewardForm = {
+  reward_type: "card",
+  reward_card_id: "",
+  reward_coins: 0,
+  reward_gems: 0,
+  reward_pack_id: "",
+};
 
 export default function AdminCollectionSets() {
   const qc = useQueryClient();
 
   // ── Collections ──
-  const [collForm, setCollForm] = useState({ name: "", description: "" });
+  const [collForm, setCollForm] = useState<{ name: string; description: string } & RewardForm>({
+    name: "",
+    description: "",
+    ...EMPTY_REWARD,
+  });
   const [collEditId, setCollEditId] = useState<string | null>(null);
   const [collDialogOpen, setCollDialogOpen] = useState(false);
   const [collDeleteId, setCollDeleteId] = useState<string | null>(null);
 
   // ── Sub-Collections ──
-  const [subForm, setSubForm] = useState({ name: "", collection_id: "" });
+  const [subForm, setSubForm] = useState<{ name: string; collection_id: string } & RewardForm>({
+    name: "",
+    collection_id: "",
+    ...EMPTY_REWARD,
+  });
   const [subEditId, setSubEditId] = useState<string | null>(null);
   const [subDialogOpen, setSubDialogOpen] = useState(false);
   const [subDeleteId, setSubDeleteId] = useState<string | null>(null);
+
+  // ── Expanded rows (player rosters) ──
+  const [expandedColl, setExpandedColl] = useState<string | null>(null);
+  const [expandedSub, setExpandedSub] = useState<string | null>(null);
 
   const { data: collections = [], isLoading: collLoading } = useQuery({
     queryKey: ["admin-collection-sets"],
