@@ -110,6 +110,73 @@ export default function Collection() {
     },
   });
 
+  // Fetch evolution links so we can treat an evo chain as a single collection slot.
+  const { data: evoLinks = [] } = useQuery({
+    queryKey: ["evo-links-collection"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("evo_paths")
+        .select("player_card_id, evolves_to_card_id")
+        .not("evolves_to_card_id", "is", null);
+      return data ?? [];
+    },
+  });
+
+  // Build chain maps:
+  //  - chainRootOf[cardId] = the BASE (root) card of the evo chain it belongs to
+  //  - chainMembersOf[rootId] = ordered list of all card ids in that chain (root first)
+  const { chainRootOf, chainMembersOf } = useMemo(() => {
+    // Forward: parent -> child
+    const childOf = new Map<string, string>();
+    // Reverse: child -> parent
+    const parentOf = new Map<string, string>();
+    for (const link of evoLinks as any[]) {
+      const from = link.player_card_id as string;
+      const to = link.evolves_to_card_id as string;
+      if (!from || !to || from === to) continue;
+      childOf.set(from, to);
+      parentOf.set(to, from);
+    }
+
+    const rootOf = new Map<string, string>();
+    const membersOf = new Map<string, string[]>();
+
+    const findRoot = (id: string): string => {
+      const seen = new Set<string>();
+      let cur = id;
+      while (parentOf.has(cur) && !seen.has(cur)) {
+        seen.add(cur);
+        cur = parentOf.get(cur)!;
+      }
+      return cur;
+    };
+
+    for (const pc of allPlayerCards as any[]) {
+      const root = findRoot(pc.id);
+      rootOf.set(pc.id, root);
+    }
+
+    // Walk forward from each root to collect ordered members
+    const allIds = new Set((allPlayerCards as any[]).map((p: any) => p.id));
+    const visitedRoots = new Set<string>();
+    for (const pc of allPlayerCards as any[]) {
+      const root = rootOf.get(pc.id)!;
+      if (visitedRoots.has(root)) continue;
+      visitedRoots.add(root);
+      const ordered: string[] = [];
+      let cur: string | undefined = root;
+      const seen = new Set<string>();
+      while (cur && allIds.has(cur) && !seen.has(cur)) {
+        ordered.push(cur);
+        seen.add(cur);
+        cur = childOf.get(cur);
+      }
+      membersOf.set(root, ordered);
+    }
+
+    return { chainRootOf: rootOf, chainMembersOf: membersOf };
+  }, [evoLinks, allPlayerCards]);
+
   const gemTierMap = useMemo(() => Object.fromEntries(gemTiers.map((g: any) => [g.id, g])), [gemTiers]);
   const teamMap = useMemo(() => Object.fromEntries(teams.map((t: any) => [t.id, t.name])), [teams]);
 
@@ -165,6 +232,22 @@ export default function Collection() {
 
   const ownedCardMap = useMemo(() => Object.fromEntries(groupedCards.map((c: any) => [c.id, c])), [groupedCards]);
 
+  // Chain-aware ownership: a chain (root) is owned if ANY of its members is owned.
+  const ownedChainRoots = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of groupedCards as any[]) {
+      const root = chainRootOf.get(c.id) ?? c.id;
+      s.add(root);
+    }
+    return s;
+  }, [groupedCards, chainRootOf]);
+
+  // Returns true if this card OR any evo-linked sibling/ancestor/descendant is owned.
+  const isOwnedSlot = (cardId: string) => {
+    const root = chainRootOf.get(cardId) ?? cardId;
+    return ownedChainRoots.has(root);
+  };
+
   // Collections that have at least one card assigned
   const populatedCollections = useMemo(() => {
     const ids = new Set((allPlayerCards as any[]).map((pc) => pc.collection_id).filter(Boolean));
@@ -189,7 +272,11 @@ export default function Collection() {
     }
   }, [viewMode, activeCollectionId, populatedCollections]);
 
-  // Cards belonging to the currently active collection / sub-collection scope
+  // Cards belonging to the currently active collection / sub-collection scope.
+  // We dedupe evo-linked cards into a single slot (keyed by chain root). The
+  // displayed card is the best owned variant in the chain (highest rating); if
+  // the user owns nothing in the chain, we display the base card so the slot
+  // still shows the original art/name.
   const activeScopeCards = useMemo(() => {
     if (!activeCollectionId) return { regular: [], reward: null as any };
     let scope = (allPlayerCards as any[]).filter((pc) => pc.collection_id === activeCollectionId);
@@ -199,17 +286,33 @@ export default function Collection() {
       // top-level scope: cards directly in collection without sub
       scope = scope.filter((pc) => !pc.sub_collection_id);
     }
-    const regular = scope.filter((pc) => !pc.is_collection_reward);
+    const rawRegular = scope.filter((pc) => !pc.is_collection_reward);
     const reward = scope.find((pc) => pc.is_collection_reward) ?? null;
+
+    // Dedupe by chain root. Slot identity = the base/root card in the chain
+    // (so missing slots always show the base art). When owned, we'll swap in
+    // the best owned variant at render time.
+    const allCardsById = new Map<string, any>((allPlayerCards as any[]).map((p: any) => [p.id, p]));
+    const seenRoots = new Set<string>();
+    const slots: any[] = [];
+    for (const pc of rawRegular) {
+      const root = chainRootOf.get(pc.id) ?? pc.id;
+      if (seenRoots.has(root)) continue;
+      seenRoots.add(root);
+      // Prefer the actual base card if it exists in our card list, else fall back to this card.
+      const baseCard = allCardsById.get(root) ?? pc;
+      slots.push(baseCard);
+    }
+
     // owned first (by rating desc), then missing (by rating desc)
-    regular.sort((a: any, b: any) => {
-      const ao = ownedCardIds.has(a.id) ? 1 : 0;
-      const bo = ownedCardIds.has(b.id) ? 1 : 0;
+    slots.sort((a: any, b: any) => {
+      const ao = isOwnedSlot(a.id) ? 1 : 0;
+      const bo = isOwnedSlot(b.id) ? 1 : 0;
       if (ao !== bo) return bo - ao;
       return (b.rating ?? 0) - (a.rating ?? 0);
     });
-    return { regular, reward };
-  }, [activeCollectionId, activeSubCollectionId, allPlayerCards, ownedCardIds]);
+    return { regular: slots, reward };
+  }, [activeCollectionId, activeSubCollectionId, allPlayerCards, ownedChainRoots, chainRootOf]);
 
   // Helper: resolve reward info for a collection or sub_collection row
   type RewardInfo = {
@@ -260,11 +363,11 @@ export default function Collection() {
       rewardType: "card",
       rewardCardId: rewardCard?.id ?? null,
       rewardLabel: rewardCard?.name ?? "Reward card",
-      alreadyClaimed: rewardCard ? ownedCardIds.has(rewardCard.id) : false,
+      alreadyClaimed: rewardCard ? isOwnedSlot(rewardCard.id) : false,
     };
   };
 
-  // Collection reward completion tracking
+  // Collection reward completion tracking — counts evo chains as a single slot.
   const collectionRewardStatus = useMemo(() => {
     const results: {
       id: string;
@@ -276,10 +379,24 @@ export default function Collection() {
       reward: RewardInfo;
     }[] = [];
 
+    // Dedupe a list of cards down to one entry per evo chain (keyed by chain root id).
+    const dedupeByChain = (cards: any[]) => {
+      const seen = new Set<string>();
+      const out: any[] = [];
+      for (const pc of cards) {
+        const root = chainRootOf.get(pc.id) ?? pc.id;
+        if (seen.has(root)) continue;
+        seen.add(root);
+        out.push({ ...pc, chainRoot: root });
+      }
+      return out;
+    };
+
     for (const sc of subCollections as any[]) {
-      const cardsInSet = (allPlayerCards as any[]).filter(
+      const rawCardsInSet = (allPlayerCards as any[]).filter(
         (pc: any) => pc.sub_collection_id === sc.id && !pc.is_collection_reward
       );
+      const cardsInSet = dedupeByChain(rawCardsInSet);
       const rewardCard = (allPlayerCards as any[]).find(
         (pc: any) => pc.sub_collection_id === sc.id && pc.is_collection_reward
       );
@@ -287,7 +404,7 @@ export default function Collection() {
       if (cardsInSet.length === 0) continue;
       if (reward.rewardType === "card" && !rewardCard) continue;
 
-      const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
+      const ownedCount = cardsInSet.filter((pc: any) => ownedChainRoots.has(pc.chainRoot)).length;
       results.push({
         id: sc.id,
         name: sc.name,
@@ -300,9 +417,10 @@ export default function Collection() {
     }
 
     for (const col of collections as any[]) {
-      const cardsInSet = (allPlayerCards as any[]).filter(
+      const rawCardsInSet = (allPlayerCards as any[]).filter(
         (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && !pc.is_collection_reward
       );
+      const cardsInSet = dedupeByChain(rawCardsInSet);
       const rewardCard = (allPlayerCards as any[]).find(
         (pc: any) => pc.collection_id === col.id && !pc.sub_collection_id && pc.is_collection_reward
       );
@@ -310,7 +428,7 @@ export default function Collection() {
       if (cardsInSet.length === 0) continue;
       if (reward.rewardType === "card" && !rewardCard) continue;
 
-      const ownedCount = cardsInSet.filter((pc: any) => ownedCardIds.has(pc.id)).length;
+      const ownedCount = cardsInSet.filter((pc: any) => ownedChainRoots.has(pc.chainRoot)).length;
       results.push({
         id: col.id,
         name: col.name,
@@ -323,7 +441,7 @@ export default function Collection() {
     }
 
     return results;
-  }, [collections, subCollections, allPlayerCards, ownedCardIds]);
+  }, [collections, subCollections, allPlayerCards, ownedChainRoots, chainRootOf]);
 
   // Claim collection reward (handles card / coins / gems / pack)
   const claimRewardMutation = useMutation({
@@ -734,7 +852,7 @@ export default function Collection() {
                 const colName = activeCollection?.name ?? "";
                 const subName = activeSubCollection?.name ?? null;
                 const totalSlots = activeScopeCards.regular.length;
-                const ownedSlots = activeScopeCards.regular.filter((pc: any) => ownedCardIds.has(pc.id)).length;
+                const ownedSlots = activeScopeCards.regular.filter((pc: any) => isOwnedSlot(pc.id)).length;
                 const pct = totalSlots > 0 ? Math.round((ownedSlots / totalSlots) * 100) : 0;
                 const rewardCard = activeScopeCards.reward;
                 const scopeRow = activeSubCollection ?? activeCollection;
@@ -821,19 +939,34 @@ export default function Collection() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {activeScopeCards.regular.map((pc: any) => {
-                          const owned = ownedCardIds.has(pc.id);
-                          const ownedCard = owned ? ownedCardMap[pc.id] : null;
+                        {activeScopeCards.regular.map((slotCard: any) => {
+                          // Slot is identified by chain root. Find the best owned variant
+                          // anywhere in the chain (highest rating); if none owned, render
+                          // the base card as a "missing" placeholder.
+                          const root = chainRootOf.get(slotCard.id) ?? slotCard.id;
+                          const chainMembers = chainMembersOf.get(root) ?? [slotCard.id];
+                          const ownedInChain = chainMembers
+                            .map((id) => ownedCardMap[id])
+                            .filter(Boolean)
+                            .sort((a: any, b: any) => (b.rating ?? 0) - (a.rating ?? 0));
+                          const displayOwned = ownedInChain[0] ?? null;
+                          const displayCard = displayOwned ?? slotCard;
+                          const owned = !!displayOwned;
+                          const totalDupesInChain = chainMembers.reduce(
+                            (sum, id) => sum + (duplicateMap[id] ?? 0),
+                            0,
+                          );
+                          const anyLockedInChain = chainMembers.some((id) => !!lockMap[id]);
                           return (
                             <PlayerCard
-                              key={pc.id}
-                              card={(ownedCard ?? pc) as any}
-                              gemTier={gemTierMap[pc.gem_tier_id]}
-                              badgeCount={ownedCard?.player_card_badges?.length ?? 0}
-                              duplicateCount={duplicateMap[pc.id] ?? (owned ? 1 : 0)}
-                              isLocked={!!lockMap[pc.id]}
+                              key={root}
+                              card={displayCard as any}
+                              gemTier={gemTierMap[displayCard.gem_tier_id]}
+                              badgeCount={displayOwned?.player_card_badges?.length ?? 0}
+                              duplicateCount={owned ? totalDupesInChain : 0}
+                              isLocked={anyLockedInChain}
                               missing={!owned}
-                              onClick={() => owned && setSelectedCardId(pc.id)}
+                              onClick={() => owned && setSelectedCardId(displayCard.id)}
                             />
                           );
                         })}
