@@ -161,7 +161,7 @@ export default function Collection() {
   }, [activeCollectionId, allPlayerCards, subCollections]);
 
   // Auto-pick the first populated collection when entering "by-collection" mode
-  useMemo(() => {
+  useEffect(() => {
     if (viewMode === "by-collection" && !activeCollectionId && populatedCollections.length > 0) {
       setActiveCollectionId(populatedCollections[0].id);
     }
