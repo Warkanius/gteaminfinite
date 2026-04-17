@@ -852,7 +852,7 @@ export default function Collection() {
                 const colName = activeCollection?.name ?? "";
                 const subName = activeSubCollection?.name ?? null;
                 const totalSlots = activeScopeCards.regular.length;
-                const ownedSlots = activeScopeCards.regular.filter((pc: any) => ownedCardIds.has(pc.id)).length;
+                const ownedSlots = activeScopeCards.regular.filter((pc: any) => isOwnedSlot(pc.id)).length;
                 const pct = totalSlots > 0 ? Math.round((ownedSlots / totalSlots) * 100) : 0;
                 const rewardCard = activeScopeCards.reward;
                 const scopeRow = activeSubCollection ?? activeCollection;
@@ -939,19 +939,34 @@ export default function Collection() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {activeScopeCards.regular.map((pc: any) => {
-                          const owned = ownedCardIds.has(pc.id);
-                          const ownedCard = owned ? ownedCardMap[pc.id] : null;
+                        {activeScopeCards.regular.map((slotCard: any) => {
+                          // Slot is identified by chain root. Find the best owned variant
+                          // anywhere in the chain (highest rating); if none owned, render
+                          // the base card as a "missing" placeholder.
+                          const root = chainRootOf.get(slotCard.id) ?? slotCard.id;
+                          const chainMembers = chainMembersOf.get(root) ?? [slotCard.id];
+                          const ownedInChain = chainMembers
+                            .map((id) => ownedCardMap[id])
+                            .filter(Boolean)
+                            .sort((a: any, b: any) => (b.rating ?? 0) - (a.rating ?? 0));
+                          const displayOwned = ownedInChain[0] ?? null;
+                          const displayCard = displayOwned ?? slotCard;
+                          const owned = !!displayOwned;
+                          const totalDupesInChain = chainMembers.reduce(
+                            (sum, id) => sum + (duplicateMap[id] ?? 0),
+                            0,
+                          );
+                          const anyLockedInChain = chainMembers.some((id) => !!lockMap[id]);
                           return (
                             <PlayerCard
-                              key={pc.id}
-                              card={(ownedCard ?? pc) as any}
-                              gemTier={gemTierMap[pc.gem_tier_id]}
-                              badgeCount={ownedCard?.player_card_badges?.length ?? 0}
-                              duplicateCount={duplicateMap[pc.id] ?? (owned ? 1 : 0)}
-                              isLocked={!!lockMap[pc.id]}
+                              key={root}
+                              card={displayCard as any}
+                              gemTier={gemTierMap[displayCard.gem_tier_id]}
+                              badgeCount={displayOwned?.player_card_badges?.length ?? 0}
+                              duplicateCount={owned ? totalDupesInChain : 0}
+                              isLocked={anyLockedInChain}
                               missing={!owned}
-                              onClick={() => owned && setSelectedCardId(pc.id)}
+                              onClick={() => owned && setSelectedCardId(displayCard.id)}
                             />
                           );
                         })}
