@@ -92,6 +92,142 @@ export default function AdminCollectionSets() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // ── Bulk Assign ──
+  const [targetCollId, setTargetCollId] = useState<string>("");
+  const [targetSubId, setTargetSubId] = useState<string>("");
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set());
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [sourceTab, setSourceTab] = useState("search");
+  const [sourcePackId, setSourcePackId] = useState<string>("");
+  const [sourceRunId, setSourceRunId] = useState<string>("");
+  const [sourceTeamId, setSourceTeamId] = useState<string>("");
+
+  const { data: allPlayers = [] } = useQuery({
+    queryKey: ["admin-all-cards-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("player_cards").select("id, name, rating, collection_id, sub_collection_id").order("name").limit(1000);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: packs = [] } = useQuery({
+    queryKey: ["packs-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("packs").select("id, name").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: runs = [] } = useQuery({
+    queryKey: ["runs-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("runs").select("id, name").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: teams = [] } = useQuery({
+    queryKey: ["teams-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("teams").select("id, name").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: packSourcePlayers = [] } = useQuery({
+    queryKey: ["pack-players-source", sourcePackId],
+    enabled: !!sourcePackId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("pack_players").select("player_card_id, player_cards(id, name, rating)").eq("pack_id", sourcePackId);
+      if (error) throw error;
+      return (data || []).map((r: any) => r.player_cards).filter(Boolean);
+    },
+  });
+
+  const { data: runSourcePlayers = [] } = useQuery({
+    queryKey: ["run-players-source", sourceRunId],
+    enabled: !!sourceRunId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("run_players").select("player_card_id, player_cards(id, name, rating)").eq("run_id", sourceRunId);
+      if (error) throw error;
+      return (data || []).map((r: any) => r.player_cards).filter(Boolean);
+    },
+  });
+
+  const { data: teamSourcePlayers = [] } = useQuery({
+    queryKey: ["team-players-source", sourceTeamId],
+    enabled: !!sourceTeamId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("team_players").select("player_card_id, player_cards(id, name, rating)").eq("team_id", sourceTeamId);
+      if (error) throw error;
+      return (data || []).map((r: any) => r.player_cards).filter(Boolean);
+    },
+  });
+
+  const playerById = useMemo(() => {
+    const m = new Map<string, any>();
+    allPlayers.forEach((p: any) => m.set(p.id, p));
+    [...packSourcePlayers, ...runSourcePlayers, ...teamSourcePlayers].forEach((p: any) => p && m.set(p.id, p));
+    return m;
+  }, [allPlayers, packSourcePlayers, runSourcePlayers, teamSourcePlayers]);
+
+  const filteredSearchPlayers = useMemo(() => {
+    if (!playerSearch.trim()) return allPlayers.slice(0, 50);
+    const q = playerSearch.toLowerCase();
+    return allPlayers.filter((p: any) => p.name.toLowerCase().includes(q)).slice(0, 100);
+  }, [allPlayers, playerSearch]);
+
+  const toggleSelected = (id: string) => {
+    setSelectedPlayerIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const addAll = (players: any[]) => {
+    setSelectedPlayerIds(prev => {
+      const next = new Set(prev);
+      players.forEach(p => p?.id && next.add(p.id));
+      return next;
+    });
+    toast.success(`Added ${players.length} players`);
+  };
+
+  const handleSubChange = (subId: string) => {
+    setTargetSubId(subId);
+    if (subId) {
+      const sub = (subCollections as any[]).find((s: any) => s.id === subId);
+      if (sub?.collection_id) setTargetCollId(sub.collection_id);
+    }
+  };
+
+  const bulkAssignMut = useMutation({
+    mutationFn: async () => {
+      if (!targetCollId) throw new Error("Pick a target collection");
+      if (selectedPlayerIds.size === 0) throw new Error("No players selected");
+      const ids = Array.from(selectedPlayerIds);
+      const payload: any = { collection_id: targetCollId, sub_collection_id: targetSubId || null };
+      const { error } = await supabase.from("player_cards").update(payload).in("id", ids);
+      if (error) throw error;
+      return ids.length;
+    },
+    onSuccess: (count) => {
+      const collName = (collections as any[]).find((c: any) => c.id === targetCollId)?.name ?? "collection";
+      const subName = (subCollections as any[]).find((s: any) => s.id === targetSubId)?.name;
+      toast.success(`Added ${count} players to ${collName}${subName ? ` → ${subName}` : ""}`);
+      qc.invalidateQueries({ queryKey: ["admin-all-cards-lite"] });
+      qc.invalidateQueries({ queryKey: ["admin-collection-sets"] });
+      qc.invalidateQueries({ queryKey: ["admin-sub-collection-sets"] });
+      setSelectedPlayerIds(new Set());
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const collColumns: Column<any>[] = [
     { key: "name", label: "Name", sortable: true },
     { key: "description", label: "Description", render: (r) => r.description || "—" },
