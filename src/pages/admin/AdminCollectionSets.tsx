@@ -13,8 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Pencil, Trash2, Plus, X, Search, ChevronDown, Users } from "lucide-react";
+import { Pencil, Trash2, Plus, X, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 
 type RewardType = "card" | "coins" | "gems" | "pack";
