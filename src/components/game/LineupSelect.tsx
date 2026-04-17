@@ -117,61 +117,57 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
 
   const gemTierMap = useMemo(() => Object.fromEntries(gemTiers.map((g) => [g.id, g])), [gemTiers]);
 
-  // Apply lineup restrictions to filter the collection
+  // Apply lineup restrictions to filter the collection.
+  // A card qualifies if it matches AT LEAST ONE of the active restriction categories (OR logic).
   const collection = useMemo(() => {
     if (!lineupRestrictions) return rawCollection;
 
-    return rawCollection.filter((card: any) => {
-      // Position filter
-      if (lineupRestrictions.positions?.length) {
+    const activeChecks: Array<(card: any) => boolean> = [];
+
+    if (lineupRestrictions.positions?.length) {
+      activeChecks.push((card) => {
         const cardPositions = [card.position1, card.position2].filter(Boolean);
-        if (!cardPositions.some((p: string) => lineupRestrictions.positions!.includes(p))) return false;
-      }
-
-      // Gem tier filter
-      if (lineupRestrictions.gem_tier_ids?.length) {
-        if (!card.gem_tier_id || !lineupRestrictions.gem_tier_ids.includes(card.gem_tier_id)) return false;
-      }
-
-      // Team filter
-      if (lineupRestrictions.team_ids?.length) {
-        if (!card.team_id || !lineupRestrictions.team_ids.includes(card.team_id)) return false;
-      }
-
-      // Collection filter
-      if (lineupRestrictions.collection_ids?.length) {
-        if (!card.collection_id || !lineupRestrictions.collection_ids.includes(card.collection_id)) return false;
-      }
-
-      // Sub-collection filter
-      if (lineupRestrictions.sub_collection_ids?.length) {
-        if (!card.sub_collection_id || !lineupRestrictions.sub_collection_ids.includes(card.sub_collection_id)) return false;
-      }
-
-      // Card color filter
-      if (lineupRestrictions.card_colors?.length) {
+        return cardPositions.some((p: string) => lineupRestrictions.positions!.includes(p));
+      });
+    }
+    if (lineupRestrictions.gem_tier_ids?.length) {
+      activeChecks.push((card) => !!card.gem_tier_id && lineupRestrictions.gem_tier_ids!.includes(card.gem_tier_id));
+    }
+    if (lineupRestrictions.team_ids?.length) {
+      activeChecks.push((card) => !!card.team_id && lineupRestrictions.team_ids!.includes(card.team_id));
+    }
+    if (lineupRestrictions.collection_ids?.length) {
+      activeChecks.push((card) => !!card.collection_id && lineupRestrictions.collection_ids!.includes(card.collection_id));
+    }
+    if (lineupRestrictions.sub_collection_ids?.length) {
+      activeChecks.push((card) => !!card.sub_collection_id && lineupRestrictions.sub_collection_ids!.includes(card.sub_collection_id));
+    }
+    if (lineupRestrictions.card_colors?.length) {
+      activeChecks.push((card) => {
         const bucket = hslToColorBucket(card.card_color_primary);
-        if (!bucket || !lineupRestrictions.card_colors.includes(bucket)) return false;
-      }
-
-      // Badge filter
-      if (lineupRestrictions.badge_ids?.length) {
+        return !!bucket && lineupRestrictions.card_colors!.includes(bucket);
+      });
+    }
+    if (lineupRestrictions.badge_ids?.length) {
+      activeChecks.push((card) => {
         const cardBadgeIds = cardBadgeAssignments
           .filter((a: any) => a.player_card_id === card.id)
           .map((a: any) => a.badge_id);
-        if (!lineupRestrictions.badge_ids.some((bid: string) => cardBadgeIds.includes(bid))) return false;
-      }
-
-      // Trait filter
-      if (lineupRestrictions.trait_ids?.length) {
+        return lineupRestrictions.badge_ids!.some((bid: string) => cardBadgeIds.includes(bid));
+      });
+    }
+    if (lineupRestrictions.trait_ids?.length) {
+      activeChecks.push((card) => {
         const cardTraitIds = cardTraitAssignments
           .filter((a: any) => a.player_card_id === card.id)
           .map((a: any) => a.trait_id);
-        if (!lineupRestrictions.trait_ids.some((tid: string) => cardTraitIds.includes(tid))) return false;
-      }
+        return lineupRestrictions.trait_ids!.some((tid: string) => cardTraitIds.includes(tid));
+      });
+    }
 
-      return true;
-    });
+    if (activeChecks.length === 0) return rawCollection;
+
+    return rawCollection.filter((card: any) => activeChecks.some((check) => check(card)));
   }, [rawCollection, lineupRestrictions, cardBadgeAssignments, cardTraitAssignments]);
 
   const toggleCard = (id: string) => {
