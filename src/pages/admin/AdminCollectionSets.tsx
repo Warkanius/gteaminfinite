@@ -288,6 +288,193 @@ export default function AdminCollectionSets() {
         </CardContent>
       </Card>
 
+      {/* Bulk Assign Players */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            Bulk Assign Players
+            <Badge variant="secondary">{selectedPlayerIds.size} selected</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Target Collection *</Label>
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={targetCollId}
+                onChange={e => { setTargetCollId(e.target.value); setTargetSubId(""); }}
+              >
+                <option value="">— Select collection —</option>
+                {collections.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Target Sub-Collection (optional)</Label>
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={targetSubId}
+                onChange={e => handleSubChange(e.target.value)}
+              >
+                <option value="">— None (collection only) —</option>
+                {(subCollections as any[])
+                  .filter((s: any) => !targetCollId || s.collection_id === targetCollId)
+                  .map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <Tabs value={sourceTab} onValueChange={setSourceTab}>
+            <TabsList className="grid grid-cols-4 w-full">
+              <TabsTrigger value="search">Search</TabsTrigger>
+              <TabsTrigger value="pack">From Pack</TabsTrigger>
+              <TabsTrigger value="run">From Run</TabsTrigger>
+              <TabsTrigger value="team">From Team</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="search" className="space-y-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search player by name…"
+                  value={playerSearch}
+                  onChange={e => setPlayerSearch(e.target.value)}
+                />
+              </div>
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border divide-y divide-border">
+                {filteredSearchPlayers.length === 0 && (
+                  <div className="p-3 text-sm text-muted-foreground">No players found.</div>
+                )}
+                {filteredSearchPlayers.map((p: any) => (
+                  <label key={p.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 cursor-pointer">
+                    <Checkbox checked={selectedPlayerIds.has(p.id)} onCheckedChange={() => toggleSelected(p.id)} />
+                    <span className="text-sm flex-1">{p.name}</span>
+                    <Badge variant="outline" className="text-xs">{p.rating}</Badge>
+                  </label>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="pack" className="space-y-2">
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={sourcePackId}
+                onChange={e => setSourcePackId(e.target.value)}
+              >
+                <option value="">— Select pack —</option>
+                {packs.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              {sourcePackId && (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => addAll(packSourcePlayers as any[])} disabled={!packSourcePlayers.length}>
+                    <Plus className="h-3 w-3 mr-1" /> Add all {packSourcePlayers.length}
+                  </Button>
+                  <div className="max-h-48 overflow-y-auto rounded-md border border-border divide-y divide-border">
+                    {(packSourcePlayers as any[]).map((p: any) => (
+                      <label key={p.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 cursor-pointer">
+                        <Checkbox checked={selectedPlayerIds.has(p.id)} onCheckedChange={() => toggleSelected(p.id)} />
+                        <span className="text-sm flex-1">{p.name}</span>
+                        <Badge variant="outline" className="text-xs">{p.rating}</Badge>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="run" className="space-y-2">
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={sourceRunId}
+                onChange={e => setSourceRunId(e.target.value)}
+              >
+                <option value="">— Select run —</option>
+                {runs.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+              {sourceRunId && (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => addAll(runSourcePlayers as any[])} disabled={!runSourcePlayers.length}>
+                    <Plus className="h-3 w-3 mr-1" /> Add all {runSourcePlayers.length}
+                  </Button>
+                  <div className="max-h-48 overflow-y-auto rounded-md border border-border divide-y divide-border">
+                    {(runSourcePlayers as any[]).map((p: any) => (
+                      <label key={p.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 cursor-pointer">
+                        <Checkbox checked={selectedPlayerIds.has(p.id)} onCheckedChange={() => toggleSelected(p.id)} />
+                        <span className="text-sm flex-1">{p.name}</span>
+                        <Badge variant="outline" className="text-xs">{p.rating}</Badge>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="team" className="space-y-2">
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={sourceTeamId}
+                onChange={e => setSourceTeamId(e.target.value)}
+              >
+                <option value="">— Select team —</option>
+                {teams.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              {sourceTeamId && (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => addAll(teamSourcePlayers as any[])} disabled={!teamSourcePlayers.length}>
+                    <Plus className="h-3 w-3 mr-1" /> Add all {teamSourcePlayers.length}
+                  </Button>
+                  <div className="max-h-48 overflow-y-auto rounded-md border border-border divide-y divide-border">
+                    {(teamSourcePlayers as any[]).map((p: any) => (
+                      <label key={p.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 cursor-pointer">
+                        <Checkbox checked={selectedPlayerIds.has(p.id)} onCheckedChange={() => toggleSelected(p.id)} />
+                        <span className="text-sm flex-1">{p.name}</span>
+                        <Badge variant="outline" className="text-xs">{p.rating}</Badge>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </TabsContent>
+          </Tabs>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Staged players ({selectedPlayerIds.size})</Label>
+              {selectedPlayerIds.size > 0 && (
+                <Button size="sm" variant="ghost" onClick={() => setSelectedPlayerIds(new Set())}>
+                  Clear all
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5 min-h-[44px] p-2 rounded-md border border-dashed border-border">
+              {selectedPlayerIds.size === 0 && (
+                <span className="text-sm text-muted-foreground">No players staged. Use search or import above.</span>
+              )}
+              {Array.from(selectedPlayerIds).map(id => {
+                const p = playerById.get(id);
+                return (
+                  <Badge key={id} variant="secondary" className="gap-1 pr-1">
+                    {p?.name ?? id.slice(0, 6)}
+                    <button onClick={() => toggleSelected(id)} className="hover:bg-destructive/20 rounded p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                );
+              })}
+            </div>
+          </div>
+
+          <Button
+            className="w-full"
+            disabled={!targetCollId || selectedPlayerIds.size === 0 || bulkAssignMut.isPending}
+            onClick={() => bulkAssignMut.mutate()}
+          >
+            {bulkAssignMut.isPending ? "Assigning…" : `Assign ${selectedPlayerIds.size} players`}
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Collection Dialog */}
       <FormDialog open={collDialogOpen} onOpenChange={setCollDialogOpen} title={collEditId ? "Edit Collection" : "Add Collection"} onSave={() => saveCollMut.mutate()} saving={saveCollMut.isPending}>
         <div className="space-y-3">
