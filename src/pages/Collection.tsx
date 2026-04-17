@@ -79,11 +79,11 @@ export default function Collection() {
     },
   });
 
-  // Fetch ALL player cards to compute collection completion
+  // Fetch ALL player cards to compute collection completion + render missing slots
   const { data: allPlayerCards = [] } = useQuery({
     queryKey: ["all-player-cards-collection"],
     queryFn: async () => {
-      const { data } = await supabase.from("player_cards").select("id, name, collection_id, sub_collection_id, is_collection_reward");
+      const { data } = await supabase.from("player_cards").select("id, name, rating, position1, position2, gem_name, gem_tier_id, card_color_primary, card_color_secondary, card_glow_color, card_animation, collection_id, sub_collection_id, is_collection_reward");
       return data ?? [];
     },
   });
