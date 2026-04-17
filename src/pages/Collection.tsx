@@ -141,6 +141,54 @@ export default function Collection() {
   // Set of player_card_ids user owns
   const ownedCardIds = useMemo(() => new Set(groupedCards.map((c: any) => c.id)), [groupedCards]);
 
+  const ownedCardMap = useMemo(() => Object.fromEntries(groupedCards.map((c: any) => [c.id, c])), [groupedCards]);
+
+  // Collections that have at least one card assigned
+  const populatedCollections = useMemo(() => {
+    const ids = new Set((allPlayerCards as any[]).map((pc) => pc.collection_id).filter(Boolean));
+    return (collections as any[]).filter((c) => ids.has(c.id));
+  }, [collections, allPlayerCards]);
+
+  // Sub-collections under the active collection
+  const activeSubCollections = useMemo(() => {
+    if (!activeCollectionId) return [];
+    const subIds = new Set(
+      (allPlayerCards as any[])
+        .filter((pc) => pc.collection_id === activeCollectionId && pc.sub_collection_id)
+        .map((pc) => pc.sub_collection_id)
+    );
+    return (subCollections as any[]).filter((sc) => sc.collection_id === activeCollectionId && subIds.has(sc.id));
+  }, [activeCollectionId, allPlayerCards, subCollections]);
+
+  // Auto-pick the first populated collection when entering "by-collection" mode
+  useMemo(() => {
+    if (viewMode === "by-collection" && !activeCollectionId && populatedCollections.length > 0) {
+      setActiveCollectionId(populatedCollections[0].id);
+    }
+  }, [viewMode, activeCollectionId, populatedCollections]);
+
+  // Cards belonging to the currently active collection / sub-collection scope
+  const activeScopeCards = useMemo(() => {
+    if (!activeCollectionId) return { regular: [], reward: null as any };
+    let scope = (allPlayerCards as any[]).filter((pc) => pc.collection_id === activeCollectionId);
+    if (activeSubCollectionId) {
+      scope = scope.filter((pc) => pc.sub_collection_id === activeSubCollectionId);
+    } else {
+      // top-level scope: cards directly in collection without sub
+      scope = scope.filter((pc) => !pc.sub_collection_id);
+    }
+    const regular = scope.filter((pc) => !pc.is_collection_reward);
+    const reward = scope.find((pc) => pc.is_collection_reward) ?? null;
+    // owned first (by rating desc), then missing (by rating desc)
+    regular.sort((a: any, b: any) => {
+      const ao = ownedCardIds.has(a.id) ? 1 : 0;
+      const bo = ownedCardIds.has(b.id) ? 1 : 0;
+      if (ao !== bo) return bo - ao;
+      return (b.rating ?? 0) - (a.rating ?? 0);
+    });
+    return { regular, reward };
+  }, [activeCollectionId, activeSubCollectionId, allPlayerCards, ownedCardIds]);
+
   // Collection reward completion tracking
   const collectionRewardStatus = useMemo(() => {
     const results: {
