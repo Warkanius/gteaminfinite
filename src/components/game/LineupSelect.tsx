@@ -209,20 +209,33 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
       });
     }
     if (lineupRestrictions.gem_tier_ids?.length) {
-      activeChecks.push((card) => !!card.gem_tier_id && lineupRestrictions.gem_tier_ids!.includes(card.gem_tier_id));
+      activeChecks.push((card) => {
+        const root = resolveRoot(card);
+        return !!root.gem_tier_id && lineupRestrictions.gem_tier_ids!.includes(root.gem_tier_id);
+      });
     }
     if (lineupRestrictions.team_ids?.length) {
-      activeChecks.push((card) => !!card.team_id && lineupRestrictions.team_ids!.includes(card.team_id));
+      activeChecks.push((card) => {
+        const root = resolveRoot(card);
+        return !!root.team_id && lineupRestrictions.team_ids!.includes(root.team_id);
+      });
     }
     if (lineupRestrictions.collection_ids?.length) {
-      activeChecks.push((card) => !!card.collection_id && lineupRestrictions.collection_ids!.includes(card.collection_id));
+      activeChecks.push((card) => {
+        const root = resolveRoot(card);
+        return !!root.collection_id && lineupRestrictions.collection_ids!.includes(root.collection_id);
+      });
     }
     if (lineupRestrictions.sub_collection_ids?.length) {
-      activeChecks.push((card) => !!card.sub_collection_id && lineupRestrictions.sub_collection_ids!.includes(card.sub_collection_id));
+      activeChecks.push((card) => {
+        const root = resolveRoot(card);
+        return !!root.sub_collection_id && lineupRestrictions.sub_collection_ids!.includes(root.sub_collection_id);
+      });
     }
     if (lineupRestrictions.card_colors?.length) {
       activeChecks.push((card) => {
-        const bucket = hslToColorBucket(card.card_color_primary);
+        const root = resolveRoot(card);
+        const bucket = hslToColorBucket(root.card_color_primary);
         return !!bucket && lineupRestrictions.card_colors!.includes(bucket);
       });
     }
@@ -246,7 +259,7 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
     if (activeChecks.length === 0) return rawCollection;
 
     return rawCollection.filter((card: any) => activeChecks.some((check) => check(card)));
-  }, [rawCollection, lineupRestrictions, cardBadgeAssignments, cardTraitAssignments]);
+  }, [rawCollection, lineupRestrictions, cardBadgeAssignments, cardTraitAssignments, chainRootOf, cardById]);
 
   const toggleCard = (id: string) => {
     setSelectedIds((prev) => {
