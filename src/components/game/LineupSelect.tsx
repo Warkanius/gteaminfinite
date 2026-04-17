@@ -117,6 +117,84 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
 
   const gemTierMap = useMemo(() => Object.fromEntries(gemTiers.map((g) => [g.id, g])), [gemTiers]);
 
+  // Evo chain links: every evolved card id -> its base (root) card id.
+  // Used so an evolved variant inherits its base card's collection/team/tier/color
+  // when checking lineup restrictions.
+  const { data: evoLinks = [] } = useQuery({
+    queryKey: ["evo-links-lineup"],
+    enabled: !!lineupRestrictions,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("evo_paths")
+        .select("player_card_id, evolves_to_card_id")
+        .not("evolves_to_card_id", "is", null);
+      return data ?? [];
+    },
+  });
+
+  const chainRootOf = useMemo(() => {
+    // Walk evolved -> parent links until we reach a card that isn't an evolution target.
+    const parentOf = new Map<string, string>();
+    for (const link of evoLinks as any[]) {
+      const from = link.player_card_id as string;
+      const to = link.evolves_to_card_id as string;
+      if (!from || !to || from === to) continue;
+      parentOf.set(to, from);
+    }
+    const rootOf = new Map<string, string>();
+    for (const evolvedId of parentOf.keys()) {
+      let cur = evolvedId;
+      const seen = new Set<string>([cur]);
+      while (parentOf.has(cur)) {
+        const next = parentOf.get(cur)!;
+        if (seen.has(next)) break; // cycle guard
+        seen.add(next);
+        cur = next;
+      }
+      rootOf.set(evolvedId, cur);
+    }
+    return rootOf;
+  }, [evoLinks]);
+
+  // Fetch any root cards that aren't already in the user's collection so we can
+  // read their collection_id / sub_collection_id / team_id / gem_tier_id / card_color_primary.
+  const missingRootIds = useMemo(() => {
+    if (!lineupRestrictions) return [] as string[];
+    const have = new Set((rawCollection as any[]).map((c) => c.id));
+    const need = new Set<string>();
+    for (const card of rawCollection as any[]) {
+      const root = chainRootOf.get(card.id);
+      if (root && !have.has(root)) need.add(root);
+    }
+    return Array.from(need);
+  }, [rawCollection, chainRootOf, lineupRestrictions]);
+
+  const { data: rootCards = [] } = useQuery({
+    queryKey: ["evo-root-cards-lineup", missingRootIds.sort().join(",")],
+    enabled: missingRootIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("player_cards")
+        .select("id, collection_id, sub_collection_id, team_id, gem_tier_id, card_color_primary")
+        .in("id", missingRootIds);
+      return data ?? [];
+    },
+  });
+
+  const cardById = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const c of rawCollection as any[]) map[c.id] = c;
+    for (const c of rootCards as any[]) if (!map[c.id]) map[c.id] = c;
+    return map;
+  }, [rawCollection, rootCards]);
+
+  // Resolve a card to its chain-root version for inherited-property checks.
+  const resolveRoot = (card: any) => {
+    const rootId = chainRootOf.get(card.id);
+    if (!rootId) return card;
+    return cardById[rootId] ?? card;
+  };
+
   // Apply lineup restrictions to filter the collection.
   // A card qualifies if it matches AT LEAST ONE of the active restriction categories (OR logic).
   const collection = useMemo(() => {
