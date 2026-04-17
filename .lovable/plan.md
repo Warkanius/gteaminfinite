@@ -1,42 +1,44 @@
 
-The user wants a bulk player assignment tool on the **admin** Collections page (or actually the Collection management — let me check). They said "on the collection page". Let me think — they're admin so likely they mean admin collection management. The user-facing Collection page is for viewing owned cards. The admin pages are AdminCollectionSets (which manages collections/sub-collections) and AdminPlayers.
+The user wants the user-facing Collection page (`src/pages/Collection.tsx`) to be reorganized to mimic NBA 2K17 MyTeam's collection page system. Let me think about what that looked like:
 
-Let me check AdminCollectionSets quickly via context — it's listed in the file tree. The plan should target that admin page.
+NBA 2K17 MyTeam collections had:
+- A tabbed/paged structure where each "page" represented a collection (e.g. team, theme set)
+- Each collection page showed ALL slots (owned + missing), with missing slots shown as silhouettes/empty
+- The reward card was prominently displayed at the top of each collection page
+- Progress counter "X / Y collected"
+- Tabs/dropdown to switch between collections
 
-## Goal
-Add a bulk-assign tool inside the admin Collection Sets page so the admin can:
-1. Search and multi-select player cards by name with a search bar
-2. Import all players from a Pack, Run, or Team in one click
-3. Assign the selected batch to a collection OR a sub-collection
-4. When assigning to a sub-collection, also auto-set their `collection_id` to the parent collection
+I need to look at the current Collection.tsx more carefully — it currently shows a flat grid of owned cards only, with collection rewards as a small list at the top. The new design should be page-based per collection.
 
-## UI changes (`src/pages/admin/AdminCollectionSets.tsx`)
+Let me check the structure of collections vs sub_collections — collections are top-level, sub_collections nest under them.
 
-Add a new "Bulk Assign Players" panel with:
-- **Target picker**: two selects — Collection (required) + Sub-collection (optional). If sub is chosen, the parent collection auto-fills and is locked.
-- **Player picker** with three tabs:
-  - **Search**: typeahead search bar over `player_cards.name`, multi-select with checkbox chips for chosen players. Shows running count "12 selected".
-  - **Import from Pack**: select a pack → loads `pack_players` → "Add all 30 players" button + per-player checkboxes to deselect any.
-  - **Import from Run**: select a run → loads `run_players` → same UX.
-  - **Import from Team**: select a team → loads `team_players` → same UX.
-- **Selected players staging area**: shows all chosen players (across sources) with × to remove individually + "Clear all" button.
-- **Assign button**: writes `collection_id` (and `sub_collection_id` when applicable) on every selected `player_cards` row in one bulk update.
+## Proposed redesign
 
-## Logic
+Replace the flat grid with a **paginated collection browser**:
 
-- Query keys: reuse `["packs"]`, `["runs"]`, `["teams"]`, plus `["all-player-cards-lite"]` already used elsewhere.
-- Bulk update: one `UPDATE player_cards SET collection_id = ?, sub_collection_id = ? WHERE id IN (…)` via `supabase.from("player_cards").update(...).in("id", ids)`.
-- **Sub-collection auto-parent rule**: if a sub-collection is picked, set both `collection_id = parent` AND `sub_collection_id = chosen`. Sub-collections already store `collection_id` on the row, so we always derive parent from that.
-- Show toast with count: "Added 24 players to Generation of Miracles → Teiko Era".
-- Invalidate `["admin-all-cards-lite"]`, `["collections"]`, `["sub-collections"]` after success.
+### Top-level structure
+- Add a new "View mode" toggle: **All Cards** (current behavior) | **By Collection** (new MyTeam-style view)
+- In "By Collection" mode, show a horizontal scrollable tab/chip bar listing every collection that has cards assigned (e.g. "Generation of Miracles", "Seirin High", etc.)
+- A second-level chip bar appears beneath when the selected collection has sub-collections (e.g. "Teiko Era", "Current Era")
 
-## Files
+### Per-collection page layout
+- **Header card**: collection name + progress bar "12/20 collected (60%)" + the **reward card** displayed prominently (with claim button if completed, locked silhouette if not)
+- **Card grid**: shows ALL `player_cards` in that collection (excluding the reward card itself), with:
+  - Owned cards: rendered normally with `PlayerCard`
+  - Missing cards: rendered as a greyscale/silhouette tile showing only name + position + tier color stripe (so the user knows what to chase)
+- Sort missing cards last, owned cards first by rating
 
+### Data needs (already mostly fetched)
+- `collections`, `sub_collections`, `allPlayerCards`, `ownedCardIds` — all already queried
+- Just need to extend `allPlayerCards` query to include the fields needed to render missing-card placeholders (`name, position1, gem_tier_id, rating`)
+
+### Files touched
 | File | Change |
 |---|---|
-| `src/pages/admin/AdminCollectionSets.tsx` | Add Bulk Assign panel: target picker (collection + optional sub-collection), tabbed source picker (search / pack / run / team), staging list, bulk-assign mutation |
+| `src/pages/Collection.tsx` | Add view-mode toggle, collection/sub-collection tab navigation, per-collection page with reward header + full slot grid (owned + missing placeholders) |
+| `src/components/cards/PlayerCard.tsx` | Add `missing` prop that renders a greyscale silhouette variant (name + position + tier color bar only) |
 
-## Out of scope
-- No changes to the user-facing `src/pages/Collection.tsx`
-- No schema changes (existing `player_cards.collection_id` and `sub_collection_id` columns are sufficient)
-- No reverse "remove from collection" bulk tool (can add later if needed)
+### Out of scope
+- No schema changes
+- "All Cards" flat view stays as-is (toggle preserves the existing UX)
+- No changes to filters in the new view (per-collection pages don't need tier/position filters since they're already scoped)
