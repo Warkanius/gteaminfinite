@@ -514,7 +514,7 @@ export default function Collection() {
   const bg = (c: string) => isHsl(c) ? `hsl(${c})` : c;
 
   // Claimable rewards
-  const claimableRewards = collectionRewardStatus.filter((r) => r.complete && !r.alreadyClaimed);
+  const claimableRewards = collectionRewardStatus.filter((r) => r.complete && !r.reward.alreadyClaimed);
 
   return (
     <div className="space-y-6">
