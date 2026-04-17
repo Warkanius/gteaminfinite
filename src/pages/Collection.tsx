@@ -20,6 +20,9 @@ export default function Collection() {
   const [posFilter, setPosFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"name" | "rating">("rating");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"all" | "by-collection">("all");
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+  const [activeSubCollectionId, setActiveSubCollectionId] = useState<string | null>(null);
 
   // Fetch raw collection entries
   const { data: rawCollection = [], isLoading } = useQuery({
