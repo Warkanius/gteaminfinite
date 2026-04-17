@@ -18,16 +18,57 @@ interface PlayerCardProps {
   badgeCount?: number;
   duplicateCount?: number;
   isLocked?: boolean;
+  missing?: boolean;
   onClick?: () => void;
   className?: string;
 }
 
-export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked, onClick, className }: PlayerCardProps) {
+export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked, missing, onClick, className }: PlayerCardProps) {
   const visuals = resolveCardVisuals(card, gemTier);
   const positions = [card.position1, card.position2].filter(Boolean).join("/");
 
   const isHsl = (c: string) => /^\d+\s/.test(c);
   const bg = (c: string) => isHsl(c) ? `hsl(${c})` : c;
+
+  if (missing) {
+    return (
+      <button
+        onClick={onClick}
+        className={cn(
+          "relative group flex flex-col items-center justify-end rounded-xl border border-dashed border-border/40 p-3 pt-10 transition-transform hover:scale-105 cursor-pointer overflow-hidden w-full aspect-[3/4] bg-muted/20",
+          className,
+        )}
+        style={{
+          boxShadow: `inset 0 0 0 2px ${bg(visuals.glow)}20`,
+        }}
+        title={`Missing: ${card.name}`}
+      >
+        {/* Tier color stripe */}
+        <div
+          className="absolute top-0 left-0 right-0 h-1.5"
+          style={{ background: `linear-gradient(90deg, ${bg(visuals.primary)}, ${bg(visuals.glow)}, ${bg(visuals.secondary)})` }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center opacity-30">
+          <Lock className="w-10 h-10 text-muted-foreground" />
+        </div>
+        <h3 className="text-sm font-semibold text-muted-foreground/80 truncate w-full text-center relative z-10">
+          {card.name}
+        </h3>
+        <div className="flex gap-1 mt-1.5 relative z-10">
+          {positions && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground/70 border-muted-foreground/30">
+              {positions}
+            </Badge>
+          )}
+          {gemTier?.name && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground/70 border-muted-foreground/30">
+              {gemTier.name}
+            </Badge>
+          )}
+        </div>
+      </button>
+    );
+  }
 
   return (
     <button
