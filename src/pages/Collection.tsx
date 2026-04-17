@@ -272,7 +272,11 @@ export default function Collection() {
     }
   }, [viewMode, activeCollectionId, populatedCollections]);
 
-  // Cards belonging to the currently active collection / sub-collection scope
+  // Cards belonging to the currently active collection / sub-collection scope.
+  // We dedupe evo-linked cards into a single slot (keyed by chain root). The
+  // displayed card is the best owned variant in the chain (highest rating); if
+  // the user owns nothing in the chain, we display the base card so the slot
+  // still shows the original art/name.
   const activeScopeCards = useMemo(() => {
     if (!activeCollectionId) return { regular: [], reward: null as any };
     let scope = (allPlayerCards as any[]).filter((pc) => pc.collection_id === activeCollectionId);
@@ -282,17 +286,33 @@ export default function Collection() {
       // top-level scope: cards directly in collection without sub
       scope = scope.filter((pc) => !pc.sub_collection_id);
     }
-    const regular = scope.filter((pc) => !pc.is_collection_reward);
+    const rawRegular = scope.filter((pc) => !pc.is_collection_reward);
     const reward = scope.find((pc) => pc.is_collection_reward) ?? null;
+
+    // Dedupe by chain root. Slot identity = the base/root card in the chain
+    // (so missing slots always show the base art). When owned, we'll swap in
+    // the best owned variant at render time.
+    const allCardsById = new Map<string, any>((allPlayerCards as any[]).map((p: any) => [p.id, p]));
+    const seenRoots = new Set<string>();
+    const slots: any[] = [];
+    for (const pc of rawRegular) {
+      const root = chainRootOf.get(pc.id) ?? pc.id;
+      if (seenRoots.has(root)) continue;
+      seenRoots.add(root);
+      // Prefer the actual base card if it exists in our card list, else fall back to this card.
+      const baseCard = allCardsById.get(root) ?? pc;
+      slots.push(baseCard);
+    }
+
     // owned first (by rating desc), then missing (by rating desc)
-    regular.sort((a: any, b: any) => {
-      const ao = ownedCardIds.has(a.id) ? 1 : 0;
-      const bo = ownedCardIds.has(b.id) ? 1 : 0;
+    slots.sort((a: any, b: any) => {
+      const ao = isOwnedSlot(a.id) ? 1 : 0;
+      const bo = isOwnedSlot(b.id) ? 1 : 0;
       if (ao !== bo) return bo - ao;
       return (b.rating ?? 0) - (a.rating ?? 0);
     });
-    return { regular, reward };
-  }, [activeCollectionId, activeSubCollectionId, allPlayerCards, ownedCardIds]);
+    return { regular: slots, reward };
+  }, [activeCollectionId, activeSubCollectionId, allPlayerCards, ownedChainRoots, chainRootOf]);
 
   // Helper: resolve reward info for a collection or sub_collection row
   type RewardInfo = {
