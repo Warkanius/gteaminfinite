@@ -1,35 +1,42 @@
 
+The user wants a bulk player assignment tool on the **admin** Collections page (or actually the Collection management — let me check). They said "on the collection page". Let me think — they're admin so likely they mean admin collection management. The user-facing Collection page is for viewing owned cards. The admin pages are AdminCollectionSets (which manages collections/sub-collections) and AdminPlayers.
 
-## Bug confirmed (Domination roster mismatch)
+Let me check AdminCollectionSets quickly via context — it's listed in the file tree. The plan should target that admin page.
 
-**Root cause**: Race condition in `LineupSelect.tsx` `handleStart`. When a user clicks "Start Game" on a domination match before `domCpuLineup` finishes loading, the code falls through to the **random CPU branch** because the `dominationGameId && domCpuLineup && domCpuLineup.length > 0` guard fails when `domCpuLineup` is `undefined`. It then pulls 5 random players from the cached `allCards` query (cached from any prior 5v5 visit) — which is how the user ended up with Akashi/Hayama/Mibuchi/Nebuya/Mayuzumi in a "Shutoku" game. The match is then logged as Shutoku because the opponent name comes from props, not from the actual CPU cards.
+## Goal
+Add a bulk-assign tool inside the admin Collection Sets page so the admin can:
+1. Search and multi-select player cards by name with a search bar
+2. Import all players from a Pack, Run, or Team in one click
+3. Assign the selected batch to a collection OR a sub-collection
+4. When assigning to a sub-collection, also auto-set their `collection_id` to the parent collection
 
-**Verified in DB**: Most recent Shutoku game (`a0707a78`, game_order 5) has Midorima/Takao/Otsobo/Miyaji/Kimura assigned in `domination_game_players`, but the `game_logs.player_stats` for that match shows the Rakuzan roster as the CPU side.
+## UI changes (`src/pages/admin/AdminCollectionSets.tsx`)
 
-## Fix
+Add a new "Bulk Assign Players" panel with:
+- **Target picker**: two selects — Collection (required) + Sub-collection (optional). If sub is chosen, the parent collection auto-fills and is locked.
+- **Player picker** with three tabs:
+  - **Search**: typeahead search bar over `player_cards.name`, multi-select with checkbox chips for chosen players. Shows running count "12 selected".
+  - **Import from Pack**: select a pack → loads `pack_players` → "Add all 30 players" button + per-player checkboxes to deselect any.
+  - **Import from Run**: select a run → loads `run_players` → same UX.
+  - **Import from Team**: select a team → loads `team_players` → same UX.
+- **Selected players staging area**: shows all chosen players (across sources) with × to remove individually + "Clear all" button.
+- **Assign button**: writes `collection_id` (and `sub_collection_id` when applicable) on every selected `player_cards` row in one bulk update.
 
-### `src/components/game/LineupSelect.tsx`
-1. **Block the Start button until the right CPU lineup has loaded**:
-   - When `dominationGameId` is set, disable Start until `domCpuLineup !== undefined`.
-   - When `challengeTeamId` is set, disable Start until `challengeCpuLineup !== undefined`.
-   - Add a small "Loading opponent…" hint next to the button while waiting.
-2. **Hard-fail in `handleStart` instead of silently falling through**:
-   - If `dominationGameId` is set but `domCpuLineup` is empty/undefined, show a toast (`"Opponent roster not ready — try again in a moment"`) and return. Same for challenge.
-   - Random-CPU branch should only run when neither `dominationGameId` nor `challengeTeamId` is set.
-3. **Disable the cached random pool from leaking in**:
-   - Add `dominationGameId/challengeTeamId` into the `allCards` query key, or skip even reading it when those are set. Cleanest: keep `enabled: !dominationGameId && !challengeTeamId` and rewrite the random branch behind an explicit `else if (!dominationGameId && !challengeTeamId)` guard.
+## Logic
 
-### `src/pages/Play.tsx` (defensive)
-- If `location.state` is missing entirely (page refresh on `/play/match`), redirect to `/domination` or show "Pick a game first" instead of starting an unconfigured 5v5.
+- Query keys: reuse `["packs"]`, `["runs"]`, `["teams"]`, plus `["all-player-cards-lite"]` already used elsewhere.
+- Bulk update: one `UPDATE player_cards SET collection_id = ?, sub_collection_id = ? WHERE id IN (…)` via `supabase.from("player_cards").update(...).in("id", ids)`.
+- **Sub-collection auto-parent rule**: if a sub-collection is picked, set both `collection_id = parent` AND `sub_collection_id = chosen`. Sub-collections already store `collection_id` on the row, so we always derive parent from that.
+- Show toast with count: "Added 24 players to Generation of Miracles → Teiko Era".
+- Invalidate `["admin-all-cards-lite"]`, `["collections"]`, `["sub-collections"]` after success.
 
-### Out of scope
-- Empty Rakuzan slot at game_order 7 (separate admin cleanup — flag in chat).
-- Duplicate Takao handling (next pass, per your "Domination first" choice).
-
-## Files touched
+## Files
 
 | File | Change |
 |---|---|
-| `src/components/game/LineupSelect.tsx` | Disable Start while expected CPU lineup is loading; fail loudly instead of falling through to random; only run random branch when no dominationGameId/challengeTeamId |
-| `src/pages/Play.tsx` | Bail out if `location.state` is missing on `/play/match` |
+| `src/pages/admin/AdminCollectionSets.tsx` | Add Bulk Assign panel: target picker (collection + optional sub-collection), tabbed source picker (search / pack / run / team), staging list, bulk-assign mutation |
 
+## Out of scope
+- No changes to the user-facing `src/pages/Collection.tsx`
+- No schema changes (existing `player_cards.collection_id` and `sub_collection_id` columns are sufficient)
+- No reverse "remove from collection" bulk tool (can add later if needed)
