@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { describeChallenge } from "@/lib/evoGenerator";
 
 interface CardDetailProps {
   open: boolean;
@@ -292,6 +293,9 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
                       const target = req.target ?? 1;
                       const met = current >= target;
                       const pctReq = Math.min(100, Math.round((current / target) * 100));
+                      const label = req.description?.trim()
+                        ? req.description
+                        : describeChallenge(req.type, target, req.stat);
                       return (
                         <div key={i} className="space-y-0.5">
                           <div className="flex items-center gap-1.5 text-[10px]">
@@ -300,7 +304,7 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
                             ) : (
                               <Circle className="h-3 w-3 text-muted-foreground shrink-0" />
                             )}
-                            <span className={met ? "text-primary" : "text-muted-foreground"}>{req.description}</span>
+                            <span className={met ? "text-primary" : "text-muted-foreground"}>{label}</span>
                           </div>
                           <div className="flex items-center gap-2 ml-4">
                             <Progress value={pctReq} className="h-1 flex-1" />

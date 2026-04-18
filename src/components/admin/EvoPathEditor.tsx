@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Wand2, ChevronDown, Trash2, Plus, Layers } from "lucide-react";
 import { toast } from "sonner";
-import { generateSingleEvoStep, type EvoStep, type CompoundChallenge } from "@/lib/evoGenerator";
+import { generateSingleEvoStep, describeChallenge, type EvoStep, type CompoundChallenge } from "@/lib/evoGenerator";
 import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 import { computeOVR } from "@/lib/ovrUtils";
 
@@ -119,13 +119,29 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
 
   function addCompoundReq(stepIdx: number) {
     const step = steps[stepIdx];
-    const newReq: CompoundChallenge = { type: "points_scored", stat: null, target: 100, description: "" };
+    const newReq: CompoundChallenge = {
+      type: "points_scored",
+      stat: null,
+      target: 100,
+      description: describeChallenge("points_scored", 100, null),
+    };
     updateStep(stepIdx, { compound_challenges: [...step.compound_challenges, newReq] });
   }
 
   function updateCompoundReq(stepIdx: number, reqIdx: number, updates: Partial<CompoundChallenge>) {
     const step = steps[stepIdx];
-    const updated = step.compound_challenges.map((r, i) => i === reqIdx ? { ...r, ...updates } : r);
+    const updated = step.compound_challenges.map((r, i) => {
+      if (i !== reqIdx) return r;
+      const merged = { ...r, ...updates };
+      // Auto-regenerate description when type/stat/target changes and the description
+      // is either empty or still matches the prior auto-generated text.
+      const prevAuto = describeChallenge(r.type, r.target, r.stat);
+      const descTouchedByUser = r.description?.trim() && r.description !== prevAuto;
+      if (!descTouchedByUser && updates.description === undefined) {
+        merged.description = describeChallenge(merged.type, merged.target, merged.stat);
+      }
+      return merged;
+    });
     updateStep(stepIdx, { compound_challenges: updated });
   }
 
