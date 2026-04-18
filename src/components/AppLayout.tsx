@@ -24,7 +24,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <NotificationBell />
             <CurrencyDisplay />
           </header>
-          <div className="flex-1 p-6 relative">
+          <div className="flex-1 p-3 sm:p-6 relative min-w-0">
             <div className="absolute top-1/4 right-1/4 w-[40vw] h-[40vw] bg-primary/5 rounded-full blur-[120px] pointer-events-none -z-10" />
             {children}
           </div>

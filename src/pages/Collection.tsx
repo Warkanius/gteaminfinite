@@ -736,7 +736,7 @@ export default function Collection() {
         <>
           {/* Filters */}
           <div className="flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative flex-1 min-w-[160px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search cards…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
             </div>
@@ -866,7 +866,7 @@ export default function Collection() {
                     <div className="rounded-xl border border-border bg-card p-4 space-y-4">
                       <div>
                         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                          <h2 className="text-lg font-bold">
+                          <h2 className="text-base sm:text-lg font-bold">
                             {colName}
                             {subName && <span className="text-muted-foreground"> → {subName}</span>}
                           </h2>
