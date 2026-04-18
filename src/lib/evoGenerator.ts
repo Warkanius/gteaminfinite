@@ -38,13 +38,20 @@ const STAT_LABELS: Record<string, string> = {
   stat_reb: "rebounds", stat_blk: "blocks", stat_int: "interceptions",
 };
 
-const CHALLENGE_TEMPLATES: Record<string, (target: number, stat?: string) => string> = {
+export const CHALLENGE_TEMPLATES: Record<string, (target: number, stat?: string | null) => string> = {
   points_scored: (t) => `Score ${t} total points with this card`,
   games_won: (t) => `Win ${t} games with this card in your lineup`,
   total_stat: (t, s) => `Record ${t} total ${s ? STAT_LABELS[s] ?? s : "stat rolls"} with this card`,
   single_game_stat: (t, s) => `Record ${t}+ ${s ? STAT_LABELS[s] ?? s : "stat"} in a single game`,
   stat_game_count: (t, s) => `Record ${t} games with 20+ ${s ? STAT_LABELS[s] ?? s : "stat"}`,
 };
+
+/** Build a human-readable description for a challenge requirement. */
+export function describeChallenge(type: string, target: number, stat?: string | null): string {
+  const tpl = CHALLENGE_TEMPLATES[type];
+  if (tpl) return tpl(target, stat ?? undefined);
+  return `${type.replace(/_/g, " ")} — ${target}`;
+}
 
 // Scale challenge difficulty by tier progression step
 const BASE_TARGETS: Record<string, number[]> = {
