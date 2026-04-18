@@ -425,7 +425,7 @@ export default function AdminPacks() {
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)} title="Delete Pack" description="This will delete the pack and all associated player slots." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
 
-      <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} />
+      <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} onSwitchPlayer={setQuickEditPlayerId} />
     </div>
   );
 }
