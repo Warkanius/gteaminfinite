@@ -46,6 +46,18 @@ export default function AdminStarterPacks() {
     },
   });
 
+  // Cards that are evo targets — exclude from starter pack picker
+  const { data: evoTargetIds = new Set<string>() } = useQuery({
+    queryKey: ["evo-target-ids"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("evo_paths")
+        .select("evolves_to_card_id")
+        .not("evolves_to_card_id", "is", null);
+      return new Set((data ?? []).map((r: any) => r.evolves_to_card_id as string));
+    },
+  });
+
   const { data: packPlayers = [], refetch: refetchPlayers } = useQuery({
     queryKey: ["starter-pack-players", managingPack?.id],
     enabled: !!managingPack,
@@ -125,7 +137,7 @@ export default function AdminStarterPacks() {
   });
 
   const assignedIds = new Set(packPlayers.map((pp) => pp.player_card_id));
-  const availablePlayers = playerCards.filter((p) => !assignedIds.has(p.id));
+  const availablePlayers = playerCards.filter((p) => !assignedIds.has(p.id) && !evoTargetIds.has(p.id));
 
   return (
     <div className="space-y-6">

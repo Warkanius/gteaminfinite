@@ -323,15 +323,6 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
                     <span className="text-[10px] font-mono text-muted-foreground">{prog?.current_value ?? 0}/{step.challenge_target}</span>
                   </div>
                 )}
-                {Object.keys(step.stat_boosts ?? {}).length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(step.stat_boosts as Record<string, number>).map(([k, v]) => (
-                      <Badge key={k} variant="outline" className="text-[10px] py-0 px-1">
-                        {k.replace("stat_", "").toUpperCase()} +{v}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           );
