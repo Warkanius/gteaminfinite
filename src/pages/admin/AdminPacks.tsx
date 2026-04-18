@@ -86,6 +86,7 @@ export default function AdminPacks() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [detailPack, setDetailPack] = useState<Pack | null>(null);
+  const [quickEditPlayerId, setQuickEditPlayerId] = useState<string | null>(null);
 
   const { data: packs = [], isLoading } = useQuery({
     queryKey: ["admin-packs"],
