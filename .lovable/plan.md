@@ -1,37 +1,36 @@
 
 
 ## Goal
-Make the Collection grid show smaller cards on iPhone so the user doesn't have to zoom out. Keep design identical — only adjust breakpoints and gap.
+Add the `PlayerQuickEdit` flow into the Pack manager so admins can tweak a player's stats/badges/traits without leaving the pack editor — same UX as in `AdminTeams` and `RunRosterManager`.
 
-## What's wrong now
-In `src/pages/Collection.tsx`, both grids use:
-```
-grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4
-```
-At 430px viewport that's 2 columns → ~195px wide cards (with `aspect-[3/4]` → ~260px tall). Missing/empty slots feel huge because they're nearly half the screen.
+## Where it goes
+`src/pages/admin/AdminPacks.tsx` — inside the "Pack Players" tab of the **Manage** dialog. Each player row currently shows: `#slot | name | X (remove)`. We'll insert a **pencil** button between the name and the remove button.
 
-## Fix (one-line tweak in two places)
+## Changes (one file: `src/pages/admin/AdminPacks.tsx`)
 
-Change both grids to:
-```
-grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3
-```
+1. **Imports**: add `PlayerQuickEdit` and the `Pencil` icon (Pencil already imported).
+2. **State**: add `const [quickEditPlayerId, setQuickEditPlayerId] = useState<string | null>(null);`
+3. **Player row** (around line 315–321): add a pencil button:
+   ```
+   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setQuickEditPlayerId(pp.player_card_id)}>
+     <Pencil className="h-4 w-4" />
+   </Button>
+   ```
+4. **Mount the dialog** at the bottom of the component (alongside the existing `ConfirmDialog`):
+   ```
+   <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} />
+   ```
+5. **Invalidation**: `PlayerQuickEdit` already invalidates `admin-all-players-lite` / `admin-team-players` / `admin-dom-game-players`. Add `pack-players` to that list inside `PlayerQuickEdit.tsx`'s `onSuccess` so the row re-fetches and the new name shows immediately. Also add `player-cards-list` so the combobox at the top of the pack editor reflects renames.
 
-- **3 columns on mobile** → ~125px wide cards, comfortable for a 430px iPhone (and still fine down to 360px).
-- Tighter gap (`gap-2`) on mobile to maximize card real estate; `gap-3` from `sm:` up.
-- Denser grid on tablet/desktop too so the whole page feels more like a binder.
+## Files touched
 
-### Files touched
-
-| File | Lines | Change |
-|---|---|---|
-| `src/pages/Collection.tsx` | 777 ("All" view grid) | Update grid classes |
-| `src/pages/Collection.tsx` | 941 (By‑Collection slot grid) | Same update |
-
-Tab strips, headers, and reward card width (`w-24 sm:w-28`) stay as-is — they already look right.
+| File | Change |
+|---|---|
+| `src/pages/admin/AdminPacks.tsx` | Add quick-edit state, pencil button on each player row, mount `PlayerQuickEdit` |
+| `src/components/admin/PlayerQuickEdit.tsx` | Add `pack-players` and `player-cards-list` to the `onSuccess` query invalidation list |
 
 ## Out of scope
-- No changes to `PlayerCard` itself (already uses `aspect-[3/4] w-full`, so it scales perfectly with the new column width).
-- No changes to other pages (Dashboard, Pack reveal, etc.).
-- No font/badge size changes — those already read fine at the smaller card size based on `PlayerCard`'s `text-sm`/`text-[10px]` scale.
+- No layout changes to the player row beyond adding one icon button.
+- No change to the player combobox or odds tab.
+- Not adding "create new player" from inside the pack editor — only edit existing.
 
