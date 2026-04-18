@@ -318,6 +318,7 @@ export default function AdminPacks() {
                   <div key={pp.id} className="flex items-center gap-3 bg-background border rounded-md p-2">
                     <span className="text-sm font-mono bg-muted px-2 py-1 rounded w-10 text-center">#{pp.slot_number}</span>
                     <span className="flex-1 font-medium">{playerCards.find((p) => p.id === pp.player_card_id)?.name ?? pp.player_card_id}</span>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setQuickEditPlayerId(pp.player_card_id)} title="Quick edit"><Pencil className="h-4 w-4" /></Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeSlotMut.mutate(pp.id)}><X className="h-4 w-4" /></Button>
                   </div>
                 ))}
