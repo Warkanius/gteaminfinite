@@ -798,48 +798,52 @@ export default function Collection() {
           ) : (
             <>
               {/* Collection tabs */}
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
-                {populatedCollections.map((c: any) => (
-                  <button
-                    key={c.id}
-                    onClick={() => { setActiveCollectionId(c.id); setActiveSubCollectionId(null); }}
-                    className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium border transition-colors ${
-                      activeCollectionId === c.id
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-card text-foreground border-border hover:bg-secondary"
-                    }`}
-                  >
-                    {c.name}
-                  </button>
-                ))}
+              <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden pb-2">
+                <div className="flex w-max gap-2 px-1">
+                  {populatedCollections.map((c: any) => (
+                    <button
+                      key={c.id}
+                      onClick={() => { setActiveCollectionId(c.id); setActiveSubCollectionId(null); }}
+                      className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium border transition-colors ${
+                        activeCollectionId === c.id
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-card text-foreground border-border hover:bg-secondary"
+                      }`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Sub-collection tabs */}
               {activeSubCollections.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
-                  <button
-                    onClick={() => setActiveSubCollectionId(null)}
-                    className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-medium border transition-colors ${
-                      activeSubCollectionId === null
-                        ? "bg-secondary text-foreground border-foreground/30"
-                        : "bg-transparent text-muted-foreground border-border hover:bg-secondary/60"
-                    }`}
-                  >
-                    Main
-                  </button>
-                  {activeSubCollections.map((sc: any) => (
+                <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden pb-2">
+                  <div className="flex w-max gap-2 px-1">
                     <button
-                      key={sc.id}
-                      onClick={() => setActiveSubCollectionId(sc.id)}
+                      onClick={() => setActiveSubCollectionId(null)}
                       className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-medium border transition-colors ${
-                        activeSubCollectionId === sc.id
+                        activeSubCollectionId === null
                           ? "bg-secondary text-foreground border-foreground/30"
                           : "bg-transparent text-muted-foreground border-border hover:bg-secondary/60"
                       }`}
                     >
-                      {sc.name}
+                      Main
                     </button>
-                  ))}
+                    {activeSubCollections.map((sc: any) => (
+                      <button
+                        key={sc.id}
+                        onClick={() => setActiveSubCollectionId(sc.id)}
+                        className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-medium border transition-colors ${
+                          activeSubCollectionId === sc.id
+                            ? "bg-secondary text-foreground border-foreground/30"
+                            : "bg-transparent text-muted-foreground border-border hover:bg-secondary/60"
+                        }`}
+                      >
+                        {sc.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
