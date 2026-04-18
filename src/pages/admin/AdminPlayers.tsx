@@ -177,7 +177,7 @@ export default function AdminPlayers() {
               challenge_type: s.challenge_type,
               challenge_target: s.challenge_target,
               challenge_stat: s.challenge_stat || null,
-              stat_boosts: s.stat_boosts,
+              stat_boosts: {},
               new_badges: s.new_badges,
               evolves_to_card_id: s.evolves_to_card_id || null,
               compound_challenges: s.compound_challenges,

@@ -22,7 +22,6 @@ export interface EvoStep {
   challenge_type: string;
   challenge_target: number;
   challenge_stat: string | null;
-  stat_boosts: Record<string, number>;
   new_badges: { badge_id: string; tier: string }[];
   evolves_to_card_id: string | null;
   compound_challenges: CompoundChallenge[];
@@ -101,18 +100,6 @@ export function generateSingleEvoStep(
   const targets = BASE_TARGETS[challengeType];
   const target = targets[Math.min(stepNum, targets.length - 1)];
 
-  // Stat boosts: boost the card's weaker stats more to round them out
-  const boostCount = 3 + (stepNum > 2 ? 1 : 0);
-  const weakStats = sortedStats.slice(-boostCount).map(s => s.key);
-  const statBoosts: Record<string, number> = {};
-  for (const stat of weakStats) {
-    const boost = stepNum >= 3 ? 2 : 1;
-    const currentVal = cardStats[stat] ?? 0;
-    if (currentVal + boost <= 99) {
-      statBoosts[stat] = boost;
-    }
-  }
-
   // Badge upgrades — upgrade one existing badge
   const TIERS_ORDER = ["base", "gold", "hof", "diamond", "actolytrene"];
   const newBadges: { badge_id: string; tier: string }[] = [];
@@ -136,7 +123,6 @@ export function generateSingleEvoStep(
     challenge_type: challengeType,
     challenge_target: target,
     challenge_stat: challengeStat,
-    stat_boosts: statBoosts,
     new_badges: newBadges,
     evolves_to_card_id: null,
     compound_challenges: [],

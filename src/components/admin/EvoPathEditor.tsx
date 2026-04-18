@@ -70,7 +70,6 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
         challenge_type: s.challenge_type,
         challenge_target: s.challenge_target,
         challenge_stat: (s as any).challenge_stat ?? null,
-        stat_boosts: (s.stat_boosts as Record<string, number>) ?? {},
         new_badges: (s.new_badges as any[]) ?? [],
         evolves_to_card_id: (s as any).evolves_to_card_id ?? null,
         compound_challenges: ((s as any).compound_challenges as CompoundChallenge[]) ?? [],
@@ -102,7 +101,6 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
       challenge_type: "points_scored",
       challenge_target: 100,
       challenge_stat: null,
-      stat_boosts: {},
       new_badges: [],
       evolves_to_card_id: null,
       compound_challenges: [],
@@ -302,32 +300,6 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
                   />
                 </div>
 
-                {/* Stat boosts inline */}
-                <div className="space-y-1">
-                  <Label className="text-xs">Stat Boosts</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {STAT_KEYS.map(k => {
-                      const val = step.stat_boosts[k] ?? 0;
-                      return (
-                        <div key={k} className="flex items-center gap-1">
-                          <span className="text-[10px] font-mono text-muted-foreground w-6">{STAT_LABELS[k]}</span>
-                          <Input
-                            type="number"
-                            className="h-6 w-12 text-xs text-center p-0"
-                            value={val || ""}
-                            placeholder="0"
-                            onChange={(e) => {
-                              const v = Number(e.target.value);
-                              const boosts = { ...step.stat_boosts };
-                              if (v) boosts[k] = v; else delete boosts[k];
-                              updateStep(idx, { stat_boosts: boosts });
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
             ))}
           </div>
