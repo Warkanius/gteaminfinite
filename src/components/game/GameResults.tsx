@@ -8,6 +8,7 @@ import { STAT_LABELS, STATS, type CardGameResult, type StatKey } from "@/lib/gam
 import { PackReveal } from "@/components/packs/PackReveal";
 import type { FullGameResult } from "@/pages/Play";
 import { trackEvoProgress } from "@/lib/evoProgressTracker";
+import { toast } from "sonner";
 
 const DEFAULT_WIN_REWARD = 100;
 
@@ -44,6 +45,12 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
   const [saved, setSaved] = useState(false);
   const [rewardCards, setRewardCards] = useState<PulledCard[] | null>(null);
   const [showReveal, setShowReveal] = useState(false);
+  const [choiceState, setChoiceState] = useState<{
+    eligibleCards: PulledCard[];
+    packId: string;
+    inventoryId: string | null;
+  } | null>(null);
+  const [confirmingChoice, setConfirmingChoice] = useState(false);
   const won = result.userTotal > result.cpuTotal;
   const tied = result.userTotal === result.cpuTotal;
   const reward = coinReward ?? DEFAULT_WIN_REWARD;
@@ -97,25 +104,61 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
 
         // Open reward pack if present
         if (packReward) {
+          let invItemId: string | null = null;
           try {
-            // Insert pack into inventory first so open-pack treats it as free
-            const { data: invItem } = await supabase
+            // Insert pack into inventory first so open-pack treats it as free.
+            // If anything goes wrong below, the row stays so the user can open
+            // it manually from the Pack Market.
+            const { data: invItem, error: invErr } = await supabase
               .from("user_pack_inventory")
               .insert({ user_id: user.id, pack_id: packReward, source: "challenge_reward" })
               .select("id")
               .single();
 
-            if (invItem) {
-              const { data } = await supabase.functions.invoke("open-pack", {
+            if (invErr || !invItem) {
+              console.error("[GameResults] failed to add reward pack to inventory", invErr);
+              toast.error("Couldn't grant reward pack", {
+                description: invErr?.message ?? "Please contact support.",
+              });
+            } else {
+              invItemId = invItem.id;
+              const { data, error } = await supabase.functions.invoke("open-pack", {
                 body: { inventory_id: invItem.id },
               });
-              if (data?.cards && data.cards.length > 0) {
+
+              if (error || !data) {
+                console.error("[GameResults] open-pack invoke failed", error, data);
+                toast.error("Reward pack added to inventory", {
+                  description: "Open it from the Pack Market.",
+                });
+              } else if (data.error) {
+                console.error("[GameResults] open-pack returned error", data.error);
+                toast.error("Reward pack added to inventory", {
+                  description: "Open it from the Pack Market.",
+                });
+              } else if (data.player_choice && Array.isArray(data.eligible_cards) && data.eligible_cards.length > 0) {
+                // Player's Choice slot — render selection UI; pack inventory
+                // row is preserved server-side until the user confirms.
+                setChoiceState({
+                  eligibleCards: data.eligible_cards,
+                  packId: data.pack_id,
+                  inventoryId: invItemId,
+                });
+              } else if (Array.isArray(data.cards) && data.cards.length > 0) {
                 setRewardCards(data.cards);
                 setShowReveal(true);
+              } else {
+                console.error("[GameResults] open-pack returned no cards or choice", data);
+                toast.error("Reward pack added to inventory", {
+                  description: "Open it from the Pack Market.",
+                });
               }
             }
           } catch (e) {
-            console.error("Failed to open reward pack:", e);
+            console.error("[GameResults] Failed to open reward pack:", e);
+            toast.error("Reward pack added to inventory", {
+              description: "Open it from the Pack Market.",
+            });
           }
         }
 
@@ -165,6 +208,50 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
   }, [user, saved, result, won, reward, mode, opponentName, packReward, gemReward, cardRewardId, challengeId]);
 
   const isDomination = mode === "domination";
+
+  async function handleConfirmChoice(cardId: string) {
+    if (!choiceState) return;
+    setConfirmingChoice(true);
+    const { data, error } = await supabase.functions.invoke("open-pack", {
+      body: {
+        confirm_choice_card_id: cardId,
+        pack_id: choiceState.packId,
+        inventory_id: choiceState.inventoryId,
+      },
+    });
+    setConfirmingChoice(false);
+    if (error || !data || data.error) {
+      console.error("[GameResults] confirm choice failed", error, data);
+      toast.error("Couldn't confirm pick", {
+        description: data?.error ?? error?.message ?? "Try again from the Pack Market.",
+      });
+      return;
+    }
+    if (Array.isArray(data.cards) && data.cards.length > 0) {
+      setRewardCards(data.cards);
+      setShowReveal(true);
+      setChoiceState(null);
+    } else {
+      toast.error("Pick saved but card data missing", {
+        description: "Check your collection.",
+      });
+      setChoiceState(null);
+    }
+  }
+
+  if (choiceState) {
+    return (
+      <PackReveal
+        cards={[]}
+        playerChoice
+        eligibleCards={choiceState.eligibleCards}
+        onConfirmChoice={handleConfirmChoice}
+        confirmingChoice={confirmingChoice}
+        onOpenAnother={() => setChoiceState(null)}
+        onClose={() => setChoiceState(null)}
+      />
+    );
+  }
 
   if (showReveal && rewardCards) {
     return (

@@ -2,6 +2,8 @@ import { useState, useRef, useCallback } from "react";
 import { RevealCard, type RevealCardHandle } from "./RevealCard";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { PlayerCard } from "@/components/cards/PlayerCard";
+import { cn } from "@/lib/utils";
 
 interface PulledCard {
   id: string;
@@ -28,11 +30,27 @@ interface PackRevealProps {
   onClose: () => void;
   packProgress?: PackProgress | null;
   onNextPack?: () => void;
+  // Player-choice mode
+  playerChoice?: boolean;
+  eligibleCards?: PulledCard[];
+  onConfirmChoice?: (cardId: string) => void | Promise<void>;
+  confirmingChoice?: boolean;
 }
 
-export function PackReveal({ cards, onOpenAnother, onClose, packProgress, onNextPack }: PackRevealProps) {
+export function PackReveal({
+  cards,
+  onOpenAnother,
+  onClose,
+  packProgress,
+  onNextPack,
+  playerChoice,
+  eligibleCards,
+  onConfirmChoice,
+  confirmingChoice,
+}: PackRevealProps) {
   const navigate = useNavigate();
   const [revealedCount, setRevealedCount] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const allRevealed = revealedCount >= cards.length;
   const cardRefs = useRef<(RevealCardHandle | null)[]>([]);
 
@@ -43,6 +61,51 @@ export function PackReveal({ cards, onOpenAnother, onClose, packProgress, onNext
       }
     });
   }, []);
+
+  // ===== Player Choice Mode =====
+  if (playerChoice && eligibleCards && eligibleCards.length > 0) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col items-center justify-start gap-4 p-4 overflow-y-auto">
+        <h2 className="font-display text-2xl font-bold text-foreground uppercase tracking-wider mt-4 text-center">
+          Player's Choice — Pick Your Card
+        </h2>
+        <p className="text-sm text-muted-foreground text-center max-w-md">
+          You rolled the rare Player's Choice slot. Select one card to add to your collection.
+        </p>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-5xl w-full">
+          {eligibleCards.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              disabled={confirmingChoice}
+              onClick={() => setSelectedId(card.id)}
+              className={cn(
+                "rounded-lg transition-all p-1 disabled:opacity-50",
+                selectedId === card.id
+                  ? "ring-4 ring-primary scale-105"
+                  : "ring-2 ring-transparent hover:ring-primary/50"
+              )}
+            >
+              <PlayerCard card={card as any} />
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-3 sticky bottom-4 mt-2">
+          <Button
+            disabled={!selectedId || confirmingChoice}
+            onClick={() => selectedId && onConfirmChoice?.(selectedId)}
+          >
+            {confirmingChoice ? "Adding…" : "Confirm Selection"}
+          </Button>
+          <Button variant="ghost" onClick={onClose} disabled={confirmingChoice}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const isMultiPack = packProgress && packProgress.total > 1;
   const isLastPack = isMultiPack && packProgress.current >= packProgress.total;

@@ -94,6 +94,20 @@ Deno.serve(async (req) => {
         source: "standard_pack",
       });
 
+      // Log purchase (player choice resolved)
+      await admin.from("pack_purchases").insert({
+        user_id: userId,
+        pack_id,
+        quantity: 1,
+        coins_spent: 0,
+        cards_pulled: [confirm_choice_card_id],
+      });
+
+      // NOW delete the inventory item (deferred from initial player_choice roll)
+      if (inventory_id) {
+        await admin.from("user_pack_inventory").delete().eq("id", inventory_id).eq("user_id", userId);
+      }
+
       // Fetch card data
       const { data: cards } = await admin
         .from("player_cards")
@@ -186,16 +200,15 @@ Deno.serve(async (req) => {
       // Handle player_choice slot
       if (slot === "player_choice") {
         isPlayerChoice = true;
-        // Deduct coins first
+        // Deduct coins first (paid opens only)
         if (!isFreeOpen) {
           await admin
             .from("profiles")
             .update({ coins: profile.coins - totalCost })
             .eq("id", profile.id);
         }
-        if (isFreeOpen && inventory_id) {
-          await admin.from("user_pack_inventory").delete().eq("id", inventory_id);
-        }
+        // NOTE: do NOT delete the inventory row here. Defer to confirm_choice_card_id
+        // so the pack survives if the user backs out or the UI fails.
 
         // Return eligible cards for user to pick from
         const cardIds = allPackPlayers!.map(p => p.player_card_id);
@@ -208,6 +221,7 @@ Deno.serve(async (req) => {
           player_choice: true,
           eligible_cards: cards || [],
           pack_id,
+          inventory_id: inventory_id ?? null,
           coins_remaining: isFreeOpen ? profile.coins : profile.coins - totalCost,
           coins_spent: totalCost,
         });
