@@ -98,6 +98,20 @@ export default function AdminPacks() {
     queryFn: async () => { const { data } = await supabase.from("player_cards").select("id, name").order("name"); return data ?? []; },
   });
 
+  // Cards that are evo targets (should be excluded from pack pools)
+  const { data: evoTargetIds = new Set<string>() } = useQuery({
+    queryKey: ["evo-target-ids"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("evo_paths")
+        .select("evolves_to_card_id")
+        .not("evolves_to_card_id", "is", null);
+      return new Set((data ?? []).map((r: any) => r.evolves_to_card_id as string));
+    },
+  });
+
+  const selectablePlayerCards = playerCards.filter((p) => !evoTargetIds.has(p.id));
+
   const { data: packPlayers = [] } = useQuery({
     queryKey: ["pack-players", detailPack?.id],
     enabled: !!detailPack,
