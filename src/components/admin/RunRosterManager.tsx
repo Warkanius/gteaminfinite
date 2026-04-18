@@ -800,7 +800,7 @@ export function RunRosterManager({ runId }: Props) {
         </CollapsibleContent>
       </Collapsible>
 
-      <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} />
+      <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} onSwitchPlayer={setQuickEditPlayerId} />
     </div>
   );
 }
