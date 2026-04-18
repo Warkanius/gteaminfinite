@@ -51,7 +51,7 @@ export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked
         <div className="absolute inset-0 flex items-center justify-center opacity-30">
           <Lock className="w-10 h-10 text-muted-foreground" />
         </div>
-        <h3 className="text-sm font-semibold text-muted-foreground/80 truncate w-full text-center relative z-10">
+        <h3 className="text-[11px] sm:text-sm font-semibold text-muted-foreground/80 w-full text-center relative z-10 leading-tight line-clamp-2 break-words px-1">
           {card.name}
         </h3>
         <div className="flex gap-1 mt-1.5 relative z-10">
@@ -119,13 +119,13 @@ export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked
       )}
 
       {/* Card name */}
-      <h3 className="text-sm font-semibold text-foreground truncate w-full text-center drop-shadow-md">
+      <h3 className="text-[11px] sm:text-sm font-semibold text-foreground w-full text-center drop-shadow-md leading-tight line-clamp-2 break-words px-1">
         {card.name}
       </h3>
 
       {/* Gem name */}
       {card.gem_name && (
-        <p className="text-[10px] text-foreground/70 truncate w-full text-center mt-0.5">
+        <p className="text-[10px] text-foreground/70 w-full text-center mt-0.5 leading-tight line-clamp-2 break-words px-1">
           {card.gem_name}
         </p>
       )}
