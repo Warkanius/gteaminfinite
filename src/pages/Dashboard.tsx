@@ -106,14 +106,61 @@ export default function Dashboard() {
       const { data, error } = await supabase.functions.invoke("claim-starter-pack", {
         body: { pack_id: packId },
       });
-      if (error || data?.error) {
-        toast({ title: "Claim Failed", description: data?.error || error?.message, variant: "destructive" });
-      } else {
-        setShowStarterPicker(false);
-        setRevealCards(data.cards);
+
+      if (error) {
+        console.error("[claimPack] invoke error", error);
+        toast({
+          title: "Claim Failed",
+          description: error.message || "Network error — please try again.",
+          variant: "destructive",
+        });
+        setClaiming(false);
+        return;
       }
-    } catch {
-      toast({ title: "Error", description: "Something went wrong", variant: "destructive" });
+
+      if (!data) {
+        console.error("[claimPack] no data returned from edge function");
+        toast({
+          title: "Claim Failed",
+          description: "No response from server. Please try again.",
+          variant: "destructive",
+        });
+        setClaiming(false);
+        return;
+      }
+
+      if (data.error) {
+        console.error("[claimPack] server returned error", data);
+        toast({
+          title: "Claim Failed",
+          description: data.error + (data.detail ? ` (${data.detail})` : ""),
+          variant: "destructive",
+        });
+        setClaiming(false);
+        return;
+      }
+
+      const cards = Array.isArray(data.cards) ? data.cards : [];
+      if (cards.length === 0) {
+        console.error("[claimPack] success response had no cards", data);
+        toast({
+          title: "Something went wrong",
+          description: "No cards were returned. Please try again.",
+          variant: "destructive",
+        });
+        setClaiming(false);
+        return;
+      }
+
+      setShowStarterPicker(false);
+      setRevealCards(cards);
+    } catch (err: any) {
+      console.error("[claimPack] exception", err);
+      toast({
+        title: "Error",
+        description: err?.message || "Something went wrong",
+        variant: "destructive",
+      });
     }
     setClaiming(false);
   }
@@ -178,8 +225,18 @@ export default function Dashboard() {
       </div>
 
       {/* Starter Pack Selection Dialog */}
-      <Dialog open={showStarterPicker} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-2xl" onPointerDownOutside={(e) => e.preventDefault()}>
+      <Dialog
+        open={showStarterPicker}
+        onOpenChange={(open) => {
+          if (!claiming) setShowStarterPicker(open);
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-2xl"
+          onPointerDownOutside={(e) => {
+            if (claiming) e.preventDefault();
+          }}
+        >
           <DialogHeader>
             <DialogTitle className="font-display text-2xl flex items-center gap-2">
               <Sparkles className="h-6 w-6 text-gem-gold" />
@@ -223,6 +280,16 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={claiming}
+              onClick={() => setShowStarterPicker(false)}
+            >
+              Skip for now
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
