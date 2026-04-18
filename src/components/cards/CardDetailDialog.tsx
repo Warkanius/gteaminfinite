@@ -271,7 +271,9 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
                   <ArrowRight className="h-3 w-3 text-muted-foreground" />
                   <span className="font-medium" style={{ color: glowColor }}>{(step as any).to_tier?.name ?? "?"}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">{step.challenge_description}</p>
+                <p className="text-xs text-muted-foreground">
+                  {isCompound ? "Complete all of the following:" : step.challenge_description}
+                </p>
                 {canClaim && (
                   <Button
                     size="sm"
