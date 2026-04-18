@@ -938,7 +938,7 @@ export default function Collection() {
                         No player cards in this collection yet.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
+                      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-1.5 sm:gap-2">
                         {activeScopeCards.regular.map((slotCard: any) => {
                           // Slot is identified by chain root. Find the best owned variant
                           // anywhere in the chain (highest rating); if none owned, render
