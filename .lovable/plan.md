@@ -1,57 +1,59 @@
 
 
-## What's wrong
-`PlayerCard` truncates card names with `truncate` (single line + ellipsis) on both the missing-slot view (line 53) and the regular card view (line 122). At 3-column mobile widths (~130px wide cards), longer names like "Giannis Antetokounmpo" or "Shai Gilgeous-Alexander" get cut to "Giannis Antet…".
+## Goal
+1. Remove the "Stat Boosts" feature entirely from evolution path management (admin player creation + pack quick edit + anywhere else it appears).
+2. Ensure only **original** (non-evolved) cards appear in pack pools — evo versions stay in the DB but are excluded from pack player pickers/admin pack rosters.
 
-## Fix (one file: `src/components/cards/PlayerCard.tsx`)
+## Investigation needed
+Let me verify the exact code paths.
 
-Swap single-line `truncate` for a 2-line clamp on the name, and let the gem name wrap to 2 lines too. This keeps the card aspect ratio intact (the name area is at the bottom of a fixed `aspect-[3/4]` button) while showing the full name in almost every realistic case.
+- `src/components/admin/EvoPathEditor.tsx` — has `stat_boosts` UI/state
+- `src/lib/evoProgressTracker.ts` — applies stat boosts at evolution time
+- `src/pages/admin/AdminPacks.tsx` — player picker for packs
+- `src/pages/admin/AdminPlayers.tsx` — uses EvoPathEditor; also creates evo versions
 
-### Missing slot name (line 53)
-```tsx
-// from:
-<h3 className="text-sm font-semibold text-muted-foreground/80 truncate w-full text-center relative z-10">
-// to:
-<h3 className="text-[11px] sm:text-sm font-semibold text-muted-foreground/80 w-full text-center relative z-10 leading-tight line-clamp-2 break-words">
-```
+An "original" card = a `player_cards` row that is NOT referenced by any `evo_paths.evolves_to_card_id`. That's the cleanest way to identify originals without a schema change.
 
-### Regular card name (line 122)
-```tsx
-// from:
-<h3 className="text-sm font-semibold text-foreground truncate w-full text-center drop-shadow-md">
-// to:
-<h3 className="text-[11px] sm:text-sm font-semibold text-foreground w-full text-center drop-shadow-md leading-tight line-clamp-2 break-words px-1">
-```
+## Plan
 
-### Gem name (line 128)
-```tsx
-// from:
-<p className="text-[10px] text-foreground/70 truncate w-full text-center mt-0.5">
-// to:
-<p className="text-[10px] text-foreground/70 w-full text-center mt-0.5 leading-tight line-clamp-2 break-words px-1">
-```
+### Part 1 — Remove Stat Boosts everywhere
 
-## Why this works
-- `line-clamp-2` lets long names wrap to a second line and only ellipsizes if they exceed 2 lines (rare).
-- `text-[11px] sm:text-sm` shrinks the name slightly on mobile so 2 lines comfortably fit in the existing card footer area without changing the card's aspect ratio.
-- `break-words` prevents very long single tokens (e.g. hyphenated last names) from overflowing horizontally.
-- `px-1` gives the text 4px breathing room from the card edges.
-- Tailwind already supports `line-clamp-*` utilities natively (v3.3+), no plugin needed.
+**`src/components/admin/EvoPathEditor.tsx`**
+- Remove the entire "Stat Boosts" section (the 9-stat grid editor per step).
+- Remove `stat_boosts` from the local step state shape, default values, and the `onStepsChange` payload.
+- Keep the column in `evo_paths` (no migration); just always write `{}`.
 
-## What stays the same
-- Card aspect ratio (`aspect-[3/4]`), gradient background, glow, animations.
-- Star rating, badge count, duplicate badge, lock icon positions.
-- Position / tier chips below the name.
-- All other pages and grids.
+**`src/lib/evoProgressTracker.ts`** (and any consumers)
+- Remove the code path that reads `evo_paths.stat_boosts` and applies them to the player when an evolution completes. Evolution will now rely solely on `evolves_to_card_id` swap.
+- Verify nothing else depends on `stat_boosts`.
 
-## Files touched
+**`src/components/admin/PlayerQuickEdit.tsx`**
+- Already uses `EvoPathEditor`, so it inherits the removal. No extra change needed beyond confirming.
+
+**`src/pages/admin/AdminPlayers.tsx`**
+- Same — inherits removal via `EvoPathEditor`.
+
+### Part 2 — Exclude evo versions from pack pools
+
+**`src/pages/admin/AdminPacks.tsx`**
+- In the query that lists selectable players for a pack (e.g. `pack-players-picker` / `admin-all-players-lite` usage in pack context), filter out any `player_card.id` that appears in `evo_paths.evolves_to_card_id`.
+- Approach: fetch the set of `evolves_to_card_id` (non-null) once via `useQuery`, then `.filter()` the player list client-side. Lightweight — same dataset is already loaded.
+- Apply the same filter to the **starter pack** picker (`AdminStarterPacks.tsx`) and any other "pick a card to put in a pack" UI: search for usages of `pack_players` insertions.
+
+**Out of scope**
+- Does not touch `team_players`, `domination_game_players`, `run_players`, `auction_listings`, or `gem_market_listings` — user only asked about packs.
+- Does not delete existing `pack_players` rows that already point at evo versions; we'll surface a one-time admin warning in the pack editor if any current pack contains an evo card (badge "Evo version — won't display in pool" next to the row), but won't auto-delete.
+
+### Files to update
 
 | File | Change |
 |---|---|
-| `src/components/cards/PlayerCard.tsx` | Replace `truncate` on name + gem name with 2-line clamp + slightly smaller mobile font |
+| `src/components/admin/EvoPathEditor.tsx` | Remove Stat Boosts UI + state + payload |
+| `src/lib/evoProgressTracker.ts` | Remove stat-boost application at evolution time |
+| `src/pages/admin/AdminPacks.tsx` | Filter evo cards out of pack player picker; warn on existing evo rows |
+| `src/pages/admin/AdminStarterPacks.tsx` | Same filter for starter pack picker |
 
-## Out of scope
-- No grid column changes.
-- No `index.css` / `AppLayout` changes.
-- No changes to other card components (e.g. `RevealCard`).
+### Not changed
+- DB schema (column stays, ignored).
+- Other admin tools, gameplay, public-facing pages.
 
