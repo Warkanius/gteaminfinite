@@ -1,87 +1,57 @@
 
-## What’s actually wrong
-The last tweak changed the slot grid, but the real mobile bug is still in the page shell:
 
-1. The app is still using a **document-level horizontal clamp** (`html, body { overflow-x: hidden; max-width: 100vw; }`), so iPhone is clipping wide content instead of letting the Collection tab rows scroll naturally.
-2. The Collection chip rows are not built as a true “outer scroller + inner content” pattern, so long collection lists can get visually cut off.
-3. `AppLayout` already has `min-w-0` on the inner content wrapper, but the **`main` flex item itself** still needs `min-w-0`, otherwise wide Collection content can force bad width calculations.
+## What's wrong
+`PlayerCard` truncates card names with `truncate` (single line + ellipsis) on both the missing-slot view (line 53) and the regular card view (line 122). At 3-column mobile widths (~130px wide cards), longer names like "Giannis Antetokounmpo" or "Shai Gilgeous-Alexander" get cut to "Giannis Antet…".
 
-That’s why it feels like “nothing changed”: the grid changed, but the scroll/container bug did not.
+## Fix (one file: `src/components/cards/PlayerCard.tsx`)
 
-## Fix
-Keep the current aesthetic and keep the By Collection grid at 3 columns. Change the layout/scroll behavior instead.
+Swap single-line `truncate` for a 2-line clamp on the name, and let the gem name wrap to 2 lines too. This keeps the card aspect ratio intact (the name area is at the bottom of a fixed `aspect-[3/4]` button) while showing the full name in almost every realistic case.
 
-### 1. `src/index.css`
-Stop clamping the entire document width globally.
-
-- Remove the global `max-width: 100vw`
-- Remove the global `overflow-x: hidden` from `html, body`
-- Keep `-webkit-text-size-adjust: 100%` / `text-size-adjust: 100%`
-
-Result: iPhone text sizing stays stable, but Collection’s horizontal scrollers won’t get clipped by the document.
-
-### 2. `src/components/AppLayout.tsx`
-Move overflow control to the app shell and fix the flex width negotiation.
-
-Change:
+### Missing slot name (line 53)
 ```tsx
-<div className="min-h-screen flex w-full">
-...
-<main className="flex-1 flex flex-col">
+// from:
+<h3 className="text-sm font-semibold text-muted-foreground/80 truncate w-full text-center relative z-10">
+// to:
+<h3 className="text-[11px] sm:text-sm font-semibold text-muted-foreground/80 w-full text-center relative z-10 leading-tight line-clamp-2 break-words">
 ```
 
-To:
+### Regular card name (line 122)
 ```tsx
-<div className="min-h-screen flex w-full overflow-x-hidden">
-...
-<main className="flex-1 min-w-0 flex flex-col">
+// from:
+<h3 className="text-sm font-semibold text-foreground truncate w-full text-center drop-shadow-md">
+// to:
+<h3 className="text-[11px] sm:text-sm font-semibold text-foreground w-full text-center drop-shadow-md leading-tight line-clamp-2 break-words px-1">
 ```
 
-Result: the app still won’t blow out horizontally, but inner scroll regions can behave correctly.
-
-### 3. `src/pages/Collection.tsx`
-Convert both chip rows into explicit horizontal scrollers.
-
-For both:
-- Collection tabs
-- Sub-collection tabs
-
-Change from a single flex container:
+### Gem name (line 128)
 ```tsx
-<div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
-  ...buttons
-</div>
+// from:
+<p className="text-[10px] text-foreground/70 truncate w-full text-center mt-0.5">
+// to:
+<p className="text-[10px] text-foreground/70 w-full text-center mt-0.5 leading-tight line-clamp-2 break-words px-1">
 ```
 
-To a two-layer structure:
-```tsx
-<div className="w-full min-w-0 overflow-x-auto overflow-y-hidden pb-2">
-  <div className="flex w-max gap-2 px-1">
-    ...buttons
-  </div>
-</div>
-```
-
-This ensures:
-- the row is constrained to the phone width
-- the inner chip list can extend naturally
-- you can scroll all the way to the last collection
-- the row won’t get cut off by the page shell
+## Why this works
+- `line-clamp-2` lets long names wrap to a second line and only ellipsizes if they exceed 2 lines (rare).
+- `text-[11px] sm:text-sm` shrinks the name slightly on mobile so 2 lines comfortably fit in the existing card footer area without changing the card's aspect ratio.
+- `break-words` prevents very long single tokens (e.g. hyphenated last names) from overflowing horizontally.
+- `px-1` gives the text 4px breathing room from the card edges.
+- Tailwind already supports `line-clamp-*` utilities natively (v3.3+), no plugin needed.
 
 ## What stays the same
-- All Cards grid stays reverted to the original layout
-- By Collection grid stays at `grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6`
-- Same colors, same card visuals, same typography, same overall look
-- No changes to Pack Market, Gem Market, Dashboard, etc.
+- Card aspect ratio (`aspect-[3/4]`), gradient background, glow, animations.
+- Star rating, badge count, duplicate badge, lock icon positions.
+- Position / tier chips below the name.
+- All other pages and grids.
 
-## Files to update
-- `src/index.css`
-- `src/components/AppLayout.tsx`
-- `src/pages/Collection.tsx`
+## Files touched
 
-## Expected outcome
-After this change:
-- you should not need to zoom out on iPhone
-- the By Collection slots should fit normally at 3 columns
-- the collection/sub-collection chip rows should scroll fully instead of getting cut off
-- the page should keep the same aesthetic, just behave correctly on mobile
+| File | Change |
+|---|---|
+| `src/components/cards/PlayerCard.tsx` | Replace `truncate` on name + gem name with 2-line clamp + slightly smaller mobile font |
+
+## Out of scope
+- No grid column changes.
+- No `index.css` / `AppLayout` changes.
+- No changes to other card components (e.g. `RevealCard`).
+
