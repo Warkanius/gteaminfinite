@@ -302,14 +302,8 @@ export function RunRosterManager({ runId }: Props) {
       const template = RUN_TEMPLATES.find(t => t.name === templateName);
       if (!template) throw new Error("Template not found");
 
-      // Only fill remaining slots
-      const existingCount = rosterCardIds.size;
-      const remainingSlots = template.slots.slice(existingCount);
-
-      if (remainingSlots.length === 0) {
-        toast.info("Roster is already full for this template.");
-        return [];
-      }
+      // Always add a fresh batch of all template slots (3 players)
+      const remainingSlots = template.slots;
 
       const cards = [];
       for (const slot of remainingSlots) {
