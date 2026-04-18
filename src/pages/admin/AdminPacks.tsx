@@ -316,7 +316,7 @@ export default function AdminPacks() {
                 <div className="space-y-1 flex-1">
                   <Label>Player</Label>
                   <PlayerCombobox
-                    players={playerCards}
+                    players={selectablePlayerCards}
                     value={slotPlayer}
                     onValueChange={setSlotPlayer}
                     placeholder="Search players…"
@@ -326,16 +326,22 @@ export default function AdminPacks() {
                   <Plus className="h-4 w-4 mr-1" /> Add Player
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Players are auto-assigned incrementing slot numbers. Slot determines which odds tier the player falls into.</p>
+              <p className="text-xs text-muted-foreground">Players are auto-assigned incrementing slot numbers. Slot determines which odds tier the player falls into. Evo versions are hidden — only original cards appear in packs.</p>
               <div className="space-y-2">
-                {packPlayers.map((pp) => (
-                  <div key={pp.id} className="flex items-center gap-3 bg-background border rounded-md p-2">
-                    <span className="text-sm font-mono bg-muted px-2 py-1 rounded w-10 text-center">#{pp.slot_number}</span>
-                    <span className="flex-1 font-medium">{playerCards.find((p) => p.id === pp.player_card_id)?.name ?? pp.player_card_id}</span>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setQuickEditPlayerId(pp.player_card_id)} title="Quick edit"><Pencil className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeSlotMut.mutate(pp.id)}><X className="h-4 w-4" /></Button>
-                  </div>
-                ))}
+                {packPlayers.map((pp) => {
+                  const isEvoTarget = evoTargetIds.has(pp.player_card_id);
+                  return (
+                    <div key={pp.id} className="flex items-center gap-3 bg-background border rounded-md p-2">
+                      <span className="text-sm font-mono bg-muted px-2 py-1 rounded w-10 text-center">#{pp.slot_number}</span>
+                      <span className="flex-1 font-medium">{playerCards.find((p) => p.id === pp.player_card_id)?.name ?? pp.player_card_id}</span>
+                      {isEvoTarget && (
+                        <Badge variant="destructive" className="text-[10px]">Evo version — won't drop</Badge>
+                      )}
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setQuickEditPlayerId(pp.player_card_id)} title="Quick edit"><Pencil className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeSlotMut.mutate(pp.id)}><X className="h-4 w-4" /></Button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </TabsContent>
