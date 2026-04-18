@@ -119,13 +119,13 @@ export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked
       )}
 
       {/* Card name */}
-      <h3 className="text-sm font-semibold text-foreground truncate w-full text-center drop-shadow-md">
+      <h3 className="text-[11px] sm:text-sm font-semibold text-foreground w-full text-center drop-shadow-md leading-tight line-clamp-2 break-words px-1">
         {card.name}
       </h3>
 
       {/* Gem name */}
       {card.gem_name && (
-        <p className="text-[10px] text-foreground/70 truncate w-full text-center mt-0.5">
+        <p className="text-[10px] text-foreground/70 w-full text-center mt-0.5 leading-tight line-clamp-2 break-words px-1">
           {card.gem_name}
         </p>
       )}
