@@ -866,7 +866,7 @@ export default function Collection() {
                     <div className="rounded-xl border border-border bg-card p-4 space-y-4">
                       <div>
                         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                          <h2 className="text-lg font-bold">
+                          <h2 className="text-base sm:text-lg font-bold">
                             {colName}
                             {subName && <span className="text-muted-foreground"> → {subName}</span>}
                           </h2>
