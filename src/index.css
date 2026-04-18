@@ -67,9 +67,16 @@
     @apply border-border;
   }
 
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body {
     @apply bg-background text-foreground font-sans;
     font-family: 'Inter', sans-serif;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     /* Magical subtle stardust background */
     background-image: 
       radial-gradient(circle at 15% 50%, rgba(120, 80, 255, 0.08), transparent 25%),
