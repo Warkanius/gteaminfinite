@@ -1,59 +1,41 @@
 
 
-## Goal
-1. Remove the "Stat Boosts" feature entirely from evolution path management (admin player creation + pack quick edit + anywhere else it appears).
-2. Ensure only **original** (non-evolved) cards appear in pack pools — evo versions stay in the DB but are excluded from pack player pickers/admin pack rosters.
+## Two issues to fix
 
-## Investigation needed
-Let me verify the exact code paths.
+### 1. Quick Edit dialog cuts off at the bottom
+`PlayerQuickEdit.tsx` wraps content in a `ScrollArea` with `max-h-[70vh]` *inside* `FormDialog`, which already provides its own `flex-1 overflow-y-auto` body. The nested scroll + viewport-based max height clips the bottom on small screens.
 
-- `src/components/admin/EvoPathEditor.tsx` — has `stat_boosts` UI/state
-- `src/lib/evoProgressTracker.ts` — applies stat boosts at evolution time
-- `src/pages/admin/AdminPacks.tsx` — player picker for packs
-- `src/pages/admin/AdminPlayers.tsx` — uses EvoPathEditor; also creates evo versions
+**Fix**: Remove the inner `ScrollArea` wrapper. Let `FormDialog`'s built-in scrollable body handle scrolling. Keep the inner `space-y-5 pr-2` div as the content container.
 
-An "original" card = a `player_cards` row that is NOT referenced by any `evo_paths.evolves_to_card_id`. That's the cleanest way to identify originals without a schema change.
-
-## Plan
-
-### Part 1 — Remove Stat Boosts everywhere
-
-**`src/components/admin/EvoPathEditor.tsx`**
-- Remove the entire "Stat Boosts" section (the 9-stat grid editor per step).
-- Remove `stat_boosts` from the local step state shape, default values, and the `onStepsChange` payload.
-- Keep the column in `evo_paths` (no migration); just always write `{}`.
-
-**`src/lib/evoProgressTracker.ts`** (and any consumers)
-- Remove the code path that reads `evo_paths.stat_boosts` and applies them to the player when an evolution completes. Evolution will now rely solely on `evolves_to_card_id` swap.
-- Verify nothing else depends on `stat_boosts`.
+### 2. Evo path editor + Create Evo Version not in Quick Edit
+The earlier plan to embed these was approved but the implementation pivoted to removing Stat Boosts and was never actually added. Add them now:
 
 **`src/components/admin/PlayerQuickEdit.tsx`**
-- Already uses `EvoPathEditor`, so it inherits the removal. No extra change needed beyond confirming.
+- Fetch the player's `gem_tier_id` (extend the player select).
+- Add `pendingEvoSteps` state.
+- Render `<EvoPathEditor>` after the Traits section, passing `playerId`, `playerGemTierId`, `playerStats` (from form), `playerBadges` (active + new), and `onStepsChange={setPendingEvoSteps}`.
+- In `save` mutation, after badges/traits: `delete from evo_paths where player_card_id = playerId`, then insert `pendingEvoSteps` (with `stat_boosts: {}` to satisfy the column).
+- Invalidate `["evo-paths", playerId]`.
+- Add a "Create Evo Version" button in the dialog header area:
+  - Computes next gem tier (by `sort_order` after current tier).
+  - Clones `player_cards` row (copy stats/positions/colors, set new `gem_tier_id` + `rating` from next tier).
+  - Clones `player_card_badges` and `player_card_traits` rows.
+  - Auto-links: finds first `evo_paths` row for source where `evolves_to_card_id IS NULL` (lowest `step_order`), sets it to new card id.
+  - Calls `onSwitchPlayer?.(newId)` to refocus the dialog on the new card.
+- Add optional prop `onSwitchPlayer?: (id: string) => void`.
 
-**`src/pages/admin/AdminPlayers.tsx`**
-- Same — inherits removal via `EvoPathEditor`.
+**`src/pages/admin/AdminPacks.tsx`**, **`src/pages/admin/AdminTeams.tsx`**, **`src/components/admin/RunRosterManager.tsx`**
+- Pass `onSwitchPlayer={setQuickEditPlayerId}` (or equivalent setter) to `<PlayerQuickEdit>`.
 
-### Part 2 — Exclude evo versions from pack pools
-
-**`src/pages/admin/AdminPacks.tsx`**
-- In the query that lists selectable players for a pack (e.g. `pack-players-picker` / `admin-all-players-lite` usage in pack context), filter out any `player_card.id` that appears in `evo_paths.evolves_to_card_id`.
-- Approach: fetch the set of `evolves_to_card_id` (non-null) once via `useQuery`, then `.filter()` the player list client-side. Lightweight — same dataset is already loaded.
-- Apply the same filter to the **starter pack** picker (`AdminStarterPacks.tsx`) and any other "pick a card to put in a pack" UI: search for usages of `pack_players` insertions.
-
-**Out of scope**
-- Does not touch `team_players`, `domination_game_players`, `run_players`, `auction_listings`, or `gem_market_listings` — user only asked about packs.
-- Does not delete existing `pack_players` rows that already point at evo versions; we'll surface a one-time admin warning in the pack editor if any current pack contains an evo card (badge "Evo version — won't display in pool" next to the row), but won't auto-delete.
-
-### Files to update
-
+## Files touched
 | File | Change |
 |---|---|
-| `src/components/admin/EvoPathEditor.tsx` | Remove Stat Boosts UI + state + payload |
-| `src/lib/evoProgressTracker.ts` | Remove stat-boost application at evolution time |
-| `src/pages/admin/AdminPacks.tsx` | Filter evo cards out of pack player picker; warn on existing evo rows |
-| `src/pages/admin/AdminStarterPacks.tsx` | Same filter for starter pack picker |
+| `src/components/admin/PlayerQuickEdit.tsx` | Remove inner ScrollArea; embed EvoPathEditor; add Create Evo Version; expose onSwitchPlayer |
+| `src/pages/admin/AdminPacks.tsx` | Wire onSwitchPlayer |
+| `src/pages/admin/AdminTeams.tsx` | Wire onSwitchPlayer |
+| `src/components/admin/RunRosterManager.tsx` | Wire onSwitchPlayer |
 
-### Not changed
-- DB schema (column stays, ignored).
-- Other admin tools, gameplay, public-facing pages.
+## Out of scope
+- No DB schema changes (`stat_boosts` column stays, written as `{}`).
+- No changes to `EvoPathEditor` itself or other admin pages.
 
