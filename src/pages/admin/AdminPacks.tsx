@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DataTable, Column } from "@/components/admin/DataTable";
 import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import { PlayerQuickEdit } from "@/components/admin/PlayerQuickEdit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -85,6 +86,7 @@ export default function AdminPacks() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [detailPack, setDetailPack] = useState<Pack | null>(null);
+  const [quickEditPlayerId, setQuickEditPlayerId] = useState<string | null>(null);
 
   const { data: packs = [], isLoading } = useQuery({
     queryKey: ["admin-packs"],
@@ -316,6 +318,7 @@ export default function AdminPacks() {
                   <div key={pp.id} className="flex items-center gap-3 bg-background border rounded-md p-2">
                     <span className="text-sm font-mono bg-muted px-2 py-1 rounded w-10 text-center">#{pp.slot_number}</span>
                     <span className="flex-1 font-medium">{playerCards.find((p) => p.id === pp.player_card_id)?.name ?? pp.player_card_id}</span>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setQuickEditPlayerId(pp.player_card_id)} title="Quick edit"><Pencil className="h-4 w-4" /></Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeSlotMut.mutate(pp.id)}><X className="h-4 w-4" /></Button>
                   </div>
                 ))}
@@ -401,6 +404,8 @@ export default function AdminPacks() {
       </FormDialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)} title="Delete Pack" description="This will delete the pack and all associated player slots." onConfirm={() => deleteId && deleteMut.mutate(deleteId)} loading={deleteMut.isPending} />
+
+      <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} />
     </div>
   );
 }

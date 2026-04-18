@@ -224,6 +224,8 @@ export function PlayerQuickEdit({ playerId, onClose }: PlayerQuickEditProps) {
       qc.invalidateQueries({ queryKey: ["admin-team-players"] });
       qc.invalidateQueries({ queryKey: ["admin-dom-game-players"] });
       qc.invalidateQueries({ queryKey: ["admin-all-player-badges"] });
+      qc.invalidateQueries({ queryKey: ["pack-players"] });
+      qc.invalidateQueries({ queryKey: ["player-cards-list"] });
       toast.success("Player updated");
       onClose();
     },
