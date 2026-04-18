@@ -15,9 +15,9 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full overflow-x-hidden">
         <AppSidebar />
-        <main className="flex-1 flex flex-col">
+        <main className="flex-1 min-w-0 flex flex-col">
           <header className="flex items-center border-b border-border px-4 gap-4 bg-background/40 backdrop-blur-md sticky top-0 z-10 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]">
             <SidebarTrigger />
             <div className="flex-1" />
