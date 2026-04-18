@@ -1,48 +1,42 @@
 
 
-## What's likely happening
+## What happened
 
-Your brother is on the Dashboard, the "Choose Your Starter Pack" dialog appears, he picks one — and the app appears frozen. Looking at the code + DB:
+You won the Yosen game at 12:14:06 UTC. The reward flow in `GameResults.tsx` did insert the `RTTR: Yosen` pack into your inventory and call `open-pack`. But the RTTR pack has a **17% chance** of rolling the `player_choice` slot — and when that happens, `open-pack` returns `{ player_choice: true, eligible_cards: [...] }` instead of `{ cards: [...] }`.
 
-1. **Edge function logs show zero invocations of `claim-starter-pack`**, and only one user has ever successfully claimed a starter pack (you, on Apr 5). So every other attempt has either never reached the function or failed silently.
-2. The picker dialog is **inescapable** — `onOpenChange={() => {}}` and `onPointerDownOutside={preventDefault}` mean if anything goes wrong, the dialog can never be dismissed.
-3. The claim handler in `Dashboard.tsx` has a silent-failure path: if `data` comes back undefined but `error` is also undefined (e.g. CORS preflight, timeout, network blip on mobile), the code falls through with **no toast**, no logging, and the picker stays open — looks like a freeze.
-4. If the function does return, `setRevealCards(data.cards)` runs; if `data.cards` is missing/empty the whole `PackReveal` overlay will render in a weird state with no cards.
-5. There is no error visibility — no `console.error`, no surfaced server message.
+`GameResults.tsx` only checks `if (data?.cards && data.cards.length > 0)`. So when the response has no `cards` array, the reveal never opens. Meanwhile inside `open-pack`, the player_choice branch already **deleted the inventory row** (line 197) and never inserted into `user_collections` or `pack_purchases`. The pack vanished. DB confirms: zero pack_purchases / collection inserts at 12:14 from the RTTR pack id, but the inventory row is gone.
 
-## Fix
+This affects every reward pack with a `player_choice` slot — not just RTTR — and not just Domination (Challenges have the same code path).
 
-### 1. Make the picker dismissable + always recover
+## Fix — three parts
 
-In `src/pages/Dashboard.tsx`:
+### 1. Handle `player_choice` in `GameResults.tsx`
+When `data.player_choice` is true:
+- Show the existing `PackReveal` flow in player-choice mode using `data.eligible_cards` and `data.pack_id`, so the user picks a card right inside the post-game results, then we call `open-pack` again with `confirm_choice_card_id`.
+- `PackReveal` already supports this on the Pack Market — we'll mirror that wiring (the same `eligible_cards` shape comes back).
 
-- Change `onOpenChange={() => {}}` to allow closing the dialog (e.g. `onOpenChange={(open) => { if (!claiming) setShowStarterPicker(open); }}`) so a failed claim doesn't trap the user.
-- Add an explicit "Close" / "Skip for now" button on the picker so it's never a dead end.
-- In `claimPack`, log every error to `console.error` and **always** toast on failure paths, including the `data == null` path. Also handle `data?.cards` being missing or empty as an error rather than passing it to `PackReveal`.
+### 2. One-time grant for the lost Yosen pack
+Add a manual data fix: insert one RTTR Yosen pack back into your `user_pack_inventory` (source `domination_reward`) so you can open it from the Pack Market. We'll do this via the insert tool, not a migration.
 
-### 2. Make the edge function fail loudly + correctly
+### 3. Surface failures so this can't happen silently again
+In `GameResults.tsx`:
+- Toast + `console.error` when `open-pack` returns `error`, when `data` is null, or when neither `cards` nor `player_choice` is present.
+- Don't pre-insert the pack into inventory **before** invoking the function — instead, only insert into inventory if `open-pack` itself fails so the user can retry from the Pack Market. (Currently we insert then call; if anything errors mid-flight the pack is lost.) Actually safer: keep the insert-then-call pattern but, on any unexpected response, leave a toast telling the user "Reward pack added to your inventory — open it from the Pack Market" and **do not** delete the inventory row server-side for the GameResults flow. Simpler approach: rely on the existing inventory item; if `open-pack` fails for any reason, the inventory row stays and the user opens it manually.
 
-In `supabase/functions/claim-starter-pack/index.ts`:
-
-- Add `console.log` / `console.error` at every branch (auth fail, no pack, already claimed, no players, insert error) so future attempts produce log entries we can read.
-- Surface the actual Postgres error message in the JSON response when `insertErr` happens (currently it just returns a generic "Failed to add cards to collection" with no detail).
-- Make the inserts atomic-enough: insert collection rows first, then `pack_purchases`, then fetch reveal cards. If `pack_purchases` insert fails, also remove the just-added collection rows so a retry isn't blocked by the "already claimed" check.
-- After all DB work succeeds, return `cards: cards ?? []` and a clear `success: true`.
-
-### 3. Defensive PackReveal
-
-In `src/pages/Dashboard.tsx`, only enter the reveal flow when `data.cards.length > 0`. Otherwise toast "Something went wrong, please try again" and re-open the picker.
+To make #3 actually robust, also tweak `open-pack`: on the player_choice branch, **don't delete the inventory item until the user confirms their choice** (currently it's deleted before returning). Move that delete into the `confirm_choice_card_id` branch.
 
 ## Files touched
 
 | File | Change |
 |---|---|
-| `src/pages/Dashboard.tsx` | Allow picker to close, surface all errors, add "Skip for now" button, guard against empty `data.cards` |
-| `supabase/functions/claim-starter-pack/index.ts` | Add `console.log`/`console.error` at every branch, return real Postgres error messages, roll back collection inserts on later failure |
+| `src/components/game/GameResults.tsx` | Handle `player_choice` response: render `PackReveal` in choice mode with `eligible_cards`; surface all error paths via toast + console; treat missing `data.cards` AND missing `data.player_choice` as an error |
+| `supabase/functions/open-pack/index.ts` | In the player_choice branch, **don't** delete the inventory row — defer that to the `confirm_choice_card_id` branch so the pack survives if the user backs out or the UI fails |
+| `src/components/packs/PackReveal.tsx` | (Likely tiny) accept an optional `playerChoice` mode + `eligibleCards` + `packId` so it can be reused from `GameResults`. If it already supports this from the Pack Market path, just plumb the props through. |
+| Data insert (no migration) | Re-grant 1× `RTTR: Yosen` (`528dcfd1-…`) to your `user_pack_inventory` with `source = 'domination_reward'` |
 
 ## Out of scope
 
-- Not changing the starter pack data (it's correct: 4 packs × 5 players each).
-- Not changing `open-pack` or the pack market flow — this is specifically the Dashboard claim flow.
-- Not adding a server-side "claim again later" — once it's a real success it should still be one-time.
+- Not changing the odds on the RTTR pack.
+- Not changing the Domination → Play navigation (already passes `packReward` correctly).
+- Not touching the Run / Challenge reveal paths beyond what `GameResults.tsx` already governs (Challenges go through the same component, so they get fixed for free).
 
