@@ -281,6 +281,16 @@ export default function Dashboard() {
               </Card>
             ))}
           </div>
+          <div className="flex justify-end mt-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={claiming}
+              onClick={() => setShowStarterPicker(false)}
+            >
+              Skip for now
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
