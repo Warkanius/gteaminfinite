@@ -209,6 +209,50 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
 
   const isDomination = mode === "domination";
 
+  async function handleConfirmChoice(cardId: string) {
+    if (!choiceState) return;
+    setConfirmingChoice(true);
+    const { data, error } = await supabase.functions.invoke("open-pack", {
+      body: {
+        confirm_choice_card_id: cardId,
+        pack_id: choiceState.packId,
+        inventory_id: choiceState.inventoryId,
+      },
+    });
+    setConfirmingChoice(false);
+    if (error || !data || data.error) {
+      console.error("[GameResults] confirm choice failed", error, data);
+      toast.error("Couldn't confirm pick", {
+        description: data?.error ?? error?.message ?? "Try again from the Pack Market.",
+      });
+      return;
+    }
+    if (Array.isArray(data.cards) && data.cards.length > 0) {
+      setRewardCards(data.cards);
+      setShowReveal(true);
+      setChoiceState(null);
+    } else {
+      toast.error("Pick saved but card data missing", {
+        description: "Check your collection.",
+      });
+      setChoiceState(null);
+    }
+  }
+
+  if (choiceState) {
+    return (
+      <PackReveal
+        cards={[]}
+        playerChoice
+        eligibleCards={choiceState.eligibleCards}
+        onConfirmChoice={handleConfirmChoice}
+        confirmingChoice={confirmingChoice}
+        onOpenAnother={() => setChoiceState(null)}
+        onClose={() => setChoiceState(null)}
+      />
+    );
+  }
+
   if (showReveal && rewardCards) {
     return (
       <PackReveal
