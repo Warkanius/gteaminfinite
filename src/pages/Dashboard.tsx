@@ -16,6 +16,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { useQuery } from "@tanstack/react-query";
+import { PostCard, POST_SELECT, type FeedPost } from "@/components/social/PostCard";
+import { Link } from "react-router-dom";
 
 const quickActions = [
   { title: "My Collection", desc: "View your player cards", icon: BookOpen, url: "/collection", color: "text-gem-emerald" },
@@ -204,25 +207,8 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="border-border/50 bg-card">
-          <CardHeader>
-            <CardTitle className="font-display">Recent Games</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground text-sm">No games played yet. Start a match!</p>
-          </CardContent>
-        </Card>
+      <LeagueFeedCard />
 
-        <Card className="border-border/50 bg-card">
-          <CardHeader>
-            <CardTitle className="font-display">Collection Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground text-sm">Open packs to start building your collection.</p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Starter Pack Selection Dialog */}
       <Dialog
@@ -293,6 +279,44 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function LeagueFeedCard() {
+  const { data: posts = [], isLoading } = useQuery({
+    queryKey: ["dashboard-league-feed"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("social_posts")
+        .select(POST_SELECT)
+        .eq("is_published", true)
+        .order("posted_at", { ascending: false })
+        .limit(4);
+      if (error) throw error;
+      return data as unknown as FeedPost[];
+    },
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-xl font-bold tracking-wide">League Feed</h2>
+        <Link to="/feed" className="text-sm text-primary hover:underline">View all →</Link>
+      </div>
+      {isLoading ? (
+        <Card className="border-border/50 bg-card">
+          <CardContent className="py-8 text-center text-muted-foreground text-sm">Loading…</CardContent>
+        </Card>
+      ) : posts.length === 0 ? (
+        <Card className="border-border/50 bg-card">
+          <CardContent className="py-8 text-center text-muted-foreground text-sm">Play a game to make headlines.</CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {posts.map((p) => <PostCard key={p.id} post={p} />)}
+        </div>
+      )}
     </div>
   );
 }

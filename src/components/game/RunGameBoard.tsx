@@ -24,6 +24,7 @@ import { trackEvoProgress } from "@/lib/evoProgressTracker";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { postLeagueEvent } from "@/lib/leagueEvents";
 
 interface Props {
   run: any;
@@ -32,6 +33,7 @@ interface Props {
   badgeMap: Record<string, CardBadge[]>;
   traitMap: Record<string, CardTrait[]>;
   onGameComplete: () => void;
+  runId?: string;
 }
 
 type Phase = "choose" | "rolling" | "result" | "rebound-rolling" | "rebound-result" | "done";
@@ -169,6 +171,19 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
         await supabase.from("user_runs").update({ current_wins: currentWins, highest_wins: highestWins }).eq("id", userRun.id);
       } else {
         await supabase.from("user_runs").insert({ user_id: user.id, run_id: run.id, current_wins: currentWins, highest_wins: highestWins });
+      }
+
+      // League streak post when a new personal best is set
+      if (winner === "player" && highestWins > oldHighest) {
+        try {
+          const { data: prof } = await supabase.from("profiles").select("display_name, team_name").eq("user_id", user.id).maybeSingle();
+          await postLeagueEvent({
+            event_type: "streak",
+            run_id: run.id,
+            user_display: prof?.team_name ?? prof?.display_name ?? "A challenger",
+            streak: highestWins,
+          });
+        } catch {}
       }
 
       // --- Per-Run Milestone rewards ---
