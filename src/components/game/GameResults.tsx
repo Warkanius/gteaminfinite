@@ -9,6 +9,7 @@ import { PackReveal } from "@/components/packs/PackReveal";
 import type { FullGameResult } from "@/pages/Play";
 import { trackEvoProgress } from "@/lib/evoProgressTracker";
 import { toast } from "sonner";
+import { postLeagueEvent, computeNotable, pickTopScorer, type NotableThresholds } from "@/lib/leagueEvents";
 
 const DEFAULT_WIN_REWARD = 100;
 
@@ -226,6 +227,40 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
         await trackEvoProgress(user.id, result.userCards, won);
       } catch (e) {
         console.error("Evo progress tracking error:", e);
+      }
+
+      // Domination-only league media post (server enforces gating).
+      if (mode === "domination" && roadName) {
+        try {
+          const { data: thresholdRule } = await supabase
+            .from("rule_config").select("value").eq("key", "notable_performance_thresholds").maybeSingle();
+          const thresholds = (thresholdRule?.value ?? null) as NotableThresholds | null;
+          const lines = result.userCards.map((c) => ({
+            name: c.cardName,
+            pts: c.totalPoints,
+            ast: c.statValues.stat_ast ?? 0,
+            reb: c.statValues.stat_reb ?? 0,
+            stl: c.statValues.stat_stl ?? 0,
+            blk: c.statValues.stat_blk ?? 0,
+          }));
+          const top = pickTopScorer(lines);
+          const notable = computeNotable(lines, thresholds);
+          const { data: prof } = await supabase.from("profiles").select("display_name, team_name").eq("user_id", user.id).maybeSingle();
+          await postLeagueEvent({
+            event_type: "game_result",
+            road_name: roadName,
+            user_display: prof?.team_name ?? prof?.display_name ?? "A challenger",
+            opponent: opponentName ?? null,
+            user_score: result.userTotal,
+            cpu_score: result.cpuTotal,
+            won,
+            top_scorer_name: top?.name ?? null,
+            top_scorer_pts: top?.pts ?? null,
+            notable,
+          });
+        } catch (e) {
+          console.warn("[GameResults] league event swallowed", e);
+        }
       }
 
       setSaved(true);
