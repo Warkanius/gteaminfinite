@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { computeOVR } from "@/lib/ovrUtils";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,7 +46,8 @@ export default function GemMarket() {
   const { toast } = useToast();
   const [tiers, setTiers] = useState<GemTier[]>([]);
   const [cardsByTier, setCardsByTier] = useState<Record<string, MarketCard[]>>({});
-  const [ownedCardIds, setOwnedCardIds] = useState<Set<string>>(new Set());
+  const [ownedRoots, setOwnedRoots] = useState<Set<string>>(new Set());
+  const [chainRootOf, setChainRootOf] = useState<Map<string, string>>(new Map());
   const [gems, setGems] = useState(0);
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
@@ -60,21 +61,54 @@ export default function GemMarket() {
 
   async function fetchAll() {
     setLoading(true);
-    const [tiersRes, listingsRes, collRes, profileRes] = await Promise.all([
+    const [tiersRes, listingsRes, collRes, profileRes, evoRes] = await Promise.all([
       supabase.from("gem_tiers").select("*").order("sort_order"),
       supabase.from("gem_market_listings").select("*, player_cards(id, name, rating, position1, position2, gem_name, stat_3pt, stat_mid, stat_fin, stat_dnk, stat_stl, stat_blk, stat_ast, stat_reb, stat_int)") as any,
       supabase.from("user_collections").select("player_card_id").eq("user_id", user!.id),
       supabase.from("profiles").select("gems").eq("user_id", user!.id).single(),
+      supabase.from("evo_paths").select("player_card_id, evolves_to_card_id").not("evolves_to_card_id", "is", null),
     ]);
+
+    // Build evo-chain root map: any evolved card resolves back to its base id
+    const parentOf = new Map<string, string>();
+    for (const link of (evoRes.data ?? []) as any[]) {
+      const from = link.player_card_id as string;
+      const to = link.evolves_to_card_id as string;
+      if (!from || !to || from === to) continue;
+      parentOf.set(to, from);
+    }
+    const rootMap = new Map<string, string>();
+    const resolveRoot = (id: string): string => {
+      if (rootMap.has(id)) return rootMap.get(id)!;
+      let cur = id;
+      const seen = new Set<string>([cur]);
+      while (parentOf.has(cur)) {
+        const next = parentOf.get(cur)!;
+        if (seen.has(next)) break;
+        seen.add(next);
+        cur = next;
+      }
+      rootMap.set(id, cur);
+      return cur;
+    };
 
     setTiers(tiersRes.data || []);
     setGems(profileRes.data?.gems ?? 0);
-    setOwnedCardIds(new Set((collRes.data || []).map((c: any) => c.player_card_id)));
+    setChainRootOf(rootMap);
+
+    // Owned set uses chain roots so any evo version counts.
+    const ownedSet = new Set<string>();
+    for (const row of (collRes.data ?? []) as any[]) {
+      ownedSet.add(resolveRoot(row.player_card_id));
+    }
+    setOwnedRoots(ownedSet);
 
     const grouped: Record<string, MarketCard[]> = {};
     for (const listing of (listingsRes.data || []) as any[]) {
       const pc = listing.player_cards;
       if (!pc || !listing.gem_tier_id) continue;
+      // Pre-resolve so card id maps back to its chain root for ownership checks
+      resolveRoot(pc.id);
       const card: MarketCard = {
         id: listing.id,
         player_card_id: pc.id,
@@ -99,19 +133,24 @@ export default function GemMarket() {
     setLoading(false);
   }
 
+  const isOwned = (card: MarketCard) => {
+    const root = chainRootOf.get(card.player_card_id) ?? card.player_card_id;
+    return ownedRoots.has(root);
+  };
+
   function isTierUnlocked(tier: GemTier, tierIndex: number): boolean {
     if (tierIndex === 0) return true;
     const prevTier = tiers[tierIndex - 1];
     const prevCards = cardsByTier[prevTier.id] || [];
     if (prevCards.length === 0) return true;
-    const ownedInPrev = prevCards.filter((c) => ownedCardIds.has(c.player_card_id)).length;
+    const ownedInPrev = prevCards.filter(isOwned).length;
     return ownedInPrev >= Math.ceil(prevCards.length / 2);
   }
 
   function getTierProgress(tierIndex: number): { owned: number; total: number; required: number } {
     const tier = tiers[tierIndex];
     const cards = cardsByTier[tier.id] || [];
-    const owned = cards.filter((c) => ownedCardIds.has(c.player_card_id)).length;
+    const owned = cards.filter(isOwned).length;
     return { owned, total: cards.length, required: Math.ceil(cards.length / 2) };
   }
 
@@ -126,7 +165,8 @@ export default function GemMarket() {
         toast({ title: "Purchase Failed", description: data?.error || error?.message, variant: "destructive" });
       } else {
         setGems(data.remaining_gems);
-        setOwnedCardIds((prev) => new Set([...prev, confirmCard.player_card_id]));
+        const root = chainRootOf.get(confirmCard.player_card_id) ?? confirmCard.player_card_id;
+        setOwnedRoots((prev) => new Set([...prev, root]));
         setRevealCard(data.card);
       }
     } catch {
@@ -189,7 +229,7 @@ export default function GemMarket() {
                   className="h-2"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Own {progress.required} to unlock next tier ({progress.owned}/{progress.required})
+                  Own {progress.required} to unlock next tier ({progress.owned}/{progress.required}) — evolved versions count
                 </p>
               </div>
             )}
@@ -212,17 +252,17 @@ export default function GemMarket() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {cards.map((card) => {
-                  const isOwned = ownedCardIds.has(card.player_card_id);
+                  const owned = isOwned(card);
                   const price = card.gem_value || tier.gem_value;
                   return (
                     <Card
                       key={card.id}
-                      className={`border-border/50 bg-card transition-colors ${isOwned ? "border-gem-emerald/30" : "hover:bg-accent/20"}`}
+                      className={`border-border/50 bg-card transition-colors ${owned ? "border-gem-emerald/30" : "hover:bg-accent/20"}`}
                     >
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                           <CardTitle className="font-display text-base">{card.name}</CardTitle>
-                          {isOwned && <Check className="h-4 w-4 text-gem-emerald" />}
+                          {owned && <Check className="h-4 w-4 text-gem-emerald" />}
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-2">
@@ -237,13 +277,13 @@ export default function GemMarket() {
                         <Button
                           size="sm"
                           className="w-full"
-                          disabled={isOwned || gems < price}
+                          disabled={owned || gems < price}
                           onClick={() => {
                             setConfirmCard(card);
                             setConfirmTier(tier);
                           }}
                         >
-                          {isOwned ? "Owned" : `${price} Gems`}
+                          {owned ? "Owned" : `${price} Gems`}
                         </Button>
                       </CardContent>
                     </Card>

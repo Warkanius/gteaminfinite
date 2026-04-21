@@ -13,6 +13,41 @@ function jsonResp(body: unknown, status = 200) {
   });
 }
 
+/**
+ * Build a chain-root resolver from evo_paths so any evolved variant of a card
+ * resolves back to its base/root id. Owning any version of a player counts as
+ * owning the card for collection-progress and tier-unlock checks.
+ */
+async function buildChainRootResolver(admin: any) {
+  const { data: links } = await admin
+    .from("evo_paths")
+    .select("player_card_id, evolves_to_card_id")
+    .not("evolves_to_card_id", "is", null);
+
+  const parentOf = new Map<string, string>();
+  for (const link of (links ?? []) as any[]) {
+    const from = link.player_card_id as string;
+    const to = link.evolves_to_card_id as string;
+    if (!from || !to || from === to) continue;
+    parentOf.set(to, from);
+  }
+
+  const cache = new Map<string, string>();
+  return (id: string): string => {
+    if (cache.has(id)) return cache.get(id)!;
+    let cur = id;
+    const seen = new Set<string>([cur]);
+    while (parentOf.has(cur)) {
+      const next = parentOf.get(cur)!;
+      if (seen.has(next)) break;
+      seen.add(next);
+      cur = next;
+    }
+    cache.set(id, cur);
+    return cur;
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -60,16 +95,25 @@ Deno.serve(async (req) => {
 
     if (cardErr || !card) return jsonResp({ error: "Card not found" }, 404);
 
-    // Check if user already owns this card
-    const { count: owned } = await admin
+    const resolveRoot = await buildChainRootResolver(admin);
+    const targetRoot = resolveRoot(player_card_id);
+
+    // Build set of chain roots the user already owns (any evo version counts)
+    const { data: userCollection } = await admin
       .from("user_collections")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("player_card_id", player_card_id);
+      .select("player_card_id")
+      .eq("user_id", user.id);
 
-    if (owned && owned > 0) return jsonResp({ error: "You already own this card" }, 400);
+    const ownedRoots = new Set<string>();
+    for (const row of (userCollection ?? []) as any[]) {
+      ownedRoots.add(resolveRoot(row.player_card_id));
+    }
 
-    // Check tier unlock: if this isn't the first tier, user must own >= 50% of previous tier
+    if (ownedRoots.has(targetRoot)) {
+      return jsonResp({ error: "You already own this card (or an evolved version)" }, 400);
+    }
+
+    // Tier unlock check using chain roots
     const { data: allTiers } = await admin
       .from("gem_tiers")
       .select("id, sort_order")
@@ -80,32 +124,19 @@ Deno.serve(async (req) => {
       if (currentTierIndex > 0) {
         const prevTier = allTiers[currentTierIndex - 1];
 
-        // Count total market listings in prev tier
-        const { count: totalPrev } = await admin
-          .from("gem_market_listings")
-          .select("id", { count: "exact", head: true })
-          .eq("gem_tier_id", prevTier.id);
-
-        // Get prev tier listing player_card_ids
         const { data: prevListings } = await admin
           .from("gem_market_listings")
           .select("player_card_id")
           .eq("gem_tier_id", prevTier.id);
 
-        const prevCardIds = (prevListings || []).map((l) => l.player_card_id);
+        const prevRoots = Array.from(
+          new Set((prevListings ?? []).map((l: any) => resolveRoot(l.player_card_id))),
+        );
+        const totalPrev = prevRoots.length;
 
-        // Count user's owned cards among prev tier listings
-        let ownedInPrev = 0;
-        if (prevCardIds.length > 0) {
-          const { data: ownedCards } = await admin
-            .from("user_collections")
-            .select("player_card_id")
-            .eq("user_id", user.id)
-            .in("player_card_id", prevCardIds);
-          ownedInPrev = (ownedCards || []).length;
-        }
+        const ownedInPrev = prevRoots.filter((r) => ownedRoots.has(r)).length;
+        const required = Math.ceil(totalPrev / 2);
 
-        const required = Math.ceil((totalPrev || 0) / 2);
         if (ownedInPrev < required) {
           return jsonResp({
             error: `You need to own at least ${required} cards from the previous tier to unlock this tier`,
@@ -150,6 +181,6 @@ Deno.serve(async (req) => {
       remaining_gems: profile.gems - listing.gem_value,
     });
   } catch (e) {
-    return jsonResp({ error: e.message }, 500);
+    return jsonResp({ error: (e as Error).message }, 500);
   }
 });

@@ -9,6 +9,7 @@ import { GameResults } from "@/components/game/GameResults";
 import type { CardGameResult } from "@/lib/gameEngine";
 import type { CardBadge } from "@/lib/badgeEngine";
 import type { CardTrait } from "@/lib/traitEngine";
+import type { ActiveDynamicDuo } from "@/lib/dynamicDuos";
 
 export interface GameCard {
   id: string;
@@ -56,6 +57,8 @@ interface GameState {
   opponentName?: string;
   coinReward?: number;
   packReward?: string;
+  dominationVariant?: "base" | "rttr";
+  roadName?: string;
 }
 
 export default function Play() {
@@ -75,6 +78,7 @@ export default function Play() {
   const [cpuLineup, setCpuLineup] = useState<GameCard[]>([]);
   const [badgeMap, setBadgeMap] = useState<Record<string, CardBadge[]>>({});
   const [traitMap, setTraitMap] = useState<Record<string, CardTrait[]>>({});
+  const [activeDuos, setActiveDuos] = useState<ActiveDynamicDuo[]>([]);
   const [gameResult, setGameResult] = useState<FullGameResult | null>(null);
 
   const { data: gemTiers = [] } = useQuery({
@@ -89,11 +93,12 @@ export default function Play() {
   const isDomination = !!gameState.dominationGameId;
   const isChallenge = !!gameState.challengeId;
 
-  const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[], badges: Record<string, CardBadge[]>, traits: Record<string, CardTrait[]>) => {
+  const handleLineupConfirm = useCallback((user: GameCard[], cpu: GameCard[], badges: Record<string, CardBadge[]>, traits: Record<string, CardTrait[]>, duos: ActiveDynamicDuo[]) => {
     setUserLineup(user);
     setCpuLineup(cpu);
     setBadgeMap(badges);
     setTraitMap(traits);
+    setActiveDuos(duos);
     // Go to matchup arrangement phase
     setPhase("matchup");
   }, []);
@@ -114,6 +119,7 @@ export default function Play() {
     setCpuLineup([]);
     setBadgeMap({});
     setTraitMap({});
+    setActiveDuos([]);
     setGameResult(null);
   }, []);
 
@@ -150,6 +156,7 @@ export default function Play() {
           cpuLineup={cpuLineup}
           badgeMap={badgeMap}
           traitMap={traitMap}
+          activeDuos={activeDuos}
           onComplete={handleGameComplete}
           difficultyStars={gameState.difficultyStars}
           gameContext={{ isHome: !isDomination, isAway: isDomination, isKeyGame: false }}
@@ -167,6 +174,8 @@ export default function Play() {
           cardRewardId={gameState.cardRewardId}
           challengeId={gameState.challengeId}
           dominationGameId={gameState.dominationGameId}
+          dominationVariant={gameState.dominationVariant}
+          roadName={gameState.roadName}
         />
       )}
     </div>
