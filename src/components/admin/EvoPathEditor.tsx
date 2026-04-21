@@ -112,7 +112,23 @@ export function EvoPathEditor({ playerId, playerGemTierId, playerStats, playerBa
   }
 
   function updateStep(idx: number, updates: Partial<EvoStep>) {
-    setSteps(s => s.map((step, i) => i === idx ? { ...step, ...updates } : step));
+    setSteps((s) => s.map((step, i) => {
+      if (i !== idx) return step;
+      const merged = { ...step, ...updates };
+      const prevAuto = describeChallenge(step.challenge_type, step.challenge_target, step.challenge_stat);
+      const descTouchedByUser = step.challenge_description?.trim() && step.challenge_description !== prevAuto;
+      const shouldAutoUpdateDescription = !step.compound_challenges.length && !descTouchedByUser && updates.challenge_description === undefined;
+
+      if (shouldAutoUpdateDescription && (
+        updates.challenge_type !== undefined ||
+        updates.challenge_target !== undefined ||
+        updates.challenge_stat !== undefined
+      )) {
+        merged.challenge_description = describeChallenge(merged.challenge_type, merged.challenge_target, merged.challenge_stat);
+      }
+
+      return merged;
+    }));
   }
 
   function addCompoundReq(stepIdx: number) {
