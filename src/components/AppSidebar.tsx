@@ -67,6 +67,7 @@ const adminItems = [
   { title: "Social Feed", url: "/admin/social-feed", icon: Newspaper },
   { title: "Collections", url: "/admin/collections", icon: FolderOpen },
   { title: "Collection Sets", url: "/admin/collection-sets", icon: FolderOpen },
+  { title: "Dynamic Duos", url: "/admin/dynamic-duos", icon: Sparkles },
 ];
 
 export function AppSidebar() {
