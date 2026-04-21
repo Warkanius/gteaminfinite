@@ -323,9 +323,9 @@ export default function AdminDynamicDuos() {
           if (!o) resetForm();
         }}
         title={editing ? "Edit Dynamic Duo" : "New Dynamic Duo"}
-        onSubmit={() => saveMutation.mutate()}
-        submitLabel={saveMutation.isPending ? "Saving…" : "Save Duo"}
-        size="lg"
+        onSave={() => saveMutation.mutate()}
+        saving={saveMutation.isPending}
+        className="max-w-3xl max-h-[85vh] flex flex-col overflow-hidden"
       >
         <div className="space-y-4">
           <div className="space-y-2">
