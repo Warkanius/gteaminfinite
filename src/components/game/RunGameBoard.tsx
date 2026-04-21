@@ -173,6 +173,19 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
         await supabase.from("user_runs").insert({ user_id: user.id, run_id: run.id, current_wins: currentWins, highest_wins: highestWins });
       }
 
+      // League streak post when a new personal best is set
+      if (winner === "player" && highestWins > oldHighest) {
+        try {
+          const { data: prof } = await supabase.from("profiles").select("display_name, team_name").eq("user_id", user.id).maybeSingle();
+          await postLeagueEvent({
+            event_type: "streak",
+            run_id: run.id,
+            user_display: prof?.team_name ?? prof?.display_name ?? "A challenger",
+            streak: highestWins,
+          });
+        } catch {}
+      }
+
       // --- Per-Run Milestone rewards ---
       if (winner === "player" && run.milestones && Array.isArray(run.milestones)) {
         const reachedMilestone = run.milestones.find((m: any) => m.wins_required === currentWins);
