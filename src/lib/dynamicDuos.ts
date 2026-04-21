@@ -42,7 +42,7 @@ function normalizeBoosts(boosts: DuoBoosts | null | undefined): DuoBoosts {
 }
 
 function applyBoostsToCard<T extends Record<string, any>>(card: T, boosts: DuoBoosts): T {
-  const next = { ...card };
+  const next: Record<string, any> = { ...card };
   for (const key of DUO_STAT_KEYS) {
     const boost = Number(boosts[key] ?? 0);
     if (!boost) continue;
