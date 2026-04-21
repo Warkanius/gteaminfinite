@@ -737,6 +737,148 @@ export type Database = {
         }
         Relationships: []
       }
+      location_accounts: {
+        Row: {
+          accent_color: string | null
+          avatar_url: string | null
+          created_at: string
+          handle: string
+          id: string
+          is_active: boolean
+          location_type: string
+          name: string
+          personality: string
+          road_name: string | null
+          run_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          accent_color?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          handle: string
+          id?: string
+          is_active?: boolean
+          location_type?: string
+          name: string
+          personality?: string
+          road_name?: string | null
+          run_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accent_color?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          handle?: string
+          id?: string
+          is_active?: boolean
+          location_type?: string
+          name?: string
+          personality?: string
+          road_name?: string | null
+          run_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_accounts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_post_templates: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          is_active: boolean
+          personality: string
+          sort_order: number
+          template_text: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          is_active?: boolean
+          personality: string
+          sort_order?: number
+          template_text: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          is_active?: boolean
+          personality?: string
+          sort_order?: number
+          template_text?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      location_records: {
+        Row: {
+          biggest_blowout: number
+          created_at: string
+          current_streak: number
+          games_played: number
+          high_score: number
+          id: string
+          last_played_at: string | null
+          location_account_id: string
+          longest_win_streak: number
+          losses: number
+          updated_at: string
+          user_id: string
+          wins: number
+        }
+        Insert: {
+          biggest_blowout?: number
+          created_at?: string
+          current_streak?: number
+          games_played?: number
+          high_score?: number
+          id?: string
+          last_played_at?: string | null
+          location_account_id: string
+          longest_win_streak?: number
+          losses?: number
+          updated_at?: string
+          user_id: string
+          wins?: number
+        }
+        Update: {
+          biggest_blowout?: number
+          created_at?: string
+          current_streak?: number
+          games_played?: number
+          high_score?: number
+          id?: string
+          last_played_at?: string | null
+          location_account_id?: string
+          longest_win_streak?: number
+          losses?: number
+          updated_at?: string
+          user_id?: string
+          wins?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_records_location_account_id_fkey"
+            columns: ["location_account_id"]
+            isOneToOne: false
+            referencedRelation: "location_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locker_code_redemptions: {
         Row: {
           id: string
@@ -1485,10 +1627,12 @@ export type Database = {
           content: string
           created_at: string
           creator_id: string | null
+          event_type: string | null
           id: string
           image_url: string | null
           is_published: boolean
           likes_count: number
+          location_account_id: string | null
           player_card_id: string | null
           post_type: string
           posted_at: string
@@ -1499,10 +1643,12 @@ export type Database = {
           content: string
           created_at?: string
           creator_id?: string | null
+          event_type?: string | null
           id?: string
           image_url?: string | null
           is_published?: boolean
           likes_count?: number
+          location_account_id?: string | null
           player_card_id?: string | null
           post_type?: string
           posted_at?: string
@@ -1513,10 +1659,12 @@ export type Database = {
           content?: string
           created_at?: string
           creator_id?: string | null
+          event_type?: string | null
           id?: string
           image_url?: string | null
           is_published?: boolean
           likes_count?: number
+          location_account_id?: string | null
           player_card_id?: string | null
           post_type?: string
           posted_at?: string
@@ -1528,6 +1676,13 @@ export type Database = {
             columns: ["creator_id"]
             isOneToOne: false
             referencedRelation: "social_creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_posts_location_account_id_fkey"
+            columns: ["location_account_id"]
+            isOneToOne: false
+            referencedRelation: "location_accounts"
             referencedColumns: ["id"]
           },
           {
