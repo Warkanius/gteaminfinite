@@ -24,6 +24,7 @@ import { trackEvoProgress } from "@/lib/evoProgressTracker";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { postLeagueEvent } from "@/lib/leagueEvents";
 
 interface Props {
   run: any;
