@@ -24,12 +24,15 @@ import {
   computeCardAvgStat, type CardTrait, type TraitActivation, type GameContext,
 } from "@/lib/traitEngine";
 import type { GameCard, FullGameResult } from "@/pages/Play";
+import type { ActiveDynamicDuo } from "@/lib/dynamicDuos";
+import { Sparkles } from "lucide-react";
 
 interface GameBoardProps {
   userLineup: GameCard[];
   cpuLineup: GameCard[];
   badgeMap: Record<string, CardBadge[]>;
   traitMap: Record<string, CardTrait[]>;
+  activeDuos?: ActiveDynamicDuo[];
   onComplete: (result: FullGameResult) => void;
   difficultyStars?: number;
   gameContext: GameContext;
@@ -45,7 +48,7 @@ function resolveGameplayStars(card: GameCard | undefined, gemStars?: number | nu
   return STATS.some((stat) => (card[stat] ?? 0) > 0) ? 1 : 0;
 }
 
-export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplete, difficultyStars, gameContext }: GameBoardProps) {
+export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, activeDuos = [], onComplete, difficultyStars, gameContext }: GameBoardProps) {
   const [playerIdx, setPlayerIdx] = useState(0);
   const [statIdx, setStatIdx] = useState(0);
   const [useOwnDice, setUseOwnDice] = useState(false);
@@ -341,6 +344,19 @@ export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, onComplet
 
   return (
     <div className="space-y-5">
+      {/* Active dynamic duos banner */}
+      {activeDuos.length > 0 && (
+        <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs space-y-1">
+          {activeDuos.map((d) => (
+            <div key={d.id} className="flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="font-semibold text-primary">{d.name}</span>
+              <span className="text-muted-foreground truncate">— {d.cardNames.join(" + ")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Scoreboard */}
       <div className="flex items-center justify-center gap-6">
         <div className="text-center">

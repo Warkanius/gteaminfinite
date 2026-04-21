@@ -23,6 +23,8 @@ interface GameResultsProps {
   cardRewardId?: string;
   challengeId?: string;
   dominationGameId?: string;
+  dominationVariant?: "base" | "rttr";
+  roadName?: string;
 }
 
 interface PulledCard {
@@ -39,7 +41,7 @@ interface PulledCard {
   gem_tiers?: { color?: string; name?: string } | null;
 }
 
-export function GameResults({ result, onPlayAgain, coinReward, opponentName, mode = "5v5", packReward, gemReward, cardRewardId, challengeId, dominationGameId }: GameResultsProps) {
+export function GameResults({ result, onPlayAgain, coinReward, opponentName, mode = "5v5", packReward, gemReward, cardRewardId, challengeId, dominationGameId, dominationVariant, roadName }: GameResultsProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
@@ -192,6 +194,30 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
             user_id: user.id,
             challenge_id: challengeId,
           }).maybeSingle(); // ignore duplicate
+        }
+      }
+
+      // RTTR replay tracking — record sequential replay win without disturbing
+      // the original first-clear domination progression.
+      if (won && dominationVariant === "rttr" && dominationGameId && roadName) {
+        const { data: existing } = await supabase
+          .from("user_rttr_progress")
+          .select("id, wins")
+          .eq("user_id", user.id)
+          .eq("domination_game_id", dominationGameId)
+          .maybeSingle();
+        if (existing) {
+          await supabase
+            .from("user_rttr_progress")
+            .update({ wins: (existing.wins || 0) + 1, updated_at: new Date().toISOString() })
+            .eq("id", existing.id);
+        } else {
+          await supabase.from("user_rttr_progress").insert({
+            user_id: user.id,
+            domination_game_id: dominationGameId,
+            road_name: roadName,
+            wins: 1,
+          });
         }
       }
 
