@@ -11,6 +11,7 @@ import type { GameCard } from "@/pages/Play";
 import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 import { fetchTraitsForCards, type CardTrait } from "@/lib/traitEngine";
 import { hslToColorBucket } from "@/lib/colorBucket";
+import { resolveActiveDynamicDuos, type ActiveDynamicDuo, type DynamicDuoRow } from "@/lib/dynamicDuos";
 
 interface LineupRestrictions {
   positions?: string[];
@@ -24,7 +25,13 @@ interface LineupRestrictions {
 }
 
 interface LineupSelectProps {
-  onConfirm: (userLineup: GameCard[], cpuLineup: GameCard[], badgeMap: Record<string, CardBadge[]>, traitMap: Record<string, CardTrait[]>) => void;
+  onConfirm: (
+    userLineup: GameCard[],
+    cpuLineup: GameCard[],
+    badgeMap: Record<string, CardBadge[]>,
+    traitMap: Record<string, CardTrait[]>,
+    activeDuos: ActiveDynamicDuo[],
+  ) => void;
   dominationGameId?: string;
   challengeTeamId?: string;
   lineupRestrictions?: LineupRestrictions;
@@ -295,13 +302,25 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
       cpuCards = shuffled.slice(0, 5);
     }
-    // Fetch badges and traits for all 10 cards
+    // Fetch badges, traits, and active dynamic duos for all 10 cards
     const allCardIds = [...selectedCards.map(c => c.id), ...cpuCards.map(c => c.id)];
-    const [badgeMap, traitMap] = await Promise.all([
+    const [badgeMap, traitMap, duosRes] = await Promise.all([
       fetchBadgesForCards(supabase, allCardIds),
       fetchTraitsForCards(supabase, allCardIds),
+      supabase.from("dynamic_duos").select("*").eq("is_active", true),
     ]);
-    onConfirm(selectedCards, cpuCards, badgeMap, traitMap);
+
+    const allDuos = (duosRes.data ?? []) as unknown as DynamicDuoRow[];
+    const userDuoResult = resolveActiveDynamicDuos(selectedCards as any[], allDuos);
+    const cpuDuoResult = resolveActiveDynamicDuos(cpuCards as any[], allDuos);
+
+    onConfirm(
+      userDuoResult.lineup as GameCard[],
+      cpuDuoResult.lineup as GameCard[],
+      badgeMap,
+      traitMap,
+      userDuoResult.activeDuos,
+    );
   };
 
   const opponentLoading =
