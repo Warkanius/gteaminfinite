@@ -160,6 +160,7 @@ export default function Play() {
           onComplete={handleGameComplete}
           difficultyStars={gameState.difficultyStars}
           gameContext={{ isHome: !isDomination, isAway: isDomination, isKeyGame: false }}
+          roadName={gameState.roadName}
         />
       )}
       {phase === "results" && gameResult && (

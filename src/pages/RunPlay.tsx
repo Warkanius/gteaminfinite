@@ -75,6 +75,7 @@ export default function RunPlay() {
           badgeMap={badgeMap}
           traitMap={traitMap}
           onGameComplete={() => navigate("/runs")}
+          runId={run.id}
         />
       )}
     </div>
