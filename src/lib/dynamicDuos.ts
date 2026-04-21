@@ -48,7 +48,7 @@ function applyBoostsToCard<T extends Record<string, any>>(card: T, boosts: DuoBo
     if (!boost) continue;
     next[key] = Number(next[key] ?? 0) + boost;
   }
-  return next;
+  return next as T;
 }
 
 export function summarizeBoosts(boosts: DuoBoosts | null | undefined) {
