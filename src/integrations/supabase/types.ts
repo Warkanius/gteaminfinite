@@ -434,6 +434,45 @@ export type Database = {
         }
         Relationships: []
       }
+      dynamic_duos: {
+        Row: {
+          boosts_a: Json
+          boosts_b: Json
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          player_card_id_a: string
+          player_card_id_b: string
+          updated_at: string
+        }
+        Insert: {
+          boosts_a?: Json
+          boosts_b?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          player_card_id_a: string
+          player_card_id_b: string
+          updated_at?: string
+        }
+        Update: {
+          boosts_a?: Json
+          boosts_b?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          player_card_id_a?: string
+          player_card_id_b?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       evo_paths: {
         Row: {
           challenge_description: string
@@ -1813,6 +1852,36 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      user_rttr_progress: {
+        Row: {
+          created_at: string
+          domination_game_id: string
+          id: string
+          road_name: string
+          updated_at: string
+          user_id: string
+          wins: number
+        }
+        Insert: {
+          created_at?: string
+          domination_game_id: string
+          id?: string
+          road_name: string
+          updated_at?: string
+          user_id: string
+          wins?: number
+        }
+        Update: {
+          created_at?: string
+          domination_game_id?: string
+          id?: string
+          road_name?: string
+          updated_at?: string
+          user_id?: string
+          wins?: number
         }
         Relationships: []
       }
