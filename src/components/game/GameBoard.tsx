@@ -36,6 +36,7 @@ interface GameBoardProps {
   onComplete: (result: FullGameResult) => void;
   difficultyStars?: number;
   gameContext: GameContext;
+  roadName?: string;
 }
 
 function resolveGameplayStars(card: GameCard | undefined, gemStars?: number | null): number {

@@ -32,6 +32,7 @@ interface Props {
   badgeMap: Record<string, CardBadge[]>;
   traitMap: Record<string, CardTrait[]>;
   onGameComplete: () => void;
+  runId?: string;
 }
 
 type Phase = "choose" | "rolling" | "result" | "rebound-rolling" | "rebound-result" | "done";
