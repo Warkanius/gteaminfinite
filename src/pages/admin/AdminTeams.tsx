@@ -143,6 +143,7 @@ export default function AdminTeams() {
   const [teamEditId, setTeamEditId] = useState<string | null>(null);
   const [teamDialog, setTeamDialog] = useState(false);
   const [teamDeleteId, setTeamDeleteId] = useState<string | null>(null);
+  const [duplicateSourceTeamId, setDuplicateSourceTeamId] = useState<string | null>(null);
 
   // Team roster quick-add state
   const [teamQuickAddArchetype, setTeamQuickAddArchetype] = useState("");
@@ -159,9 +160,27 @@ export default function AdminTeams() {
     mutationFn: async () => {
       const payload = { name: teamForm.name, category: teamForm.category };
       if (teamEditId) { const { error } = await supabase.from("teams").update(payload).eq("id", teamEditId); if (error) throw error; }
-      else { const { data, error } = await supabase.from("teams").insert(payload).select("id").single(); if (error) throw error; setTeamEditId(data.id); }
+      else {
+        const { data, error } = await supabase.from("teams").insert(payload).select("id").single();
+        if (error) throw error;
+        if (duplicateSourceTeamId) {
+          const sourceRoster = teamPlayers
+            .filter((tp) => tp.team_id === duplicateSourceTeamId)
+            .map((tp) => ({ team_id: data.id, player_card_id: tp.player_card_id, slot: tp.slot }));
+          if (sourceRoster.length > 0) {
+            const { error: rosterError } = await supabase.from("team_players").insert(sourceRoster);
+            if (rosterError) throw rosterError;
+          }
+        }
+        setTeamEditId(data.id);
+      }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-teams"] }); toast.success("Saved"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-teams"] });
+      qc.invalidateQueries({ queryKey: ["admin-team-players"] });
+      setDuplicateSourceTeamId(null);
+      toast.success("Saved");
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -628,8 +647,8 @@ export default function AdminTeams() {
               <CardDescription>Manage CPU opponents and their rosters.</CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable data={teams} columns={teamCols} isLoading={teamsLoading} searchKeys={["name"]} onAdd={() => { setTeamForm({ name: "", category: "domination" }); setTeamEditId(null); setTeamDialog(true); }} addLabel="Add Team"
-                actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTeamForm({ name: r.name, category: r.category }); setTeamEditId(r.id); setTeamDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setTeamForm({ name: `${r.name} (Copy)`, category: r.category }); setTeamEditId(null); setTeamDialog(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTeamDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
+              <DataTable data={teams} columns={teamCols} isLoading={teamsLoading} searchKeys={["name"]} onAdd={() => { setTeamForm({ name: "", category: "domination" }); setTeamEditId(null); setDuplicateSourceTeamId(null); setTeamDialog(true); }} addLabel="Add Team"
+                actions={(r) => (<div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setTeamForm({ name: r.name, category: r.category }); setTeamEditId(r.id); setDuplicateSourceTeamId(null); setTeamDialog(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setTeamForm({ name: `${r.name} (Copy)`, category: r.category }); setTeamEditId(null); setDuplicateSourceTeamId(r.id); setTeamDialog(true); }}><Copy className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => setTeamDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)} />
             </CardContent>
           </Card>
         </TabsContent>
