@@ -202,8 +202,68 @@ export default function AdminSocialFeed() {
     },
   });
 
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["admin-location-accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("location_accounts").select("*").order("name");
+      if (error) throw error;
+      return (data ?? []) as LocationAccount[];
+    },
+  });
+
+  const { data: templates = [] } = useQuery({
+    queryKey: ["admin-post-templates"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("location_post_templates")
+        .select("*")
+        .order("personality")
+        .order("event_type")
+        .order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as PostTemplate[];
+    },
+  });
+
+  const { data: runs = [] } = useQuery({
+    queryKey: ["admin-runs-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("runs").select("id, name").order("name");
+      return data ?? [];
+    },
+  });
+
+  // Personalities pulled live from rule_config so adding one in Rules immediately appears here.
+  const { data: personalities = ["hype", "analyst", "trash_talker", "historian", "meme"] } = useQuery({
+    queryKey: ["personalities-enum"],
+    queryFn: async () => {
+      const { data } = await supabase.from("rule_config").select("value").eq("key", "personalities_enum").maybeSingle();
+      const v = data?.value;
+      if (Array.isArray(v) && v.every((x) => typeof x === "string")) return v as string[];
+      return ["hype", "analyst", "trash_talker", "historian", "meme"];
+    },
+  });
+
   const playerMap = Object.fromEntries(players.map((p) => [p.id, p]));
   const creatorMap = Object.fromEntries(creators.map((c) => [c.id, c]));
+  const runMap = Object.fromEntries(runs.map((r: any) => [r.id, r]));
+
+  const handleAccountAvatarUpload = async (file: File) => {
+    setAccountUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `accounts/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("social-images").upload(path, file);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("social-images").getPublicUrl(path);
+      setAccountForm((f) => ({ ...f, avatar_url: urlData.publicUrl }));
+      toast.success("Avatar uploaded");
+    } catch (e: any) {
+      toast.error(e.message ?? "Upload failed");
+    } finally {
+      setAccountUploading(false);
+    }
+  };
 
   /* ── Image upload ────────────────────────── */
 
