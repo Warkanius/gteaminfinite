@@ -133,9 +133,23 @@ export default function AdminSocialFeed() {
   const [creatorForm, setCreatorForm] = useState(emptyCreator());
   const [creatorEditId, setCreatorEditId] = useState<string | null>(null);
   const [creatorDeleteId, setCreatorDeleteId] = useState<string | null>(null);
-  const [creatorsOpen, setCreatorsOpen] = useState(false);
   const [creatorUploading, setCreatorUploading] = useState(false);
   const creatorFileRef = useRef<HTMLInputElement>(null);
+
+  // Location account state
+  const [accountDialogOpen, setAccountDialogOpen] = useState(false);
+  const [accountForm, setAccountForm] = useState(emptyAccount());
+  const [accountEditId, setAccountEditId] = useState<string | null>(null);
+  const [accountDeleteId, setAccountDeleteId] = useState<string | null>(null);
+  const [accountUploading, setAccountUploading] = useState(false);
+  const accountFileRef = useRef<HTMLInputElement>(null);
+
+  // Template state
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateForm, setTemplateForm] = useState(emptyTemplate());
+  const [templateEditId, setTemplateEditId] = useState<string | null>(null);
+  const [templateDeleteId, setTemplateDeleteId] = useState<string | null>(null);
+  const [seeding, setSeeding] = useState(false);
 
   const handleCreatorAvatarUpload = async (file: File) => {
     setCreatorUploading(true);
