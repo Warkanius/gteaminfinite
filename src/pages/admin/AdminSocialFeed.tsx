@@ -652,88 +652,236 @@ export default function AdminSocialFeed() {
 
   return (
     <div className="space-y-6">
-      {/* Posts Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Social Feed Manager</CardTitle>
-              <CardDescription>Create fictional social media posts attributed to players or creators.</CardDescription>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setCreatorsOpen(!creatorsOpen)}>
-              <Users className="h-4 w-4 mr-2" /> Creators ({creators.length})
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            data={posts}
-            columns={columns}
-            isLoading={isLoading}
-            searchKeys={["content"]}
-            searchPlaceholder="Search posts…"
-            onAdd={() => { setForm(emptyForm()); setEditId(null); setDialogOpen(true); }}
-            addLabel="New Post"
-            actions={(row) => (
-              <div className="flex gap-1">
-                <Button size="icon" variant="ghost" onClick={() => { setForm(row); setEditId(row.id); setDialogOpen(true); }}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setForm({ ...row, id: undefined as any, content: `${row.content}` }); setEditId(null); setDialogOpen(true); }}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
+      <div>
+        <h1 className="text-2xl font-bold">Social Feed Manager</h1>
+        <p className="text-sm text-muted-foreground">Posts, creators, and the location-aware media accounts that auto-tweet about league action.</p>
+      </div>
+
+      <Tabs defaultValue="posts" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+          <TabsTrigger value="posts"><MessageSquare className="h-4 w-4 mr-1.5" />Posts</TabsTrigger>
+          <TabsTrigger value="creators"><Users className="h-4 w-4 mr-1.5" />Creators</TabsTrigger>
+          <TabsTrigger value="accounts"><Radio className="h-4 w-4 mr-1.5" />Media Accounts</TabsTrigger>
+          <TabsTrigger value="templates"><Sparkles className="h-4 w-4 mr-1.5" />Post Templates</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="posts">
+          <Card>
+            <CardHeader>
+              <CardTitle>Manual Posts</CardTitle>
+              <CardDescription>Hand-written posts attributed to players or creators.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={posts}
+                columns={columns}
+                isLoading={isLoading}
+                searchKeys={["content"]}
+                searchPlaceholder="Search posts…"
+                onAdd={() => { setForm(emptyForm()); setEditId(null); setDialogOpen(true); }}
+                addLabel="New Post"
+                actions={(row) => (
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" onClick={() => { setForm(row); setEditId(row.id); setDialogOpen(true); }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setForm({ ...row, id: undefined as any, content: `${row.content}` }); setEditId(null); setDialogOpen(true); }}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => setDeleteId(row.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                )}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="creators">
+          <Card>
+            <CardHeader>
+              <CardTitle>Creators</CardTitle>
+              <CardDescription>Non-player content creators (commentators, analysts, fan channels).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={creators}
+                columns={[
+                  { key: "name", label: "Name" },
+                  { key: "handle", label: "Handle" },
+                  {
+                    key: "accent_color",
+                    label: "Color",
+                    render: (r) => (
+                      <div className="h-5 w-5 rounded-full border border-border" style={{ background: r.accent_color ?? undefined }} />
+                    ),
+                  },
+                ] as Column<Creator>[]}
+                isLoading={false}
+                searchKeys={["name", "handle"]}
+                searchPlaceholder="Search creators…"
+                onAdd={() => { setCreatorForm(emptyCreator()); setCreatorEditId(null); setCreatorDialogOpen(true); }}
+                addLabel="New Creator"
+                actions={(row) => (
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" onClick={() => { setCreatorForm(row); setCreatorEditId(row.id); setCreatorDialogOpen(true); }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setCreatorForm({ ...row, name: `${row.name} (Copy)`, handle: `${row.handle}_copy` }); setCreatorEditId(null); setCreatorDialogOpen(true); }}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => setCreatorDeleteId(row.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                )}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="accounts">
+          <Card>
+            <CardHeader>
+              <CardTitle>Media Accounts</CardTitle>
+              <CardDescription>
+                Outlets that auto-post about league events. Each one covers the whole league, a road, or a specific run, with a personality driving the copy.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={accounts}
+                columns={[
+                  {
+                    key: "name",
+                    label: "Account",
+                    render: (r) => (
+                      <div className="flex items-center gap-2">
+                        {r.avatar_url ? (
+                          <img src={r.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover border border-border" />
+                        ) : (
+                          <div className="h-7 w-7 rounded-full border border-border" style={{ background: r.accent_color ?? undefined }} />
+                        )}
+                        <div className="leading-tight">
+                          <div className="font-medium">{r.name}</div>
+                          <div className="text-xs text-muted-foreground">@{r.handle}</div>
+                        </div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "personality",
+                    label: "Personality",
+                    render: (r) => <Badge variant="secondary" className="capitalize">{r.personality.replace(/_/g, " ")}</Badge>,
+                  },
+                  {
+                    key: "location_type",
+                    label: "Coverage",
+                    render: (r) => {
+                      if (r.location_type === "league") return <span className="text-xs">🏀 League-wide</span>;
+                      if (r.location_type === "road") return <span className="text-xs">🛣 {r.road_name ?? "—"}</span>;
+                      if (r.location_type === "run" && r.run_id) return <span className="text-xs">📍 {(runMap as any)[r.run_id]?.name ?? "Run"}</span>;
+                      return <span className="text-xs text-muted-foreground">—</span>;
+                    },
+                  },
+                  {
+                    key: "is_active",
+                    label: "Active",
+                    render: (r) => (
+                      <Switch
+                        checked={r.is_active}
+                        onCheckedChange={(v) => toggleAccountActiveMut.mutate({ id: r.id, is_active: v })}
+                      />
+                    ),
+                  },
+                ] as Column<LocationAccount>[]}
+                isLoading={false}
+                searchKeys={["name", "handle", "road_name"]}
+                searchPlaceholder="Search accounts…"
+                onAdd={() => { setAccountForm(emptyAccount()); setAccountEditId(null); setAccountDialogOpen(true); }}
+                addLabel="New Account"
+                actions={(row) => (
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" onClick={() => { setAccountForm(row); setAccountEditId(row.id); setAccountDialogOpen(true); }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setAccountForm({ ...row, name: `${row.name} (Copy)`, handle: `${row.handle}_copy` }); setAccountEditId(null); setAccountDialogOpen(true); }}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => setAccountDeleteId(row.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                )}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="templates">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <CardTitle>Post Templates</CardTitle>
+                  <CardDescription>
+                    Copy library that powers auto-generated posts. Picked at random per personality × event type. Placeholders: <code>{"{player}"}</code>, <code>{"{score}"}</code>, <code>{"{opponent}"}</code>, <code>{"{tier}"}</code>, <code>{"{stat_line}"}</code>, <code>{"{streak}"}</code>.
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={seedDefaults} disabled={seeding}>
+                  {seeding ? "Seeding…" : "Seed default templates"}
                 </Button>
               </div>
-            )}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Creators Panel */}
-      {creatorsOpen && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Creators</CardTitle>
-            <CardDescription>Non-player content creators (commentators, analysts, fan channels).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              data={creators}
-              columns={[
-                { key: "name", label: "Name" },
-                { key: "handle", label: "Handle" },
-                {
-                  key: "accent_color",
-                  label: "Color",
-                  render: (r) => (
-                    <div className="h-5 w-5 rounded-full border border-border" style={{ background: r.accent_color ?? undefined }} />
-                  ),
-                },
-              ] as Column<Creator>[]}
-              isLoading={false}
-              searchKeys={["name", "handle"]}
-              searchPlaceholder="Search creators…"
-              onAdd={() => { setCreatorForm(emptyCreator()); setCreatorEditId(null); setCreatorDialogOpen(true); }}
-              addLabel="New Creator"
-              actions={(row) => (
-                <div className="flex gap-1">
-                  <Button size="icon" variant="ghost" onClick={() => { setCreatorForm(row); setCreatorEditId(row.id); setCreatorDialogOpen(true); }}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setCreatorForm({ ...row, name: `${row.name} (Copy)`, handle: `${row.handle}_copy` }); setCreatorEditId(null); setCreatorDialogOpen(true); }}>
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => setCreatorDeleteId(row.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              )}
-            />
-          </CardContent>
-        </Card>
-      )}
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={templates}
+                columns={[
+                  {
+                    key: "personality",
+                    label: "Personality",
+                    render: (r) => <Badge variant="secondary" className="capitalize">{r.personality.replace(/_/g, " ")}</Badge>,
+                  },
+                  {
+                    key: "event_type",
+                    label: "Event",
+                    render: (r) => <Badge variant="outline" className="capitalize">{r.event_type.replace(/_/g, " ")}</Badge>,
+                  },
+                  {
+                    key: "template_text",
+                    label: "Template",
+                    render: (r) => <span className="text-sm">{r.template_text.length > 80 ? r.template_text.slice(0, 80) + "…" : r.template_text}</span>,
+                  },
+                  {
+                    key: "is_active",
+                    label: "Active",
+                    render: (r) => r.is_active ? <Badge>On</Badge> : <Badge variant="outline">Off</Badge>,
+                  },
+                ] as Column<PostTemplate>[]}
+                isLoading={false}
+                searchKeys={["personality", "event_type", "template_text"]}
+                searchPlaceholder="Search templates…"
+                onAdd={() => { setTemplateForm(emptyTemplate()); setTemplateEditId(null); setTemplateDialogOpen(true); }}
+                addLabel="New Template"
+                actions={(row) => (
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" onClick={() => { setTemplateForm(row); setTemplateEditId(row.id); setTemplateDialogOpen(true); }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" title="Duplicate" onClick={() => { setTemplateForm({ ...row, template_text: row.template_text }); setTemplateEditId(null); setTemplateDialogOpen(true); }}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => setTemplateDeleteId(row.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                )}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* ── Post Dialog ──────────────────────── */}
       <FormDialog
