@@ -5,15 +5,68 @@ import { DataTable, Column } from "@/components/admin/DataTable";
 import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { HslColorPicker } from "@/components/admin/HslColorPicker";
+import { PostTemplatePreview } from "@/components/admin/PostTemplatePreview";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pencil, Trash2, Upload, X, Users, Copy } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Pencil, Trash2, Upload, X, Users, Copy, Radio, MessageSquare, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+
+/* ── Location accounts + templates ────────── */
+
+interface LocationAccount {
+  id: string;
+  name: string;
+  handle: string;
+  avatar_url: string | null;
+  accent_color: string | null;
+  personality: string;
+  location_type: "league" | "road" | "run" | string;
+  road_name: string | null;
+  run_id: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface PostTemplate {
+  id: string;
+  personality: string;
+  event_type: string;
+  template_text: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+const EVENT_TYPES = ["game_result", "appearance", "evolution", "streak", "signing"];
+const LOCATION_TYPES = ["league", "road", "run"];
+
+const emptyAccount = (): Partial<LocationAccount> => ({
+  name: "",
+  handle: "",
+  avatar_url: null,
+  accent_color: "hsl(280, 70%, 50%)",
+  personality: "hype",
+  location_type: "league",
+  road_name: null,
+  run_id: null,
+  is_active: true,
+});
+
+const emptyTemplate = (): Partial<PostTemplate> => ({
+  personality: "hype",
+  event_type: "game_result",
+  template_text: "",
+  is_active: true,
+  sort_order: 0,
+});
 
 /* ── Types ─────────────────────────────────── */
 
