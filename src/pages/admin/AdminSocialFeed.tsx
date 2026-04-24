@@ -368,6 +368,253 @@ export default function AdminSocialFeed() {
     onError: (e) => toast.error(e.message),
   });
 
+  /* ── Account mutations ───────────────────── */
+
+  const saveAccountMut = useMutation({
+    mutationFn: async () => {
+      const payload: any = {
+        name: accountForm.name?.trim() ?? "",
+        handle: accountForm.handle?.trim().replace(/^@/, "") ?? "",
+        avatar_url: accountForm.avatar_url ?? null,
+        accent_color: accountForm.accent_color ?? "hsl(280, 70%, 50%)",
+        personality: accountForm.personality ?? "hype",
+        location_type: accountForm.location_type ?? "league",
+        road_name: accountForm.location_type === "road" ? (accountForm.road_name ?? null) : null,
+        run_id: accountForm.location_type === "run" ? (accountForm.run_id ?? null) : null,
+        is_active: accountForm.is_active ?? true,
+      };
+      if (!payload.name || !payload.handle) throw new Error("Name and handle are required");
+      if (payload.location_type === "road" && !payload.road_name) throw new Error("Road name is required");
+      if (payload.location_type === "run" && !payload.run_id) throw new Error("Pick a run");
+      if (accountEditId) {
+        const { error } = await supabase.from("location_accounts").update(payload).eq("id", accountEditId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("location_accounts").insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-location-accounts"] });
+      qc.invalidateQueries({ queryKey: ["admin-rules-location-accounts"] });
+      setAccountDialogOpen(false);
+      toast.success(accountEditId ? "Account updated" : "Account created");
+    },
+    onError: (e: any) => toast.error(e.message ?? "Save failed"),
+  });
+
+  const deleteAccountMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("location_accounts").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-location-accounts"] });
+      qc.invalidateQueries({ queryKey: ["admin-rules-location-accounts"] });
+      setAccountDeleteId(null);
+      toast.success("Account deleted");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const toggleAccountActiveMut = useMutation({
+    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const { error } = await supabase.from("location_accounts").update({ is_active }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-location-accounts"] }),
+    onError: (e) => toast.error(e.message),
+  });
+
+  /* ── Template mutations ──────────────────── */
+
+  const saveTemplateMut = useMutation({
+    mutationFn: async () => {
+      const payload: any = {
+        personality: templateForm.personality ?? "hype",
+        event_type: templateForm.event_type ?? "game_result",
+        template_text: templateForm.template_text?.trim() ?? "",
+        sort_order: templateForm.sort_order ?? 0,
+        is_active: templateForm.is_active ?? true,
+      };
+      if (!payload.template_text) throw new Error("Template text is required");
+      if (templateEditId) {
+        const { error } = await supabase.from("location_post_templates").update(payload).eq("id", templateEditId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("location_post_templates").insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-post-templates"] });
+      setTemplateDialogOpen(false);
+      toast.success(templateEditId ? "Template updated" : "Template created");
+    },
+    onError: (e: any) => toast.error(e.message ?? "Save failed"),
+  });
+
+  const deleteTemplateMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("location_post_templates").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-post-templates"] });
+      setTemplateDeleteId(null);
+      toast.success("Template deleted");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const seedDefaults = async () => {
+    setSeeding(true);
+    try {
+      const seeds: { personality: string; event_type: string; template_text: string }[] = [];
+      const SEED_BY_PERSONALITY: Record<string, Record<string, string[]>> = {
+        hype: {
+          game_result: [
+            "🚨 {player} GOES OFF for {stat_line} in a {score} W over {opponent}!! 🔥🔥",
+            "{score} FINAL — {player} cooked the {opponent} ({stat_line}). Unreal.",
+          ],
+          appearance: [
+            "👀 LOOK who just pulled up — {tier} {player} in the building!!",
+            "Yo {player} ({tier}) just stepped on the court 😤",
+          ],
+          evolution: [
+            "📈 {player} just EVOLVED. Different beast now.",
+            "{player} unlocked a new tier. We are NOT safe.",
+          ],
+          streak: [
+            "🔥 {player} on a {streak}-game heater. STOP HIM.",
+            "{streak} W's in a row for {player}. Locked in.",
+          ],
+          signing: [
+            "🚨 BREAKING — {tier} {player} just hit the league!! 📝",
+            "WELCOME {player} ({tier}) to the show 🎉",
+          ],
+        },
+        analyst: {
+          game_result: [
+            "Box score: {player} — {stat_line}. Final {score} vs {opponent}.",
+            "{player} put up {stat_line}, leading the {score} win over {opponent}.",
+          ],
+          appearance: [
+            "Notable check-in: {tier} {player} on the floor.",
+            "Tier alert — {player} ({tier}) is in the lineup.",
+          ],
+          evolution: [
+            "Progression update: {player} reached a new tier today.",
+            "{player} evolved. Worth tracking how the new badges play out.",
+          ],
+          streak: [
+            "{player} is now on a {streak}-game win streak.",
+            "Sample size growing: {streak} straight Ws for {player}.",
+          ],
+          signing: [
+            "Roster move: {tier} {player} added to the league pool.",
+            "New asset: {player} ({tier}) enters circulation.",
+          ],
+        },
+        trash_talker: {
+          game_result: [
+            "{opponent} got COOKED. {score}. {player} dropped {stat_line}. Pack it up.",
+            "Lol @ {opponent}. {player} ({stat_line}) said sit down. {score}.",
+          ],
+          appearance: [
+            "Oh you brought {player} ({tier})? Y'all really tried it 😂",
+            "{tier} {player} pulled up. Run home.",
+          ],
+          evolution: [
+            "{player} evolved. Like he wasn't already too much. Ridiculous.",
+            "Bro {player} got an upgrade?? Unfair league.",
+          ],
+          streak: [
+            "{streak} in a row?? Somebody PLEASE beat {player}. This is embarrassing.",
+            "{player} on {streak} straight. The competition is washed.",
+          ],
+          signing: [
+            "Y'all REALLY signed {player} ({tier})?? Pay attention league.",
+            "{tier} {player} in the building. Other GMs in shambles.",
+          ],
+        },
+        historian: {
+          game_result: [
+            "On this night: {player} — {stat_line} — leads a {score} victory over {opponent}.",
+            "Filed away: {score} W, {player} with {stat_line}. One for the books.",
+          ],
+          appearance: [
+            "Sighting: {tier} {player} returns to the hardwood.",
+            "{player} ({tier}) makes another appearance — every showing matters.",
+          ],
+          evolution: [
+            "{player} reaches a new chapter. Evolution complete.",
+            "Today {player} crossed a tier threshold. Noted.",
+          ],
+          streak: [
+            "{player} extends the run to {streak} straight wins.",
+            "Streak watch: {player} now at {streak} consecutive Ws.",
+          ],
+          signing: [
+            "Welcomed today: {tier} {player}. A new name on the ledger.",
+            "League roster grows — {player} ({tier}) signs in.",
+          ],
+        },
+        meme: {
+          game_result: [
+            "{player} dropping {stat_line} is criminal. {score}. {opponent} = ☠️",
+            "POV: you played {player}. {stat_line}. {score}. ggwp 💀",
+          ],
+          appearance: [
+            "no bc why is {tier} {player} HERE 😭",
+            "{player} ({tier}) showed up I'm crying 💀",
+          ],
+          evolution: [
+            "{player} hit evolve and now he's built different fr",
+            "they really upgraded {player} 😭 nerf when",
+          ],
+          streak: [
+            "{player} on {streak} W's. Touch grass champ.",
+            "{streak} straight. {player} is in his bag fr fr.",
+          ],
+          signing: [
+            "{tier} {player} just signed I— 🧎",
+            "new card alert 🚨 {player} ({tier}) welcome to the chaos",
+          ],
+        },
+      };
+
+      for (const personality of personalities) {
+        const templatesForP = SEED_BY_PERSONALITY[personality];
+        if (!templatesForP) continue;
+        for (const event_type of EVENT_TYPES) {
+          for (const text of (templatesForP[event_type] ?? [])) {
+            seeds.push({ personality, event_type, template_text: text });
+          }
+        }
+      }
+
+      const { data: existing } = await supabase
+        .from("location_post_templates")
+        .select("personality,event_type,template_text");
+      const seen = new Set((existing ?? []).map((r: any) => `${r.personality}|${r.event_type}|${r.template_text}`));
+      const toInsert = seeds.filter((s) => !seen.has(`${s.personality}|${s.event_type}|${s.template_text}`));
+
+      if (toInsert.length === 0) {
+        toast.info("All default templates already exist");
+        return;
+      }
+      const { error } = await supabase.from("location_post_templates").insert(toInsert);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["admin-post-templates"] });
+      toast.success(`Seeded ${toInsert.length} templates`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Seed failed");
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   /* ── Table columns ───────────────────────── */
 
   const columns: Column<SocialPost>[] = [
