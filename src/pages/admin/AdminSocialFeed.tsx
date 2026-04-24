@@ -1138,6 +1138,255 @@ export default function AdminSocialFeed() {
         onConfirm={() => creatorDeleteId && deleteCreatorMut.mutate(creatorDeleteId)}
         loading={deleteCreatorMut.isPending}
       />
+
+      {/* ── Account Dialog ───────────────────── */}
+      <FormDialog
+        open={accountDialogOpen}
+        onOpenChange={setAccountDialogOpen}
+        title={accountEditId ? "Edit Media Account" : "New Media Account"}
+        onSave={() => saveAccountMut.mutate()}
+        saving={saveAccountMut.isPending}
+        className="max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
+      >
+        <div className="space-y-4 p-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Name</Label>
+              <Input
+                value={accountForm.name ?? ""}
+                onChange={(e) => setAccountForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Court Report LA"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Handle</Label>
+              <Input
+                value={accountForm.handle ?? ""}
+                onChange={(e) => setAccountForm((f) => ({ ...f, handle: e.target.value.replace(/^@/, "") }))}
+                placeholder="courtreportla"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Personality</Label>
+            <Select
+              value={accountForm.personality ?? "hype"}
+              onValueChange={(v) => setAccountForm((f) => ({ ...f, personality: v }))}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {personalities.map((p) => (
+                  <SelectItem key={p} value={p} className="capitalize">{p.replace(/_/g, " ")}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Edit the list in <strong>Rules Config → personalities_enum</strong>.</p>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Coverage</Label>
+            <Select
+              value={accountForm.location_type ?? "league"}
+              onValueChange={(v) => setAccountForm((f) => ({ ...f, location_type: v, road_name: null, run_id: null }))}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {LOCATION_TYPES.map((t) => (
+                  <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {accountForm.location_type === "road" && (
+            <div className="space-y-1">
+              <Label>Road Name</Label>
+              <Input
+                value={accountForm.road_name ?? ""}
+                onChange={(e) => setAccountForm((f) => ({ ...f, road_name: e.target.value }))}
+                placeholder="Sunset Strip"
+              />
+              <p className="text-xs text-muted-foreground">Must match a road name used in Domination games.</p>
+            </div>
+          )}
+
+          {accountForm.location_type === "run" && (
+            <div className="space-y-1">
+              <Label>Run</Label>
+              <Select
+                value={accountForm.run_id ?? ""}
+                onValueChange={(v) => setAccountForm((f) => ({ ...f, run_id: v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Pick a run" /></SelectTrigger>
+                <SelectContent>
+                  {(runs as any[]).map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <HslColorPicker
+              label="Accent Color"
+              value={accountForm.accent_color ?? "hsl(280, 70%, 50%)"}
+              onChange={(v) => setAccountForm((f) => ({ ...f, accent_color: v ?? "hsl(280, 70%, 50%)" }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Avatar</Label>
+            <div className="flex items-center gap-3">
+              {accountForm.avatar_url ? (
+                <div className="relative">
+                  <img src={accountForm.avatar_url} alt="Avatar" className="h-14 w-14 rounded-full object-cover border border-border" />
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 h-5 w-5"
+                    onClick={() => setAccountForm((f) => ({ ...f, avatar_url: null }))}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="h-14 w-14 rounded-full border-2 border-dashed border-muted-foreground/25 flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => accountFileRef.current?.click()}
+                >
+                  {accountUploading ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  ) : (
+                    <Upload className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+              )}
+              <Button variant="outline" size="sm" onClick={() => accountFileRef.current?.click()} disabled={accountUploading}>
+                {accountUploading ? "Uploading…" : "Upload"}
+              </Button>
+            </div>
+            <input
+              ref={accountFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleAccountAvatarUpload(file);
+                e.target.value = "";
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border border-border p-3">
+            <div>
+              <Label className="text-sm">Active</Label>
+              <p className="text-xs text-muted-foreground">Inactive accounts won't post or appear in pickers.</p>
+            </div>
+            <Switch
+              checked={accountForm.is_active ?? true}
+              onCheckedChange={(v) => setAccountForm((f) => ({ ...f, is_active: v }))}
+            />
+          </div>
+        </div>
+      </FormDialog>
+
+      {/* ── Template Dialog ──────────────────── */}
+      <FormDialog
+        open={templateDialogOpen}
+        onOpenChange={setTemplateDialogOpen}
+        title={templateEditId ? "Edit Template" : "New Template"}
+        onSave={() => saveTemplateMut.mutate()}
+        saving={saveTemplateMut.isPending}
+        className="max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
+      >
+        <div className="space-y-4 p-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Personality</Label>
+              <Select
+                value={templateForm.personality ?? "hype"}
+                onValueChange={(v) => setTemplateForm((f) => ({ ...f, personality: v }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {personalities.map((p) => (
+                    <SelectItem key={p} value={p} className="capitalize">{p.replace(/_/g, " ")}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Event Type</Label>
+              <Select
+                value={templateForm.event_type ?? "game_result"}
+                onValueChange={(v) => setTemplateForm((f) => ({ ...f, event_type: v }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {EVENT_TYPES.map((t) => (
+                    <SelectItem key={t} value={t} className="capitalize">{t.replace(/_/g, " ")}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Template Text</Label>
+            <Textarea
+              value={templateForm.template_text ?? ""}
+              onChange={(e) => setTemplateForm((f) => ({ ...f, template_text: e.target.value }))}
+              rows={4}
+              placeholder="🚨 {player} GOES OFF for {stat_line} in a {score} W over {opponent}!!"
+            />
+            <p className="text-xs text-muted-foreground">
+              Placeholders: <code>{"{player}"}</code> <code>{"{score}"}</code> <code>{"{opponent}"}</code> <code>{"{tier}"}</code> <code>{"{stat_line}"}</code> <code>{"{streak}"}</code>
+            </p>
+          </div>
+
+          <PostTemplatePreview template={templateForm.template_text ?? ""} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Sort Order</Label>
+              <Input
+                type="number"
+                value={templateForm.sort_order ?? 0}
+                onChange={(e) => setTemplateForm((f) => ({ ...f, sort_order: Number(e.target.value) || 0 }))}
+              />
+            </div>
+            <div className="flex items-end">
+              <div className="flex items-center justify-between w-full rounded-md border border-border p-2">
+                <Label className="text-sm">Active</Label>
+                <Switch
+                  checked={templateForm.is_active ?? true}
+                  onCheckedChange={(v) => setTemplateForm((f) => ({ ...f, is_active: v }))}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </FormDialog>
+
+      <ConfirmDialog
+        open={!!accountDeleteId}
+        onOpenChange={() => setAccountDeleteId(null)}
+        title="Delete Media Account"
+        description="Remove this account? Auto-posts already attributed to it will remain but lose the link."
+        onConfirm={() => accountDeleteId && deleteAccountMut.mutate(accountDeleteId)}
+        loading={deleteAccountMut.isPending}
+      />
+      <ConfirmDialog
+        open={!!templateDeleteId}
+        onOpenChange={() => setTemplateDeleteId(null)}
+        title="Delete Template"
+        description="Remove this post template?"
+        onConfirm={() => templateDeleteId && deleteTemplateMut.mutate(templateDeleteId)}
+        loading={deleteTemplateMut.isPending}
+      />
     </div>
   );
 }
