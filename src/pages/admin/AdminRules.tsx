@@ -117,13 +117,14 @@ export default function AdminRules() {
             <div className="space-y-1">
               <Label>Location Account</Label>
               <Select value={typeof form.value === "string" ? form.value : ""} onValueChange={(v) => setForm((f) => ({ ...f, value: v }))}>
-                <SelectTrigger><SelectValue placeholder="Pick an account (create one in Social Feed admin first)" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={locationAccounts.length ? "Pick an account" : "No accounts yet — create one in Social Feed → Media Accounts"} /></SelectTrigger>
                 <SelectContent>
                   {locationAccounts.map((a: any) => (
-                    <SelectItem key={a.id} value={a.id}>{a.name} · {a.handle} · {a.location_type}</SelectItem>
+                    <SelectItem key={a.id} value={a.id}>{a.name} · @{a.handle} · {a.location_type}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">Manage accounts in <strong>Social Feed → Media Accounts</strong>.</p>
             </div>
           ) : isNumberKey ? (
             <div className="space-y-1">
