@@ -686,6 +686,85 @@ export default function AdminSocialFeed() {
 
   const isYoutube = form.post_type === "youtube";
 
+  /* ── First-run bootstrap ─────────────────── */
+  // If templates / accounts / signing-rule are missing on first visit, set up
+  // sensible defaults so the media system actually has something to post with.
+  // Each piece is gated independently and only runs once per condition.
+  const leagueAccount = accounts.find((a) => a.location_type === "league");
+  const accountsLoaded = accounts !== undefined;
+  const templatesLoaded = templates !== undefined;
+  const ruleLoaded = signingRule !== undefined;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function bootstrap() {
+      // 1. Seed templates if completely empty
+      if (templatesLoaded && templates.length === 0) {
+        await seedDefaults({ silent: true });
+      }
+      if (cancelled) return;
+      // 2. Auto-create league account if none exists
+      if (accountsLoaded && !leagueAccount) {
+        const { data: created } = await supabase
+          .from("location_accounts")
+          .insert({
+            name: "GTeam League",
+            handle: "GTeamLeague",
+            personality: "hype",
+            location_type: "league",
+            accent_color: "hsl(280, 70%, 50%)",
+            is_active: true,
+          })
+          .select("id")
+          .single();
+        if (created?.id) {
+          qc.invalidateQueries({ queryKey: ["admin-location-accounts"] });
+          // 3. If signing-account rule is unset, point it at the new league account
+          if (ruleLoaded && !signingRule) {
+            await setSigningAccountMut.mutateAsync(created.id);
+          }
+        }
+      } else if (accountsLoaded && leagueAccount && ruleLoaded && !signingRule) {
+        await setSigningAccountMut.mutateAsync(leagueAccount.id);
+      }
+    }
+    bootstrap();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templatesLoaded, accountsLoaded, ruleLoaded, leagueAccount?.id, signingRule, templates.length]);
+
+  /* ── Status banner ──────────────────────── */
+  const statusItems = [
+    {
+      label: "Post templates",
+      ok: templates.length > 0,
+      detail: `${templates.length} template${templates.length === 1 ? "" : "s"}`,
+      fix: () => seedDefaults(),
+      fixLabel: "Seed defaults",
+    },
+    {
+      label: "League media account",
+      ok: !!leagueAccount,
+      detail: leagueAccount ? `${leagueAccount.name} (${leagueAccount.handle})` : "Not configured",
+      fix: () => {
+        setAccountForm({ ...emptyAccount(), location_type: "league" });
+        setAccountEditId(null);
+        setAccountDialogOpen(true);
+      },
+      fixLabel: "Create",
+    },
+    {
+      label: "Signings → media account",
+      ok: !!signingRule,
+      detail: signingRule
+        ? (accounts.find((a) => a.id === signingRule)?.name ?? "Linked")
+        : "No account linked",
+      fix: leagueAccount ? () => setSigningAccountMut.mutate(leagueAccount.id) : undefined,
+      fixLabel: "Link to league",
+    },
+  ];
+  const allOk = statusItems.every((s) => s.ok);
+
   /* ── Render ──────────────────────────────── */
 
   return (
@@ -694,6 +773,33 @@ export default function AdminSocialFeed() {
         <h1 className="text-2xl font-bold">Social Feed Manager</h1>
         <p className="text-sm text-muted-foreground">Posts, creators, and the location-aware media accounts that auto-tweet about league action.</p>
       </div>
+
+      <Card className={allOk ? "border-emerald-500/30" : "border-amber-500/40"}>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            {allOk
+              ? <><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Media system ready</>
+              : <><AlertCircle className="h-4 w-4 text-amber-500" /> Media system needs setup</>}
+          </CardTitle>
+          <CardDescription>Auto-posts only fire when all three rows below are green.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {statusItems.map((s) => (
+            <div key={s.label} className="flex items-center justify-between gap-3 text-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                {s.ok
+                  ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                  : <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />}
+                <span className="font-medium">{s.label}</span>
+                <span className="text-muted-foreground truncate">— {s.detail}</span>
+              </div>
+              {!s.ok && s.fix && (
+                <Button size="sm" variant="outline" onClick={s.fix}>{s.fixLabel}</Button>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="posts" className="space-y-4">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
