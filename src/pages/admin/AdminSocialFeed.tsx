@@ -467,8 +467,46 @@ export default function AdminSocialFeed() {
     onError: (e) => toast.error(e.message),
   });
 
-  const seedDefaults = async () => {
-    setSeeding(true);
+  /* ── League-rule sync (signings account) ───────────────────── */
+
+  const { data: signingRule } = useQuery({
+    queryKey: ["rule-league-signings-account"],
+    queryFn: async () => {
+      const { data } = await supabase.from("rule_config").select("value").eq("key", "league_signings_account_id").maybeSingle();
+      return (data?.value ?? null) as string | null;
+    },
+  });
+
+  const setSigningAccountMut = useMutation({
+    mutationFn: async (accountId: string) => {
+      const { data: existing } = await supabase
+        .from("rule_config")
+        .select("id")
+        .eq("key", "league_signings_account_id")
+        .maybeSingle();
+      if (existing) {
+        const { error } = await supabase
+          .from("rule_config")
+          .update({ value: accountId, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("rule_config").insert({
+          key: "league_signings_account_id",
+          value: accountId,
+          description: "Account ID for league-wide signing posts.",
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rule-league-signings-account"] });
+      qc.invalidateQueries({ queryKey: ["admin-rules"] });
+    },
+  });
+
+  const seedDefaults = async (opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) setSeeding(true);
     try {
       const seeds: { personality: string; event_type: string; template_text: string }[] = [];
       const SEED_BY_PERSONALITY: Record<string, Record<string, string[]>> = {
