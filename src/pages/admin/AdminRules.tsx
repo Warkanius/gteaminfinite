@@ -16,7 +16,7 @@ import type { Tables } from "@/integrations/supabase/types";
 type RuleConfig = Tables<"rule_config">;
 
 // Keys that store a single gem-tier name string — render a tier dropdown for these.
-const TIER_KEYS = new Set(["signing_min_gem_tier", "runs_appearance_min_gem_tier"]);
+const TIER_KEYS = new Set(["signing_min_gem_tier", "runs_appearance_min_gem_tier", "evolution_post_min_gem_tier"]);
 // Keys that should render an Account picker (location_accounts).
 const ACCOUNT_KEYS = new Set(["league_signings_account_id"]);
 // Keys that store a plain number — show a number input for cleaner editing.
@@ -25,6 +25,7 @@ const NUMBER_KEYS = new Set(["signing_post_cooldown_minutes", "appearance_cooldo
 const KEY_DESCRIPTIONS: Record<string, string> = {
   signing_min_gem_tier: "Minimum gem tier required for a signing post when a card enters a user's collection.",
   runs_appearance_min_gem_tier: "Minimum gem tier required for a Runs appearance post.",
+  evolution_post_min_gem_tier: "Minimum gem tier of the post-evolution card required to trigger an evolution media post.",
   notable_performance_thresholds: "Stat thresholds (points, assists, rebounds, stocks, double_double) used to flag notable lines in Domination posts.",
   signing_post_cooldown_minutes: "Per-account cooldown between signing posts, in minutes.",
   appearance_cooldown_hours: "Per-card-per-run cooldown between appearance posts, in hours.",
