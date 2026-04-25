@@ -132,6 +132,26 @@ function parseGemTierColor(color: string): Partial<CardVisuals> | null {
   return { primary: color, secondary: color, glow: color };
 }
 
+/**
+ * Wrap a color string with a given alpha (0-1). Handles three input shapes:
+ *   - Tailwind-style HSL token: "270 70% 50%"
+ *   - hsl(...) function string
+ *   - hex / named CSS colors
+ *
+ * Concatenating an alpha hex onto an `hsl(...)` string is invalid CSS and
+ * silently drops box-shadows / backgrounds — always go through this helper.
+ */
+export function withAlpha(color: string, alpha: number): string {
+  if (!color) return `hsla(0 0% 0% / ${alpha})`;
+  const tokenMatch = color.match(/^\d+\s+\d+%?\s+\d+%?$/);
+  if (tokenMatch) return `hsla(${color} / ${alpha})`;
+  if (color.startsWith("hsl(") && !color.startsWith("hsla(")) {
+    return color.replace(/^hsl\(/, "hsla(").replace(/\)\s*$/, ` / ${alpha})`);
+  }
+  if (color.startsWith("hsla(")) return color;
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
+}
+
 export function resolveCardVisuals(card: CardData, gemTier?: GemTierData | null): CardVisuals {
   const result: CardVisuals = { ...FALLBACK };
 
