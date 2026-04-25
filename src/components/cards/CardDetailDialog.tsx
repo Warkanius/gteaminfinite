@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { StarRating } from "@/components/cards/StarRating";
-import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
+import { resolveCardVisuals, withAlpha, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { computeStars } from "@/lib/ovrUtils";
 import { Lock, Unlock, Coins, CheckCircle, Circle, ArrowRight, Sparkles } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -81,8 +81,8 @@ export function CardDetailDialog({ open, onOpenChange, card, gemTier, teamName, 
         <div
           className="rounded-t-lg -mx-6 -mt-6 px-6 pt-6 pb-4 mb-4"
           style={{
-            background: `linear-gradient(135deg, ${bg(visuals.primary)}, ${bg(visuals.secondary)})`,
-            boxShadow: `inset 0 -20px 40px -20px ${bg(visuals.glow)}30`,
+            backgroundImage: `linear-gradient(135deg, ${bg(visuals.primary)}, ${bg(visuals.secondary)})`,
+            boxShadow: `inset 0 -20px 40px -20px ${withAlpha(visuals.glow, 0.35)}`,
           }}
         >
           <DialogHeader>

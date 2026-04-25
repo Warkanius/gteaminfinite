@@ -189,6 +189,6 @@ Deno.serve(async (req) => {
     return jsonResp({ success: true, cards: cards ?? [] });
   } catch (e) {
     console.error("[claim-starter-pack] unhandled exception", e);
-    return jsonResp({ error: e?.message ?? "Unknown error" }, 500);
+    return jsonResp({ error: (e as Error)?.message ?? "Unknown error" }, 500);
   }
 });

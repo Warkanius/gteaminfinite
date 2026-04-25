@@ -1,4 +1,4 @@
-import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
+import { resolveCardVisuals, withAlpha, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/cards/StarRating";
 import { Shield, Lock } from "lucide-react";
@@ -39,7 +39,7 @@ export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked
           className,
         )}
         style={{
-          boxShadow: `inset 0 0 0 2px ${bg(visuals.glow)}20`,
+          boxShadow: `inset 0 0 0 2px ${withAlpha(visuals.glow, 0.12)}`,
         }}
         title={`Missing: ${card.name}`}
       >
@@ -81,8 +81,10 @@ export function PlayerCard({ card, gemTier, badgeCount, duplicateCount, isLocked
         className,
       )}
       style={{
-        background: `linear-gradient(135deg, ${bg(visuals.primary)}, ${bg(visuals.secondary)})`,
-        boxShadow: `0 0 18px 3px ${bg(visuals.glow)}40, inset 0 1px 0 ${bg(visuals.glow)}20`,
+        // Use backgroundImage (not the `background` shorthand) so the
+        // shimmer animation's background-size can still take effect.
+        backgroundImage: `linear-gradient(135deg, ${bg(visuals.primary)}, ${bg(visuals.secondary)})`,
+        boxShadow: `0 0 18px 3px ${withAlpha(visuals.glow, 0.45)}, inset 0 1px 0 ${withAlpha(visuals.glow, 0.18)}`,
       }}
     >
       {/* Star rating */}

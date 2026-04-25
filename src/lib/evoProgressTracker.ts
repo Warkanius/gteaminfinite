@@ -1,6 +1,50 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CardGameResult, StatKey } from "@/lib/gameEngine";
 import { fetchTraitsForCards, getEvolutionMultiplier, type CardTrait } from "@/lib/traitEngine";
+import { postLeagueEvent } from "@/lib/leagueEvents";
+
+/** When an evo step just completed, fire a media event so the league reacts. */
+async function maybePostEvolution(userId: string, playerCardId: string, evoPathId: string) {
+  try {
+    // Resolve the destination card (after evolution) and its tier name.
+    const { data: path } = await supabase
+      .from("evo_paths")
+      .select("evolves_to_card_id, to_tier_id, player_card_id")
+      .eq("id", evoPathId)
+      .maybeSingle();
+    const targetCardId = path?.evolves_to_card_id ?? playerCardId;
+    const { data: card } = await supabase
+      .from("player_cards")
+      .select("name, gem_tiers(name, sort_order)")
+      .eq("id", targetCardId)
+      .maybeSingle();
+    const tierName = (card as any)?.gem_tiers?.name ?? null;
+
+    // Check the configurable gate.
+    const { data: minRule } = await supabase
+      .from("rule_config")
+      .select("value")
+      .eq("key", "evolution_post_min_gem_tier")
+      .maybeSingle();
+    const minTierName = (minRule?.value ?? null) as string | null;
+    if (minTierName && tierName) {
+      const { data: tiers } = await supabase.from("gem_tiers").select("name, sort_order");
+      const min = (tiers ?? []).find((t: any) => t.name === minTierName)?.sort_order ?? null;
+      const cur = (tiers ?? []).find((t: any) => t.name === tierName)?.sort_order ?? null;
+      if (min == null || cur == null || cur < min) return;
+    }
+
+    await postLeagueEvent({
+      event_type: "evolution",
+      player_card_id: targetCardId,
+      player_name: card?.name ?? null,
+      gem_tier_name: tierName,
+      to_tier: tierName,
+    });
+  } catch (e) {
+    console.warn("[maybePostEvolution] swallowed", (e as Error).message);
+  }
+}
 
 export interface CompoundChallenge {
   type: string;
@@ -88,6 +132,7 @@ async function trackSingleProgress(
   const existing = progressMap.get(activeStep.id);
   const newValue = (existing?.current_value ?? 0) + increment;
   const completed = newValue >= activeStep.challenge_target;
+  const wasCompleted = !!existing?.completed;
 
   if (existing) {
     await supabase
@@ -107,6 +152,10 @@ async function trackSingleProgress(
       completed,
       completed_at: completed ? new Date().toISOString() : null,
     });
+  }
+
+  if (completed && !wasCompleted) {
+    await maybePostEvolution(userId, card.playerCardId, activeStep.id);
   }
 }
 
@@ -149,6 +198,7 @@ async function trackCompoundProgress(
   const allMet = compounds.every((req, i) => (updatedCompound[String(i)] ?? 0) >= req.target);
   // current_value = number of completed sub-requirements (for display)
   const completedCount = compounds.filter((req, i) => (updatedCompound[String(i)] ?? 0) >= req.target).length;
+  const wasCompleted = !!existing?.completed;
 
   if (existing) {
     await supabase
@@ -170,6 +220,10 @@ async function trackCompoundProgress(
       completed: allMet,
       completed_at: allMet ? new Date().toISOString() : null,
     } as any);
+  }
+
+  if (allMet && !wasCompleted) {
+    await maybePostEvolution(userId, card.playerCardId, activeStep.id);
   }
 }
 
