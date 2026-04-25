@@ -867,7 +867,7 @@ export default function AdminSocialFeed() {
                     Copy library that powers auto-generated posts. Picked at random per personality × event type. Placeholders: <code>{"{player}"}</code>, <code>{"{score}"}</code>, <code>{"{opponent}"}</code>, <code>{"{tier}"}</code>, <code>{"{stat_line}"}</code>, <code>{"{streak}"}</code>.
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={seedDefaults} disabled={seeding}>
+                <Button variant="outline" size="sm" onClick={() => seedDefaults()} disabled={seeding}>
                   {seeding ? "Seeding…" : "Seed default templates"}
                 </Button>
               </div>
