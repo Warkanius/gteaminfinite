@@ -198,6 +198,7 @@ async function trackCompoundProgress(
   const allMet = compounds.every((req, i) => (updatedCompound[String(i)] ?? 0) >= req.target);
   // current_value = number of completed sub-requirements (for display)
   const completedCount = compounds.filter((req, i) => (updatedCompound[String(i)] ?? 0) >= req.target).length;
+  const wasCompleted = !!existing?.completed;
 
   if (existing) {
     await supabase
@@ -219,6 +220,10 @@ async function trackCompoundProgress(
       completed: allMet,
       completed_at: allMet ? new Date().toISOString() : null,
     } as any);
+  }
+
+  if (allMet && !wasCompleted) {
+    await maybePostEvolution(userId, card.playerCardId, activeStep.id);
   }
 }
 
