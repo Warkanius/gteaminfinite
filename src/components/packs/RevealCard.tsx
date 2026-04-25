@@ -1,5 +1,5 @@
 import { useState, forwardRef, useImperativeHandle } from "react";
-import { resolveCardVisuals, type CardData, type GemTierData } from "@/lib/cardVisuals";
+import { resolveCardVisuals, withAlpha, type CardData, type GemTierData } from "@/lib/cardVisuals";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/cards/StarRating";
 import { computeStars } from "@/lib/ovrUtils";
@@ -66,8 +66,8 @@ export const RevealCard = forwardRef<RevealCardHandle, RevealCardProps>(
             className="absolute inset-0 rounded-lg flex flex-col items-center justify-center backface-hidden"
             style={{
               backfaceVisibility: "hidden",
-              background: `linear-gradient(135deg, hsl(var(--card)), hsl(var(--muted)))`,
-              boxShadow: `0 0 20px 3px ${bg(visuals.glow)}40`,
+              backgroundImage: `linear-gradient(135deg, hsl(var(--card)), hsl(var(--muted)))`,
+              boxShadow: `0 0 20px 3px ${withAlpha(visuals.glow, 0.45)}`,
             }}
           >
             <div
@@ -104,8 +104,8 @@ export const RevealCard = forwardRef<RevealCardHandle, RevealCardProps>(
                 visuals.animation === "holographic" && "animate-holographic"
               )}
               style={{
-                background: `linear-gradient(135deg, ${bg(visuals.primary)}, ${bg(visuals.secondary)})`,
-                boxShadow: `0 0 24px 4px ${bg(visuals.glow)}50`,
+                backgroundImage: `linear-gradient(135deg, ${bg(visuals.primary)}, ${bg(visuals.secondary)})`,
+                boxShadow: `0 0 24px 4px ${withAlpha(visuals.glow, 0.55)}`,
               }}
             >
               {/* Star rating */}
