@@ -156,6 +156,14 @@ Deno.serve(async (req) => {
     if (!account) return jsonResp({ skipped: true, reason: "no_location_account" });
 
     // ── Per-event gating ────────────────────────────────────────
+    // Synthesize a "stat_line" string used by many templates: top scorer first, then notable lines.
+    const statLineParts: string[] = [];
+    if (payload.top_scorer_name && payload.top_scorer_pts != null) {
+      statLineParts.push(`${payload.top_scorer_name} ${payload.top_scorer_pts} pts`);
+    }
+    if (payload.notable && payload.notable.length) statLineParts.push(...payload.notable);
+    const statLine = statLineParts.length ? statLineParts.join(", ") : null;
+
     const ctx: Record<string, string | number | null | undefined> = {
       user: payload.user_display ?? "A challenger",
       opponent: payload.opponent ?? "the opposition",
@@ -165,6 +173,7 @@ Deno.serve(async (req) => {
       top: payload.top_scorer_name ?? null,
       topPts: payload.top_scorer_pts ?? null,
       notable: (payload.notable ?? []).join(", ") || null,
+      stat_line: statLine,
       player: payload.player_name ?? null,
       tier: payload.gem_tier_name ?? null,
       streak: payload.streak ?? null,
