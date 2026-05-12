@@ -62,27 +62,31 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return jsonResp({ error: "Unauthorized" }, 401);
 
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
-    if (claimsErr || !claimsData?.claims) return jsonResp({ error: "Unauthorized" }, 401);
-    const userId = claimsData.claims.sub as string;
-
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
 
     const payload = (await req.json()) as EventPayload;
     if (!payload?.event_type) return jsonResp({ error: "event_type required" }, 400);
+
+    // Allow trusted server-to-server calls (signings from edge functions) using service-role key.
+    let userId: string;
+    if (token === serviceKey) {
+      if (!payload.user_id) return jsonResp({ error: "user_id required for service calls" }, 400);
+      userId = payload.user_id;
+    } else {
+      const userClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
+      if (claimsErr || !claimsData?.claims) return jsonResp({ error: "Unauthorized" }, 401);
+      userId = claimsData.claims.sub as string;
+    }
 
     // ── Load configurable rules ─────────────────────────────────
     const [
