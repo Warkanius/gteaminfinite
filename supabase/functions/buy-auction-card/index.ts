@@ -60,6 +60,25 @@ Deno.serve(async (req) => {
       player_card_id: listing.player_card_id,
     });
 
+    // Fire signing event (server gates by tier + cooldown)
+    try {
+      const { data: cardInfo } = await supabaseAdmin
+        .from("player_cards").select("name, gem_tiers(name)").eq("id", listing.player_card_id).maybeSingle();
+      const { data: prof } = await supabaseAdmin
+        .from("profiles").select("display_name, team_name").eq("user_id", user.id).maybeSingle();
+      await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/post-league-event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({
+          event_type: "signing", user_id: user.id,
+          player_card_id: listing.player_card_id,
+          player_name: cardInfo?.name ?? null,
+          gem_tier_name: (cardInfo as any)?.gem_tiers?.name ?? null,
+          user_display: prof?.team_name ?? prof?.display_name ?? "A challenger",
+        }),
+      });
+    } catch (e) { console.warn("[buy-auction-card] signing swallow", (e as Error).message); }
+
     return new Response(JSON.stringify({
       success: true,
       coins_remaining: profile.coins - listing.price,
