@@ -195,9 +195,15 @@ Deno.serve(async (req) => {
         if (recent && recent.length > 0) shouldPost = false;
       }
     } else if (payload.event_type === "appearance") {
-      const min = tierSort(runsAppearanceMinTier);
+      // Use domination rule when posting to a road account; runs rule when posting to a run account.
+      const isDomination = !!payload.road_name;
+      const tierRule = isDomination ? dominationAppearanceMinTier : runsAppearanceMinTier;
+      const min = tierSort(tierRule);
       const cur = tierSort(payload.gem_tier_name);
-      if (min == null || cur == null || cur < min) shouldPost = false;
+      if (min == null || cur == null || cur < min) {
+        console.warn("[post-league-event] appearance skipped: tier_below_min", { tierRule, gem: payload.gem_tier_name });
+        shouldPost = false;
+      }
 
       if (shouldPost && typeof appearanceCooldownHr === "number" && appearanceCooldownHr > 0 && payload.player_card_id) {
         const cutoff = new Date(Date.now() - appearanceCooldownHr * 3_600_000).toISOString();
