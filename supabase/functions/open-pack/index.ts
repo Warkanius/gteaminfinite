@@ -127,6 +127,7 @@ Deno.serve(async (req) => {
         player_card_id: confirm_choice_card_id,
         source: "standard_pack",
       });
+      await fireSigning(admin, userId, confirm_choice_card_id);
 
       // Log purchase (player choice resolved)
       await admin.from("pack_purchases").insert({
