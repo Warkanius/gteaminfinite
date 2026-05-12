@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
     const [
       signingMinTier,
       runsAppearanceMinTier,
+      dominationAppearanceMinTier,
       notableThresholds,
       signingCooldownMin,
       appearanceCooldownHr,
@@ -99,6 +100,7 @@ Deno.serve(async (req) => {
     ] = await Promise.all([
       getRule(admin, "signing_min_gem_tier"),
       getRule(admin, "runs_appearance_min_gem_tier"),
+      getRule(admin, "domination_appearance_min_gem_tier"),
       getRule(admin, "notable_performance_thresholds"),
       getRule(admin, "signing_post_cooldown_minutes"),
       getRule(admin, "appearance_cooldown_hours"),
