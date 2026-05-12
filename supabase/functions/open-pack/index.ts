@@ -318,6 +318,7 @@ Deno.serve(async (req) => {
       player_card_id: pulledCardId,
       source: "standard_pack",
     });
+    await fireSigning(admin, userId, pulledCardId);
 
     // Log purchase
     await admin.from("pack_purchases").insert({
