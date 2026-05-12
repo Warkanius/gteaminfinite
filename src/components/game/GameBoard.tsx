@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PlayerCard } from "@/components/cards/PlayerCard";
@@ -26,6 +26,7 @@ import {
 import type { GameCard, FullGameResult } from "@/pages/Play";
 import type { ActiveDynamicDuo } from "@/lib/dynamicDuos";
 import { Sparkles } from "lucide-react";
+import { postLeagueEvent } from "@/lib/leagueEvents";
 
 interface GameBoardProps {
   userLineup: GameCard[];
@@ -49,7 +50,31 @@ function resolveGameplayStars(card: GameCard | undefined, gemStars?: number | nu
   return STATS.some((stat) => (card[stat] ?? 0) > 0) ? 1 : 0;
 }
 
-export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, activeDuos = [], onComplete, difficultyStars, gameContext }: GameBoardProps) {
+export function GameBoard({ userLineup, cpuLineup, badgeMap, traitMap, activeDuos = [], onComplete, difficultyStars, gameContext, roadName }: GameBoardProps) {
+  // Fire one appearance event per qualifying card on mount (server gates by tier + cooldown)
+  useEffect(() => {
+    if (!roadName) return;
+    (async () => {
+      try {
+        const { data: prof } = await supabase.from("profiles").select("display_name, team_name").eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "").maybeSingle();
+        const display = prof?.team_name ?? prof?.display_name ?? "A challenger";
+        for (const card of userLineup) {
+          await postLeagueEvent({
+            event_type: "appearance",
+            road_name: roadName,
+            player_card_id: (card as any).id,
+            player_name: (card as any).name,
+            gem_tier_name: (card as any).gem_tiers?.name ?? (card as any).gem_name ?? null,
+            user_display: display,
+          });
+        }
+      } catch (e) {
+        console.warn("[GameBoard] appearance swallow", (e as Error).message);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [playerIdx, setPlayerIdx] = useState(0);
   const [statIdx, setStatIdx] = useState(0);
   const [useOwnDice, setUseOwnDice] = useState(false);

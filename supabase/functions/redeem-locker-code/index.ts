@@ -78,8 +78,30 @@ Deno.serve(async (req) => {
       const cardId = rewardValue.player_card_id;
       if (cardId) {
         await supabaseAdmin.from("user_collections").insert({ user_id: user.id, player_card_id: cardId, source: "locker_code" });
-        const { data: card } = await supabaseAdmin.from("player_cards").select("name").eq("id", cardId).single();
+        const { data: card } = await supabaseAdmin.from("player_cards").select("name, gem_tiers(name)").eq("id", cardId).single();
         rewardDescription = `Card: ${card?.name ?? "Unknown"}`;
+        // Fire signing event
+        try {
+          const { data: prof } = await supabaseAdmin
+            .from("profiles").select("display_name, team_name").eq("user_id", user.id).maybeSingle();
+          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/post-league-event`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({
+              event_type: "signing",
+              user_id: user.id,
+              player_card_id: cardId,
+              player_name: card?.name ?? null,
+              gem_tier_name: (card as any)?.gem_tiers?.name ?? null,
+              user_display: prof?.team_name ?? prof?.display_name ?? "A challenger",
+            }),
+          });
+        } catch (e) {
+          console.warn("[redeem-locker-code] signing swallow", (e as Error).message);
+        }
       }
     } else if (rewardType === "pack") {
       packId = rewardValue.pack_id;

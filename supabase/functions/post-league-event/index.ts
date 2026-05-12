@@ -62,32 +62,37 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return jsonResp({ error: "Unauthorized" }, 401);
 
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
-    if (claimsErr || !claimsData?.claims) return jsonResp({ error: "Unauthorized" }, 401);
-    const userId = claimsData.claims.sub as string;
-
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
 
     const payload = (await req.json()) as EventPayload;
     if (!payload?.event_type) return jsonResp({ error: "event_type required" }, 400);
+
+    // Allow trusted server-to-server calls (signings from edge functions) using service-role key.
+    let userId: string;
+    if (token === serviceKey) {
+      if (!payload.user_id) return jsonResp({ error: "user_id required for service calls" }, 400);
+      userId = payload.user_id;
+    } else {
+      const userClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
+      if (claimsErr || !claimsData?.claims) return jsonResp({ error: "Unauthorized" }, 401);
+      userId = claimsData.claims.sub as string;
+    }
 
     // ── Load configurable rules ─────────────────────────────────
     const [
       signingMinTier,
       runsAppearanceMinTier,
+      dominationAppearanceMinTier,
       notableThresholds,
       signingCooldownMin,
       appearanceCooldownHr,
@@ -95,6 +100,7 @@ Deno.serve(async (req) => {
     ] = await Promise.all([
       getRule(admin, "signing_min_gem_tier"),
       getRule(admin, "runs_appearance_min_gem_tier"),
+      getRule(admin, "domination_appearance_min_gem_tier"),
       getRule(admin, "notable_performance_thresholds"),
       getRule(admin, "signing_post_cooldown_minutes"),
       getRule(admin, "appearance_cooldown_hours"),
@@ -150,6 +156,14 @@ Deno.serve(async (req) => {
     if (!account) return jsonResp({ skipped: true, reason: "no_location_account" });
 
     // ── Per-event gating ────────────────────────────────────────
+    // Synthesize a "stat_line" string used by many templates: top scorer first, then notable lines.
+    const statLineParts: string[] = [];
+    if (payload.top_scorer_name && payload.top_scorer_pts != null) {
+      statLineParts.push(`${payload.top_scorer_name} ${payload.top_scorer_pts} pts`);
+    }
+    if (payload.notable && payload.notable.length) statLineParts.push(...payload.notable);
+    const statLine = statLineParts.length ? statLineParts.join(", ") : null;
+
     const ctx: Record<string, string | number | null | undefined> = {
       user: payload.user_display ?? "A challenger",
       opponent: payload.opponent ?? "the opposition",
@@ -159,6 +173,7 @@ Deno.serve(async (req) => {
       top: payload.top_scorer_name ?? null,
       topPts: payload.top_scorer_pts ?? null,
       notable: (payload.notable ?? []).join(", ") || null,
+      stat_line: statLine,
       player: payload.player_name ?? null,
       tier: payload.gem_tier_name ?? null,
       streak: payload.streak ?? null,
@@ -189,9 +204,15 @@ Deno.serve(async (req) => {
         if (recent && recent.length > 0) shouldPost = false;
       }
     } else if (payload.event_type === "appearance") {
-      const min = tierSort(runsAppearanceMinTier);
+      // Use domination rule when posting to a road account; runs rule when posting to a run account.
+      const isDomination = !!payload.road_name;
+      const tierRule = isDomination ? dominationAppearanceMinTier : runsAppearanceMinTier;
+      const min = tierSort(tierRule);
       const cur = tierSort(payload.gem_tier_name);
-      if (min == null || cur == null || cur < min) shouldPost = false;
+      if (min == null || cur == null || cur < min) {
+        console.warn("[post-league-event] appearance skipped: tier_below_min", { tierRule, gem: payload.gem_tier_name });
+        shouldPost = false;
+      }
 
       if (shouldPost && typeof appearanceCooldownHr === "number" && appearanceCooldownHr > 0 && payload.player_card_id) {
         const cutoff = new Date(Date.now() - appearanceCooldownHr * 3_600_000).toISOString();

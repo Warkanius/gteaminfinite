@@ -51,6 +51,23 @@ export function generateRandomName(): string {
   return `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`;
 }
 
+/** Summarize a template so admins can compare avg star ratings before committing. */
+export function summarizeTemplate(t: { slots: TemplateSlot[] }) {
+  const mins = t.slots.map((s) => s.starRange[0]);
+  const maxs = t.slots.map((s) => s.starRange[1]);
+  const avgMin = mins.reduce((a, b) => a + b, 0) / Math.max(1, mins.length);
+  const avgMax = maxs.reduce((a, b) => a + b, 0) / Math.max(1, maxs.length);
+  const minStar = Math.min(...mins);
+  const maxStar = Math.max(...maxs);
+  return {
+    avgMin: Number(avgMin.toFixed(1)),
+    avgMax: Number(avgMax.toFixed(1)),
+    minStar,
+    maxStar,
+    slotCount: t.slots.length,
+  };
+}
+
 // ── 15 Team Templates (5 players each) ──────────────────
 
 export const TEAM_TEMPLATES: TeamTemplate[] = [

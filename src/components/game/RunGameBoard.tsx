@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { PlayerCard } from "@/components/cards/PlayerCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +68,32 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
   const { user } = useAuth();
   const targetScore = run.target_score;
   const runsContext = { isHome: false, isAway: true, isKeyGame: false, isHomeHeroEligible: false, isRankUpGame: false };
+
+  // Fire one appearance event per qualifying card on first mount (server gates by tier + cooldown).
+  useEffect(() => {
+    if (!run?.id) return;
+    (async () => {
+      try {
+        const { data: prof } = user
+          ? await supabase.from("profiles").select("display_name, team_name").eq("user_id", user.id).maybeSingle()
+          : { data: null };
+        const display = prof?.team_name ?? prof?.display_name ?? "A challenger";
+        for (const card of playerLineup) {
+          await postLeagueEvent({
+            event_type: "appearance",
+            run_id: run.id,
+            player_card_id: (card as any).id,
+            player_name: (card as any).name,
+            gem_tier_name: (card as any).gem_tiers?.name ?? (card as any).gem_name ?? null,
+            user_display: display,
+          });
+        }
+      } catch (e) {
+        console.warn("[RunGameBoard] appearance swallow", (e as Error).message);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Grant a pack reward (random_standard, random_standard_box, or specific ID) */
   const grantPackReward = async (userId: string, packReward: string, rewardParts: string[], source: string) => {
