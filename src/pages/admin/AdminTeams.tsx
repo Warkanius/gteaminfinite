@@ -725,17 +725,11 @@ export default function AdminTeams() {
                   <Users className="h-3.5 w-3.5" /> Roster ({currentTeamRoster.length} players)
                 </h3>
                 <div className="flex gap-2">
-                  <Select onValueChange={(tpl) => autofillTeamRoster.mutate({ teamId: teamEditId, templateName: tpl })}>
-                    <SelectTrigger className="h-8 w-auto gap-1 px-2 text-xs" title="Autofill from Template">
-                      <Wand2 className="h-3.5 w-3.5 text-primary" />
-                      <span>Autofill</span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TEAM_TEMPLATES.map(t => (
-                        <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <TemplatePicker
+                    mode="team"
+                    triggerLabel="Autofill"
+                    onPick={(tpl) => autofillTeamRoster.mutate({ teamId: teamEditId, templateName: tpl })}
+                  />
                   <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setTeamQuickAddOpen(true); setTeamQuickAddArchetype(""); setTeamQuickAddStars(3); }}>
                     <Plus className="h-3.5 w-3.5 mr-1" /> Quick Add
                   </Button>
