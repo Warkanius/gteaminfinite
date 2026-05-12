@@ -21,6 +21,7 @@ import { RunRosterManager } from "@/components/admin/RunRosterManager";
 import { MilestoneEditor, type Milestone } from "@/components/admin/MilestoneEditor";
 import { RankRewardEditor } from "@/components/admin/RankRewardEditor";
 import { TEAM_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
+import { TemplatePicker } from "@/components/admin/TemplatePicker";
 import { generateFromProfile, ARCHETYPE_LIST, type WizardProfile } from "@/lib/archetypeEngine";
 import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 
@@ -588,16 +589,11 @@ export default function AdminTeams() {
                           searchKeys={["opponent_name"]} 
                           actions={(r) => (
                             <div className="flex gap-1 justify-end flex-wrap">
-                              <Select onValueChange={(tpl) => autofillRoster.mutate({ gameId: r.id, templateName: tpl })}>
-                                <SelectTrigger className="h-8 w-8 p-0 border-none" title="Autofill Roster">
-                                  <Wand2 className="h-4 w-4 text-primary" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {TEAM_TEMPLATES.map(t => (
-                                    <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <TemplatePicker
+                                mode="team"
+                                triggerLabel="Autofill"
+                                onPick={(tpl) => autofillRoster.mutate({ gameId: r.id, templateName: tpl })}
+                              />
                               <Button size="icon" variant="ghost" className="h-8 w-8" title="Quick Add Player" onClick={() => {
                                 setQuickAddGameId(r.id);
                                 setQuickAddArchetype("");
