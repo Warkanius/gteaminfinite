@@ -13,6 +13,7 @@ import { Search, Users, Loader2, Upload, Check, X, Wand2, Plus, Pencil, ChevronD
 import { PlayerQuickEdit } from "@/components/admin/PlayerQuickEdit";
 import { toast } from "sonner";
 import { RUN_TEMPLATES, generateRandomName, type TemplateSlot } from "@/lib/teamTemplates";
+import { TemplatePicker } from "@/components/admin/TemplatePicker";
 import { generateFromProfile, ARCHETYPE_LIST, type WizardProfile } from "@/lib/archetypeEngine";
 import { computeOVR } from "@/lib/ovrUtils";
 
@@ -653,20 +654,11 @@ export function RunRosterManager({ runId }: Props) {
         <CollapsibleContent className="space-y-3 pt-3">
           {/* Autofill & Quick Add Toolbar */}
           <div className="flex flex-wrap gap-2 items-center">
-            <Select onValueChange={(tpl) => autofillRoster.mutate(tpl)}>
-              <SelectTrigger className="w-auto gap-2">
-                <Wand2 className="h-4 w-4" />
-                <SelectValue placeholder="Autofill Template…" />
-              </SelectTrigger>
-              <SelectContent>
-                {RUN_TEMPLATES.map(t => (
-                  <SelectItem key={t.name} value={t.name}>
-                    <span className="font-medium">{t.name}</span>
-                    <span className="text-xs text-muted-foreground ml-2">— {t.description}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <TemplatePicker
+              mode="run"
+              triggerLabel="Autofill Template"
+              onPick={(tpl) => autofillRoster.mutate(tpl)}
+            />
             <Button variant="outline" size="sm" onClick={() => setQuickAddOpen(!quickAddOpen)}>
               <Plus className="h-4 w-4 mr-1" /> Quick Add
             </Button>
