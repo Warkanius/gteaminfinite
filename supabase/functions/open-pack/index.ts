@@ -13,6 +13,40 @@ function jsonResp(body: unknown, status = 200) {
   });
 }
 
+async function fireSigning(admin: any, userId: string, playerCardId: string) {
+  try {
+    const { data: card } = await admin
+      .from("player_cards")
+      .select("name, gem_tiers(name)")
+      .eq("id", playerCardId)
+      .maybeSingle();
+    if (!card) return;
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("display_name, team_name")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/post-league-event`;
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({
+        event_type: "signing",
+        user_id: userId,
+        player_card_id: playerCardId,
+        player_name: card.name,
+        gem_tier_name: (card as any).gem_tiers?.name ?? null,
+        user_display: prof?.team_name ?? prof?.display_name ?? "A challenger",
+      }),
+    });
+  } catch (e) {
+    console.warn("[open-pack] fireSigning swallow", (e as Error).message);
+  }
+}
+
 function pickSlotByPercentage(odds: any[]): string | null {
   const hasPercentages = odds.some((o) => (o.percentage ?? 0) > 0);
 
