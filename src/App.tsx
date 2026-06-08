@@ -42,6 +42,8 @@ const AdminCollectionSets = lazy(() => import("@/pages/admin/AdminCollectionSets
 const Challenges = lazy(() => import("@/pages/Challenges"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const AdminDynamicDuos = lazy(() => import("@/pages/admin/AdminDynamicDuos"));
+const AdminStorylines = lazy(() => import("@/pages/admin/AdminStorylines"));
+const LeagueHistory = lazy(() => import("@/pages/LeagueHistory"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
@@ -109,6 +111,8 @@ const App = () => (
             <Route path="/challenges" element={<ProtectedRoute><LazyLoad><Challenges /></LazyLoad></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><LazyLoad><Settings /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/dynamic-duos" element={<ProtectedRoute><LazyLoad><AdminDynamicDuos /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/storylines" element={<ProtectedRoute><LazyLoad><AdminStorylines /></LazyLoad></ProtectedRoute>} />
+            <Route path="/league" element={<ProtectedRoute><LazyLoad><LeagueHistory /></LazyLoad></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
