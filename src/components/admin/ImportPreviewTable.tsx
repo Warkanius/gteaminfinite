@@ -1,11 +1,14 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Plus } from "lucide-react";
 
 export interface PreviewRow {
   key: string;
   label: string;
   detail?: string;
+  /** Optional explicit status. Falls back to `collides` for back-compat. */
+  status?: "new" | "exists" | "missing";
+  /** Legacy flag (true = exists, blocks create). */
   collides?: boolean;
 }
 
@@ -14,6 +17,29 @@ interface Props {
   selected: Set<string>;
   onToggle: (key: string) => void;
   onToggleAll: () => void;
+}
+
+function renderStatus(row: PreviewRow) {
+  const status = row.status ?? (row.collides ? "exists" : "new");
+  if (status === "exists") {
+    return (
+      <Badge variant="secondary" className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+        <CheckCircle2 className="w-3 h-3 mr-1" />Match
+      </Badge>
+    );
+  }
+  if (status === "missing") {
+    return (
+      <Badge variant="destructive" className="text-[10px]">
+        <AlertTriangle className="w-3 h-3 mr-1" />Not found
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="secondary" className="text-[10px]">
+      <Plus className="w-3 h-3 mr-1" />New
+    </Badge>
+  );
 }
 
 export function ImportPreviewTable({ rows, selected, onToggle, onToggleAll }: Props) {
@@ -40,15 +66,7 @@ export function ImportPreviewTable({ rows, selected, onToggle, onToggleAll }: Pr
               </td>
               <td className="p-2 font-medium">{r.label}</td>
               <td className="p-2 text-muted-foreground text-xs">{r.detail}</td>
-              <td className="p-2">
-                {r.collides ? (
-                  <Badge variant="destructive" className="text-[10px]">
-                    <AlertTriangle className="w-3 h-3 mr-1" />Exists
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary" className="text-[10px]">New</Badge>
-                )}
-              </td>
+              <td className="p-2">{renderStatus(r)}</td>
             </tr>
           ))}
         </tbody>
