@@ -22,12 +22,15 @@ export interface ImportContext {
   existingPlayerNames: string[];
   existingLockerCodes: string[];
   existingTeamNames: string[];
+  existingRunNames: string[];
+  existingChallengeNames: string[];
+  existingGemTaskTitles: string[];
+  existingDuoNames: string[];
   rules: Record<string, unknown>;
 }
 
 export async function loadImportContext(): Promise<ImportContext> {
-  const [archResp, badges, traits, gems, locs, players, codes, teams, rules] = await Promise.all([
-    Promise.resolve({ data: [] as { name: string }[] }), // archetypes are static (see ARCHETYPES in archetypeEngine)
+  const [badges, traits, gems, locs, players, codes, teams, runs, challenges, gemTasks, duos, rules] = await Promise.all([
     supabase.from("badges").select("id,name").order("name"),
     supabase.from("signature_traits").select("id,name").order("name"),
     supabase.from("gem_tiers").select("id,name").order("sort_order"),
@@ -35,6 +38,10 @@ export async function loadImportContext(): Promise<ImportContext> {
     supabase.from("player_cards").select("name"),
     supabase.from("locker_codes").select("code"),
     supabase.from("teams").select("name"),
+    supabase.from("runs").select("name"),
+    supabase.from("challenges").select("name"),
+    supabase.from("gem_tasks").select("title"),
+    supabase.from("dynamic_duos").select("name"),
     supabase.from("rule_config").select("key,value"),
   ]);
 
@@ -50,15 +57,21 @@ export async function loadImportContext(): Promise<ImportContext> {
   const rulesMap: Record<string, unknown> = {};
   (rules.data ?? []).forEach((r: any) => { rulesMap[r.key] = r.value; });
 
+  const lower = (rows: any[] | null, key: string) => (rows ?? []).map((r: any) => String(r[key]).toLowerCase());
+
   return {
     archetypes: ARCHETYPES,
     badges: badges.data ?? [],
     traits: traits.data ?? [],
     gemTiers: gems.data ?? [],
     locationAccounts: locs.data ?? [],
-    existingPlayerNames: (players.data ?? []).map((p: any) => p.name.toLowerCase()),
+    existingPlayerNames: lower(players.data, "name"),
     existingLockerCodes: (codes.data ?? []).map((c: any) => c.code.toUpperCase()),
-    existingTeamNames: (teams.data ?? []).map((t: any) => t.name.toLowerCase()),
+    existingTeamNames: lower(teams.data, "name"),
+    existingRunNames: lower(runs.data, "name"),
+    existingChallengeNames: lower(challenges.data, "name"),
+    existingGemTaskTitles: lower(gemTasks.data, "title"),
+    existingDuoNames: lower(duos.data, "name"),
     rules: rulesMap,
   };
 }
