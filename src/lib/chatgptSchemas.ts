@@ -596,3 +596,259 @@ export async function commitDynamicDuos(rows: z.infer<typeof DynamicDuoImportSch
   if (error) throw error;
   return data ?? [];
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// UPDATE MODE — edit existing rows by natural key (name / code)
+// Only fields ChatGPT returns are written; others are left untouched.
+// ═══════════════════════════════════════════════════════════════════
+
+const StatPatch = {
+  stat_3pt: z.number().int().min(0).max(99).optional(),
+  stat_mid: z.number().int().min(0).max(99).optional(),
+  stat_fin: z.number().int().min(0).max(99).optional(),
+  stat_dnk: z.number().int().min(0).max(99).optional(),
+  stat_ast: z.number().int().min(0).max(99).optional(),
+  stat_stl: z.number().int().min(0).max(99).optional(),
+  stat_reb: z.number().int().min(0).max(99).optional(),
+  stat_blk: z.number().int().min(0).max(99).optional(),
+  stat_int: z.number().int().min(0).max(99).optional(),
+};
+
+export const PlayerUpdateSchema = z.array(z.object({
+  name: z.string().min(1),
+  rating: z.number().int().min(0).max(99).optional(),
+  position1: z.enum(["PG", "SG", "SF", "PF", "C"]).nullable().optional(),
+  position2: z.enum(["PG", "SG", "SF", "PF", "C"]).nullable().optional(),
+  social_handle: z.string().nullable().optional(),
+  gem_tier: z.string().nullable().optional(),
+  ...StatPatch,
+}));
+
+export const TeamUpdateSchema = z.array(z.object({
+  name: z.string().min(1),
+  category: z.enum(["domination", "gauntlet", "custom"]).optional(),
+  unlock_cost: z.number().int().min(0).optional(),
+}));
+
+export const RunUpdateSchema = z.array(z.object({
+  name: z.string().min(1),
+  target_score: z.number().int().min(7).max(99).optional(),
+  milestones: z.array(z.object({
+    score: z.number().int().min(1),
+    reward_type: z.enum(["coins", "gems", "pack", "card"]),
+    reward_value: z.record(z.unknown()).default({}),
+  })).optional(),
+}));
+
+export const ChallengeUpdateSchema = z.array(z.object({
+  name: z.string().min(1),
+  description: z.string().nullable().optional(),
+  coin_reward: z.number().int().min(0).optional(),
+  gem_reward: z.number().int().min(0).optional(),
+  win_condition: z.enum(["win", "win_by", "series"]).optional(),
+  win_by_amount: z.number().int().nullable().optional(),
+  series_length: z.number().int().nullable().optional(),
+  is_repeatable: z.boolean().optional(),
+}));
+
+export const GemTaskUpdateSchema = z.array(z.object({
+  title: z.string().min(1),
+  description: z.string().nullable().optional(),
+  gem_reward: z.number().int().min(1).max(500).optional(),
+  cooldown_hours: z.number().int().min(1).max(720).optional(),
+  category: z.enum(["daily", "weekly", "fitness", "academic", "creative"]).optional(),
+  is_active: z.boolean().optional(),
+}));
+
+export const DynamicDuoUpdateSchema = z.array(z.object({
+  name: z.string().min(1),
+  description: z.string().nullable().optional(),
+  boosts_a: z.object(StatPatch).partial().optional(),
+  boosts_b: z.object(StatPatch).partial().optional(),
+  is_active: z.boolean().optional(),
+}));
+
+export const LockerCodeUpdateSchema = z.array(z.object({
+  code: z.string().min(3).transform((s) => s.toUpperCase()),
+  reward_type: z.enum(["coins", "gems", "pack", "card"]).optional(),
+  reward_value: z.record(z.unknown()).optional(),
+  max_redemptions: z.number().int().positive().nullable().optional(),
+  expires_at: z.string().nullable().optional(),
+}));
+
+// ── Update prompt builders ──────────────────────
+
+function updateRules(naturalKey: string) {
+  return `
+UPDATE RULES (strict):
+- Match rows by "${naturalKey}" (case-insensitive). Use the EXACT existing name/code.
+- Include ONLY the fields you want to change. Omit anything that should stay the same.
+- Output a JSON array. No prose, no markdown fences.
+- Do NOT invent new rows here — this is an UPDATE batch. Names that don't match existing rows will be skipped.`;
+}
+
+export function buildPlayerUpdatePrompt(ctx: ImportContext, brief: string) {
+  return `You are EDITING existing player cards in GTeam Infinite.
+
+TASK: ${brief || "rebalance these players' ratings and stats"}.
+
+Existing players (use the exact name):
+${ctx.existingPlayerNames.slice(0, 120).join(", ")}
+
+JSON SHAPE (array, partial fields):
+[
+  { "name": "Existing Player Name", "rating": 88, "stat_3pt": 92, "stat_ast": 70 }
+]
+
+Stat keys: stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (0-99).
+Positions: PG, SG, SF, PF, C.
+${updateRules("name")}`;
+}
+
+export function buildTeamUpdatePrompt(ctx: ImportContext, brief: string) {
+  return `You are EDITING existing teams in GTeam Infinite.
+TASK: ${brief || "adjust unlock costs and categories"}.
+
+Existing teams: ${ctx.existingTeamNames.slice(0, 60).join(", ")}
+
+JSON SHAPE: [{ "name": "Existing Team", "unlock_cost": 250, "category": "domination" }]
+${updateRules("name")}`;
+}
+
+export function buildRunUpdatePrompt(_ctx: ImportContext, brief: string) {
+  return `You are EDITING existing 3v3 runs.
+TASK: ${brief || "retune target scores and milestones"}.
+
+JSON SHAPE: [{ "name": "Existing Run", "target_score": 21, "milestones": [ { "score": 7, "reward_type": "coins", "reward_value": { "amount": 250 } } ] }]
+${updateRules("name")}`;
+}
+
+export function buildChallengeUpdatePrompt(_ctx: ImportContext, brief: string) {
+  return `You are EDITING existing challenges.
+TASK: ${brief || "rebalance rewards"}.
+
+JSON SHAPE: [{ "name": "Existing Challenge", "coin_reward": 500, "gem_reward": 10 }]
+${updateRules("name")}`;
+}
+
+export function buildGemTaskUpdatePrompt(_ctx: ImportContext, brief: string) {
+  return `You are EDITING existing gem tasks.
+TASK: ${brief || "retune rewards and cooldowns"}.
+
+JSON SHAPE: [{ "title": "Existing Task Title", "gem_reward": 8, "cooldown_hours": 24 }]
+${updateRules("title")}`;
+}
+
+export function buildDynamicDuoUpdatePrompt(_ctx: ImportContext, brief: string) {
+  return `You are EDITING existing dynamic duos.
+TASK: ${brief || "rebalance boosts"}.
+
+JSON SHAPE: [{ "name": "Existing Duo", "boosts_a": { "stat_reb": 5 }, "boosts_b": { "stat_reb": 5 } }]
+${updateRules("name")}`;
+}
+
+export function buildLockerCodeUpdatePrompt(ctx: ImportContext, brief: string) {
+  return `You are EDITING existing locker codes.
+TASK: ${brief || "extend expirations or update rewards"}.
+
+Existing codes: ${ctx.existingLockerCodes.slice(0, 40).join(", ")}
+JSON SHAPE: [{ "code": "EXISTING-CODE", "expires_at": "2026-12-31T23:59:59Z", "max_redemptions": 500 }]
+${updateRules("code")}`;
+}
+
+// ── Update commits (PATCH-style) ───────────────
+
+async function patchByName(table: string, name: string, patch: Record<string, unknown>) {
+  // Strip undefined so we don't accidentally null-out columns.
+  const clean: Record<string, unknown> = {};
+  Object.entries(patch).forEach(([k, v]) => { if (v !== undefined) clean[k] = v; });
+  if (!Object.keys(clean).length) return 0;
+  const { error, count } = await supabase
+    .from(table as any)
+    .update(clean as any, { count: "exact" })
+    .ilike("name", name);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function updatePlayers(rows: z.infer<typeof PlayerUpdateSchema>, ctx: ImportContext) {
+  const gemByName = new Map(ctx.gemTiers.map(g => [g.name.toLowerCase(), g.id]));
+  let total = 0;
+  for (const r of rows) {
+    const { name, gem_tier, ...rest } = r;
+    const patch: Record<string, unknown> = { ...rest };
+    if (gem_tier !== undefined) patch.gem_tier_id = gem_tier ? gemByName.get(gem_tier.toLowerCase()) ?? null : null;
+    total += await patchByName("player_cards", name, patch);
+  }
+  return total;
+}
+
+export async function updateTeams(rows: z.infer<typeof TeamUpdateSchema>) {
+  let total = 0;
+  for (const r of rows) {
+    const { name, ...patch } = r;
+    total += await patchByName("teams", name, patch);
+  }
+  return total;
+}
+
+export async function updateRuns(rows: z.infer<typeof RunUpdateSchema>) {
+  let total = 0;
+  for (const r of rows) {
+    const { name, ...patch } = r;
+    total += await patchByName("runs", name, patch);
+  }
+  return total;
+}
+
+export async function updateChallenges(rows: z.infer<typeof ChallengeUpdateSchema>) {
+  let total = 0;
+  for (const r of rows) {
+    const { name, ...patch } = r;
+    total += await patchByName("challenges", name, patch);
+  }
+  return total;
+}
+
+export async function updateGemTasks(rows: z.infer<typeof GemTaskUpdateSchema>) {
+  let total = 0;
+  for (const r of rows) {
+    const { title, ...patch } = r;
+    // gem_tasks uses "title" as natural key
+    const clean: Record<string, unknown> = {};
+    Object.entries(patch).forEach(([k, v]) => { if (v !== undefined) clean[k] = v; });
+    if (!Object.keys(clean).length) continue;
+    const { error, count } = await supabase.from("gem_tasks").update(clean as any, { count: "exact" }).ilike("title", title);
+    if (error) throw error;
+    total += count ?? 0;
+  }
+  return total;
+}
+
+export async function updateDynamicDuos(rows: z.infer<typeof DynamicDuoUpdateSchema>) {
+  let total = 0;
+  for (const r of rows) {
+    const { name, ...patch } = r;
+    total += await patchByName("dynamic_duos", name, patch);
+  }
+  return total;
+}
+
+export async function updateLockerCodes(rows: z.infer<typeof LockerCodeUpdateSchema>) {
+  let total = 0;
+  for (const r of rows) {
+    const { code, ...patch } = r;
+    const clean: Record<string, unknown> = {};
+    Object.entries(patch).forEach(([k, v]) => { if (v !== undefined) clean[k] = v; });
+    if (!Object.keys(clean).length) continue;
+    const { error, count } = await supabase.from("locker_codes").update(clean as any, { count: "exact" }).ilike("code", code);
+    if (error) throw error;
+    total += count ?? 0;
+  }
+  return total;
+}
+
+/** Check if a natural key exists in the given list (case-insensitive). */
+export function existsInList(value: string, existingLower: string[]) {
+  return existingLower.includes(value.toLowerCase());
+}
