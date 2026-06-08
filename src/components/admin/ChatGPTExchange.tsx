@@ -27,7 +27,7 @@ export interface ExchangeEntity<S extends ZodSchema> extends ExchangeMode<S> {
 
 interface Props<S extends ZodSchema> {
   title: string;
-  entity: ExchangeEntity<S, any>;
+  entity: ExchangeEntity<S>;
   onCommitted?: () => void;
   triggerLabel?: string;
   triggerVariant?: "default" | "outline" | "secondary";
