@@ -243,19 +243,40 @@ export default function AdminGlobalExport() {
           </Button>
 
           {snapshot && (
-            <div className="rounded-md border bg-muted/30 p-3 text-xs">
-              <div className="mb-2 text-muted-foreground">
-                Generated {new Date(snapshot.generated_at).toLocaleString()}
+            <>
+              <div className="rounded-md border bg-muted/30 p-3 text-xs">
+                <div className="mb-2 text-muted-foreground">
+                  Generated {new Date(snapshot.generated_at).toLocaleString()}
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-3">
+                  {Object.entries(snapshot.counts).map(([t, n]) => (
+                    <div key={t} className="flex justify-between">
+                      <span className="truncate">{t}</span>
+                      <span className="font-mono text-muted-foreground">{n}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-3">
-                {Object.entries(snapshot.counts).map(([t, n]) => (
-                  <div key={t} className="flex justify-between">
-                    <span className="truncate">{t}</span>
-                    <span className="font-mono text-muted-foreground">{n}</span>
-                  </div>
-                ))}
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs space-y-2">
+                <div className="font-semibold text-amber-400">Diagnostics (incomplete data ChatGPT can fix)</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-4">
+                  <div className="flex justify-between"><span>Unrated players</span><span className="font-mono">{snapshot.diagnostics.unrated_players.length}</span></div>
+                  <div className="flex justify-between"><span>Incomplete rosters</span><span className="font-mono">{snapshot.diagnostics.incomplete_team_rosters.length}</span></div>
+                  <div className="flex justify-between"><span>Incomplete runs</span><span className="font-mono">{snapshot.diagnostics.incomplete_runs.length}</span></div>
+                  <div className="flex justify-between"><span>Incomplete dominations</span><span className="font-mono">{snapshot.diagnostics.incomplete_domination_paths.length}</span></div>
+                </div>
+                {snapshot.diagnostics.unrated_players.length > 0 && (
+                  <details className="text-muted-foreground">
+                    <summary className="cursor-pointer">Show first 20 unrated players</summary>
+                    <ul className="mt-1 list-disc pl-5">
+                      {snapshot.diagnostics.unrated_players.slice(0, 20).map((p) => (
+                        <li key={p.name}>{p.name} — <span className="opacity-70">{p.reason}</span></li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </div>
-            </div>
+            </>
           )}
         </CardContent>
       </Card>
