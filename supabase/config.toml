@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.complete-gem-task]
 verify_jwt = false
+
+[functions.import-storyline-bundle]
+verify_jwt = false
