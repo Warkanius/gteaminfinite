@@ -376,3 +376,223 @@ export async function commitSocialPosts(rows: z.infer<typeof SocialPostImportSch
 export function flagCollision(value: string, existing: string[]) {
   return existing.includes(value.toLowerCase()) || existing.includes(value.toUpperCase());
 }
+
+// ── Additional prompt builders ──────────────────────
+
+export function buildTeamPrompt(ctx: ImportContext, brief: string) {
+  return `Generate TEAMS for GTeam Infinite (NBA-style card game).
+TASK: ${brief || "3 themed teams with 5-player rosters each"}.
+
+JSON SHAPE (array):
+[
+  {
+    "name": "Cosmic Renegades",
+    "category": "domination" | "gauntlet" | "custom",
+    "unlock_cost": 0,
+    "roster": ["Player Name 1", "Player Name 2", "..."]  // names of EXISTING player_cards. Omit/empty if rosters added later.
+  }
+]
+
+Existing teams (DO NOT REUSE): ${ctx.existingTeamNames.slice(0, 30).join(", ") || "(none)"}
+Existing players you can reference: ${ctx.existingPlayerNames.slice(0, 60).join(", ") || "(none)"}
+${jsonRules()}`;
+}
+
+export function buildRunPrompt(ctx: ImportContext, brief: string) {
+  return `Generate 3v3 RUNS for GTeam Infinite.
+TASK: ${brief || "2 themed run ladders with milestone rewards"}.
+
+JSON SHAPE (array):
+[
+  {
+    "name": "Downtown Hustle",
+    "target_score": 21,
+    "milestones": [
+      { "score": 7, "reward_type": "coins", "reward_value": { "amount": 250 } },
+      { "score": 14, "reward_type": "gems", "reward_value": { "amount": 10 } },
+      { "score": 21, "reward_type": "pack", "reward_value": { "pack_name": "Bronze Pack" } }
+    ],
+    "roster": ["NPC opponent name 1", "NPC opponent name 2", "NPC opponent name 3"]
+  }
+]
+${jsonRules()}`;
+}
+
+export function buildChallengePrompt(ctx: ImportContext, brief: string) {
+  return `Generate CHALLENGES for GTeam Infinite.
+TASK: ${brief || "5 single challenges + 1 spotlight series"}.
+
+JSON SHAPE (array):
+[
+  {
+    "name": "Beat the Cosmic Renegades",
+    "description": "Take down the league's hottest squad.",
+    "challenge_type": "single" | "spotlight",
+    "win_condition": "win" | "win_by" | "series",
+    "win_by_amount": null,
+    "series_length": null,
+    "coin_reward": 500,
+    "gem_reward": 10,
+    "spotlight_group": null,
+    "sort_order": 0,
+    "opponent_team_name": "Cosmic Renegades",  // name of an existing team OR null
+    "is_repeatable": true
+  }
+]
+
+Existing teams: ${ctx.existingTeamNames.slice(0, 30).join(", ") || "(none)"}
+${jsonRules()}`;
+}
+
+export function buildGemTaskPrompt(_ctx: ImportContext, brief: string) {
+  return `Generate REAL-LIFE GEM TASKS for a kids' card game (gems earned by completing real-world tasks).
+TASK: ${brief || "8 healthy daily/weekly tasks"}.
+
+JSON SHAPE (array):
+[
+  {
+    "title": "Read for 20 minutes",
+    "description": "Any book counts.",
+    "gem_reward": 5,
+    "cooldown_hours": 24,
+    "category": "daily" | "weekly" | "fitness" | "academic" | "creative",
+    "is_active": true
+  }
+]
+${jsonRules()}`;
+}
+
+export function buildDynamicDuoPrompt(ctx: ImportContext, brief: string) {
+  return `Generate DYNAMIC DUOS (player chemistry pairings) for GTeam Infinite.
+TASK: ${brief || "5 duo pairings that grant stat boosts when both cards are in a lineup"}.
+
+JSON SHAPE (array):
+[
+  {
+    "name": "Twin Towers",
+    "description": "Two paint beasts who dominate the glass together.",
+    "player_a_name": "Marcus Vega",
+    "player_b_name": "Tyrone Wallace",
+    "boosts_a": { "stat_reb": 5, "stat_blk": 3 },
+    "boosts_b": { "stat_reb": 5, "stat_blk": 3 },
+    "is_active": true
+  }
+]
+
+Existing players to pair from: ${ctx.existingPlayerNames.slice(0, 60).join(", ") || "(none)"}
+Stat keys: stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (integers, typically +1 to +8).
+${jsonRules()}`;
+}
+
+// ── Additional commit functions ─────────────────────
+
+async function resolvePlayerIds(names: string[]) {
+  if (!names.length) return new Map<string, string>();
+  const { data } = await supabase.from("player_cards").select("id,name").in("name", names);
+  const map = new Map<string, string>();
+  (data ?? []).forEach((p: any) => map.set(p.name.toLowerCase(), p.id));
+  return map;
+}
+
+export async function commitTeams(rows: z.infer<typeof TeamImportSchema>) {
+  const { data: teams, error } = await supabase.from("teams").insert(
+    rows.map(r => ({ name: r.name, category: r.category, unlock_cost: r.unlock_cost }))
+  ).select("id,name");
+  if (error) throw error;
+
+  // Attach rosters where possible
+  const allNames = [...new Set(rows.flatMap(r => r.roster ?? []))];
+  const playerMap = await resolvePlayerIds(allNames);
+  const teamPlayerRows: any[] = [];
+  rows.forEach((r, idx) => {
+    const team = teams?.[idx];
+    if (!team) return;
+    (r.roster ?? []).forEach((pname, slot) => {
+      const pid = playerMap.get(pname.toLowerCase());
+      if (pid) teamPlayerRows.push({ team_id: team.id, player_card_id: pid, slot: slot + 1 });
+    });
+  });
+  if (teamPlayerRows.length) await supabase.from("team_players").insert(teamPlayerRows);
+  return teams ?? [];
+}
+
+export async function commitRuns(rows: z.infer<typeof RunImportSchema>) {
+  const { data: runs, error } = await supabase.from("runs").insert(
+    rows.map(r => ({ name: r.name, target_score: r.target_score, milestones: r.milestones as any }))
+  ).select("id,name");
+  if (error) throw error;
+
+  const allNames = [...new Set(rows.flatMap(r => r.roster ?? []))];
+  const playerMap = await resolvePlayerIds(allNames);
+  const runPlayerRows: any[] = [];
+  rows.forEach((r, idx) => {
+    const run = runs?.[idx];
+    if (!run) return;
+    (r.roster ?? []).forEach((pname, slot) => {
+      const pid = playerMap.get(pname.toLowerCase());
+      if (pid) runPlayerRows.push({ run_id: run.id, player_card_id: pid, slot: slot + 1 });
+    });
+  });
+  if (runPlayerRows.length) await supabase.from("run_players").insert(runPlayerRows);
+  return runs ?? [];
+}
+
+export async function commitChallenges(rows: z.infer<typeof ChallengeImportSchema>) {
+  const teamNames = [...new Set(rows.map(r => r.opponent_team_name).filter(Boolean) as string[])];
+  let teamMap = new Map<string, string>();
+  if (teamNames.length) {
+    const { data } = await supabase.from("teams").select("id,name").in("name", teamNames);
+    (data ?? []).forEach((t: any) => teamMap.set(t.name.toLowerCase(), t.id));
+  }
+  const toInsert = rows.map(r => ({
+    name: r.name,
+    description: r.description ?? null,
+    challenge_type: r.challenge_type,
+    win_condition: r.win_condition,
+    win_by_amount: r.win_by_amount ?? null,
+    series_length: r.series_length ?? null,
+    coin_reward: r.coin_reward,
+    gem_reward: r.gem_reward,
+    spotlight_group: r.spotlight_group ?? null,
+    sort_order: r.sort_order,
+    is_repeatable: r.is_repeatable,
+    opponent_team_id: r.opponent_team_name ? teamMap.get(r.opponent_team_name.toLowerCase()) ?? null : null,
+  }));
+  const { error, data } = await supabase.from("challenges").insert(toInsert).select("id,name");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function commitGemTasks(rows: z.infer<typeof GemTaskImportSchema>) {
+  const { error, data } = await supabase.from("gem_tasks").insert(
+    rows.map(r => ({
+      title: r.title, description: r.description ?? null,
+      gem_reward: r.gem_reward, cooldown_hours: r.cooldown_hours,
+      category: r.category, is_active: r.is_active,
+    }))
+  ).select("id,title");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function commitDynamicDuos(rows: z.infer<typeof DynamicDuoImportSchema>) {
+  const names = [...new Set(rows.flatMap(r => [r.player_a_name, r.player_b_name]))];
+  const playerMap = await resolvePlayerIds(names);
+  const toInsert: any[] = [];
+  const skipped: string[] = [];
+  rows.forEach(r => {
+    const a = playerMap.get(r.player_a_name.toLowerCase());
+    const b = playerMap.get(r.player_b_name.toLowerCase());
+    if (!a || !b || a === b) { skipped.push(r.name); return; }
+    toInsert.push({
+      name: r.name, description: r.description ?? null,
+      player_card_id_a: a, player_card_id_b: b,
+      boosts_a: r.boosts_a, boosts_b: r.boosts_b,
+      is_active: r.is_active,
+    });
+  });
+  if (!toInsert.length) throw new Error(`No duos created — player names did not resolve. Skipped: ${skipped.join(", ")}`);
+  const { error, data } = await supabase.from("dynamic_duos").insert(toInsert).select("id,name");
+  if (error) throw error;
+  return data ?? [];
+}
