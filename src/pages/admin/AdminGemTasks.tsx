@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Pencil, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { ChatGPTExchange } from "@/components/admin/ChatGPTExchange";
+import { GemTasksExchange } from "@/lib/exchangeEntities";
 
 type GemTask = {
   id: string;
@@ -83,7 +85,10 @@ export default function AdminGemTasks() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Gem Tasks</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold">Gem Tasks</h1>
+        <ChatGPTExchange title="Gem Tasks · AI Import / Export" entity={GemTasksExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-gem-tasks"] })} />
+      </div>
       <DataTable
         data={tasks}
         columns={columns}

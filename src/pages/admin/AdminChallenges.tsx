@@ -17,6 +17,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Pencil, Trash2, Copy, CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
+import { ChatGPTExchange } from "@/components/admin/ChatGPTExchange";
+import { ChallengesExchange } from "@/lib/exchangeEntities";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { COLOR_BUCKET_NAMES } from "@/lib/colorBucket";
@@ -284,7 +286,10 @@ export default function AdminChallenges() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Challenges Manager</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold">Challenges Manager</h1>
+        <ChatGPTExchange title="Challenges · AI Import / Export" entity={ChallengesExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-challenges"] })} />
+      </div>
       <DataTable
         data={challenges}
         columns={columns}

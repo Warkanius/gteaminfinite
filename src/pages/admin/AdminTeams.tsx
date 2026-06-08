@@ -16,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Pencil, Trash2, Plus, Users, Wand2, Package, Zap, Copy, X } from "lucide-react";
 import { PlayerQuickEdit } from "@/components/admin/PlayerQuickEdit";
 import { toast } from "sonner";
+import { ChatGPTExchange } from "@/components/admin/ChatGPTExchange";
+import { TeamsExchange, RunsExchange } from "@/lib/exchangeEntities";
 import type { Tables } from "@/integrations/supabase/types";
 import { RunRosterManager } from "@/components/admin/RunRosterManager";
 import { MilestoneEditor, type Milestone } from "@/components/admin/MilestoneEditor";
@@ -539,9 +541,15 @@ export default function AdminTeams() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Match Configurations</h1>
-        <p className="text-muted-foreground mt-2">Manage teams, domination roads, and endless run settings.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Match Configurations</h1>
+          <p className="text-muted-foreground mt-2">Manage teams, domination roads, and endless run settings.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <ChatGPTExchange title="Teams · AI Import / Export" entity={TeamsExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-teams"] })} />
+          <ChatGPTExchange title="Runs · AI Import / Export" entity={RunsExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-runs"] })} />
+        </div>
       </div>
 
       <Tabs defaultValue="domination" className="w-full">

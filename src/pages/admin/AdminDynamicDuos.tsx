@@ -14,6 +14,8 @@ import { PlayerCombobox } from "@/components/admin/PlayerCombobox";
 import { StatInput } from "@/components/admin/StatInput";
 import { Plus, Pencil, Trash2, Copy, Search } from "lucide-react";
 import { toast } from "sonner";
+import { ChatGPTExchange } from "@/components/admin/ChatGPTExchange";
+import { DynamicDuosExchange } from "@/lib/exchangeEntities";
 import {
   type DuoBoosts,
   type DuoStatKey,
@@ -223,9 +225,12 @@ export default function AdminDynamicDuos() {
             Pair two players to grant custom stat boosts when both are in the same lineup.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-2" /> New Duo
-        </Button>
+        <div className="flex items-center gap-2">
+          <ChatGPTExchange title="Dynamic Duos · AI Import / Export" entity={DynamicDuosExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-dynamic-duos"] })} />
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-2" /> New Duo
+          </Button>
+        </div>
       </div>
 
       <div className="relative max-w-md">
