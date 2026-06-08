@@ -40,17 +40,88 @@ const SNAPSHOT_TABLES = [
   "rule_config",
 ] as const;
 
+type Diagnostics = {
+  unrated_players: { name: string; reason: string }[];
+  incomplete_team_rosters: { team: string; category: string; players: number; expected: number }[];
+  incomplete_runs: { run: string; issue: string }[];
+  incomplete_domination_paths: { road: string; opponent: string; players: number; expected: number }[];
+};
+
 type Snapshot = {
   generated_at: string;
   counts: Record<string, number>;
   tables: Record<string, any[]>;
+  diagnostics: Diagnostics;
 };
+
+const STAT_KEYS = ["stat_3pt","stat_mid","stat_fin","stat_dnk","stat_ast","stat_stl","stat_reb","stat_blk","stat_int"] as const;
+
+function computeDiagnostics(tables: Record<string, any[]>): Diagnostics {
+  const players = tables.player_cards ?? [];
+  const teams = tables.teams ?? [];
+  const teamPlayers = tables.team_players ?? [];
+  const runs = tables.runs ?? [];
+  const runPlayers = tables.run_players ?? [];
+  const domGames = tables.domination_games ?? [];
+  const domPlayers = tables.domination_game_players ?? [];
+
+  // Unrated: rating null/0, OR all 9 stats are 0/null
+  const unrated_players = players
+    .map((p: any) => {
+      const ratingNum = p.rating == null ? 0 : Number(p.rating);
+      const statSum = STAT_KEYS.reduce((s, k) => s + (Number(p[k]) || 0), 0);
+      if (!ratingNum && !statSum) return { name: p.name, reason: "no rating, all stats 0" };
+      if (!ratingNum) return { name: p.name, reason: "rating missing" };
+      if (!statSum) return { name: p.name, reason: "all per-stat values 0" };
+      return null;
+    })
+    .filter(Boolean) as { name: string; reason: string }[];
+
+  // Roster size by category (3v3 = 3 starters, 6 = full bench). Treat <3 as incomplete.
+  const EXPECTED = 6;
+  const MIN_VIABLE = 3;
+  const teamRosterCount = new Map<string, number>();
+  teamPlayers.forEach((tp: any) => teamRosterCount.set(tp.team_id, (teamRosterCount.get(tp.team_id) ?? 0) + 1));
+  const incomplete_team_rosters = teams
+    .map((t: any) => {
+      const n = teamRosterCount.get(t.id) ?? 0;
+      if (n >= MIN_VIABLE) return null;
+      return { team: t.name, category: t.category, players: n, expected: EXPECTED };
+    })
+    .filter(Boolean) as Diagnostics["incomplete_team_rosters"];
+
+  // Runs: need a roster (run_players) AND milestones array
+  const runRosterCount = new Map<string, number>();
+  runPlayers.forEach((rp: any) => runRosterCount.set(rp.run_id, (runRosterCount.get(rp.run_id) ?? 0) + 1));
+  const incomplete_runs: Diagnostics["incomplete_runs"] = [];
+  runs.forEach((r: any) => {
+    const n = runRosterCount.get(r.id) ?? 0;
+    const ms = Array.isArray(r.milestones) ? r.milestones.length : 0;
+    if (n < MIN_VIABLE) incomplete_runs.push({ run: r.name, issue: `only ${n} opponent card(s) — need ≥${MIN_VIABLE}` });
+    if (!ms) incomplete_runs.push({ run: r.name, issue: "no milestones defined" });
+    if (!r.target_score) incomplete_runs.push({ run: r.name, issue: "no target_score" });
+  });
+
+  // Domination path games: each needs 3 (or 5) player slots filled
+  const domRosterCount = new Map<string, number>();
+  domPlayers.forEach((dp: any) => domRosterCount.set(dp.domination_game_id, (domRosterCount.get(dp.domination_game_id) ?? 0) + 1));
+  const incomplete_domination_paths = domGames
+    .map((g: any) => {
+      const n = domRosterCount.get(g.id) ?? 0;
+      if (n >= MIN_VIABLE) return null;
+      return { road: g.road_name, opponent: g.opponent_name, players: n, expected: MIN_VIABLE };
+    })
+    .filter(Boolean) as Diagnostics["incomplete_domination_paths"];
+
+  return { unrated_players, incomplete_team_rosters, incomplete_runs, incomplete_domination_paths };
+}
 
 async function fetchSnapshot(): Promise<Snapshot> {
   const snap: Snapshot = {
     generated_at: new Date().toISOString(),
     counts: {},
     tables: {},
+    diagnostics: { unrated_players: [], incomplete_team_rosters: [], incomplete_runs: [], incomplete_domination_paths: [] },
   };
   for (const t of SNAPSHOT_TABLES) {
     const { data, error } = await supabase.from(t as any).select("*").limit(5000);
@@ -63,6 +134,14 @@ async function fetchSnapshot(): Promise<Snapshot> {
     snap.tables[t] = data ?? [];
     snap.counts[t] = (data ?? []).length;
   }
+  // Pull the two domination tables too (not in SNAPSHOT_TABLES yet)
+  for (const t of ["domination_games", "domination_game_players"] as const) {
+    if (snap.tables[t]) continue;
+    const { data } = await supabase.from(t as any).select("*").limit(5000);
+    snap.tables[t] = data ?? [];
+    snap.counts[t] = (data ?? []).length;
+  }
+  snap.diagnostics = computeDiagnostics(snap.tables);
   return snap;
 }
 
