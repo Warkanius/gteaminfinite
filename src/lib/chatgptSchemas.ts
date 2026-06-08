@@ -106,6 +106,71 @@ export const SocialPostImportSchema = z.array(z.object({
   headline_image_url: z.string().url().nullable().optional(),
 }));
 
+// Teams (with optional roster of player names)
+export const TeamImportSchema = z.array(z.object({
+  name: z.string().min(1).max(120),
+  category: z.enum(["domination", "gauntlet", "custom"]).default("domination"),
+  unlock_cost: z.number().int().min(0).default(0),
+  roster: z.array(z.string()).max(8).optional().default([]),
+}));
+
+// Runs (3v3 rosters)
+export const RunImportSchema = z.array(z.object({
+  name: z.string().min(1).max(120),
+  target_score: z.number().int().min(7).max(99).default(21),
+  milestones: z.array(z.object({
+    score: z.number().int().min(1),
+    reward_type: z.enum(["coins", "gems", "pack", "card"]),
+    reward_value: z.record(z.unknown()).default({}),
+  })).optional().default([]),
+  roster: z.array(z.string()).max(5).optional().default([]),
+}));
+
+// Challenges
+export const ChallengeImportSchema = z.array(z.object({
+  name: z.string().min(1).max(160),
+  description: z.string().optional(),
+  challenge_type: z.enum(["single", "spotlight"]).default("single"),
+  win_condition: z.enum(["win", "win_by", "series"]).default("win"),
+  win_by_amount: z.number().int().nullable().optional(),
+  series_length: z.number().int().nullable().optional(),
+  coin_reward: z.number().int().min(0).default(0),
+  gem_reward: z.number().int().min(0).default(0),
+  spotlight_group: z.string().nullable().optional(),
+  sort_order: z.number().int().default(0),
+  opponent_team_name: z.string().nullable().optional(),
+  is_repeatable: z.boolean().default(true),
+}));
+
+// Gem Tasks
+export const GemTaskImportSchema = z.array(z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().nullable().optional(),
+  gem_reward: z.number().int().min(1).max(500).default(5),
+  cooldown_hours: z.number().int().min(1).max(720).default(24),
+  category: z.enum(["daily", "weekly", "fitness", "academic", "creative"]).default("daily"),
+  is_active: z.boolean().default(true),
+}));
+
+// Dynamic Duos
+const DuoBoostShape = z.object({
+  stat_3pt: z.number().int().optional(), stat_mid: z.number().int().optional(),
+  stat_fin: z.number().int().optional(), stat_dnk: z.number().int().optional(),
+  stat_ast: z.number().int().optional(), stat_stl: z.number().int().optional(),
+  stat_reb: z.number().int().optional(), stat_blk: z.number().int().optional(),
+  stat_int: z.number().int().optional(),
+}).partial();
+
+export const DynamicDuoImportSchema = z.array(z.object({
+  name: z.string().min(1).max(120),
+  description: z.string().nullable().optional(),
+  player_a_name: z.string().min(1),
+  player_b_name: z.string().min(1),
+  boosts_a: DuoBoostShape.default({}),
+  boosts_b: DuoBoostShape.default({}),
+  is_active: z.boolean().default(true),
+}));
+
 export const StorylineBundleSchema = z.object({
   storyline: z.object({
     title: z.string().min(1).max(160),
