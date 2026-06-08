@@ -19,10 +19,10 @@ export interface ExchangeMode<S extends ZodSchema> {
   commit: (selected: z.infer<S>, ctx: ImportContext) => Promise<number>;
 }
 
-export interface ExchangeEntity<S extends ZodSchema, U extends ZodSchema = S> extends ExchangeMode<S> {
+export interface ExchangeEntity<S extends ZodSchema> extends ExchangeMode<S> {
   exportData?: () => Promise<unknown>;
-  /** Optional update mode (PATCH existing rows by natural key). */
-  update?: ExchangeMode<U>;
+  /** Optional update mode (PATCH existing rows by natural key). Uses its own schema. */
+  update?: ExchangeMode<ZodSchema>;
 }
 
 interface Props<S extends ZodSchema> {
