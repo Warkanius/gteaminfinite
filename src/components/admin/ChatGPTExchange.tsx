@@ -4,35 +4,40 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ImportPreviewTable, PreviewRow } from "@/components/admin/ImportPreviewTable";
-import { Bot, Copy, Download, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
+import { Bot, Copy, Download, Sparkles, CheckCircle2, AlertCircle, Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { loadImportContext, type ImportContext } from "@/lib/chatgptSchemas";
 import type { z, ZodSchema } from "zod";
 
-export interface ExchangeEntity<S extends ZodSchema> {
-  /** Schema for the array OR object returned by ChatGPT */
+export interface ExchangeMode<S extends ZodSchema> {
   schema: S;
-  /** Prompt builder (uses fresh context + admin brief) */
   buildPrompt: (ctx: ImportContext, brief: string) => string;
-  /** Turn each parsed row into a preview entry */
   toPreviewRows: (parsed: z.infer<S>, ctx: ImportContext) => PreviewRow[];
-  /** Commit the user-selected rows. Returns count created. */
+  /** Returns count of rows affected. */
   commit: (selected: z.infer<S>, ctx: ImportContext) => Promise<number>;
-  /** Current rows (for Export tab). Optional. */
+}
+
+export interface ExchangeEntity<S extends ZodSchema, U extends ZodSchema = S> extends ExchangeMode<S> {
   exportData?: () => Promise<unknown>;
+  /** Optional update mode (PATCH existing rows by natural key). */
+  update?: ExchangeMode<U>;
 }
 
 interface Props<S extends ZodSchema> {
   title: string;
-  entity: ExchangeEntity<S>;
+  entity: ExchangeEntity<S, any>;
   onCommitted?: () => void;
   triggerLabel?: string;
   triggerVariant?: "default" | "outline" | "secondary";
 }
 
+type Mode = "create" | "update";
+
 export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitted, triggerLabel = "AI Import / Export", triggerVariant = "outline" }: Props<S>) {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>("create");
   const [ctx, setCtx] = useState<ImportContext | null>(null);
   const [brief, setBrief] = useState("");
   const [pasted, setPasted] = useState("");
@@ -42,16 +47,32 @@ export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitte
   const [committing, setCommitting] = useState(false);
   const [exportJson, setExportJson] = useState<string>("");
 
+  const active: ExchangeMode<any> = mode === "update" && entity.update ? entity.update : entity;
+  const hasUpdate = !!entity.update;
+
   useEffect(() => {
     if (open && !ctx) loadImportContext().then(setCtx).catch((e) => toast.error(e.message));
   }, [open, ctx]);
 
-  const prompt = useMemo(() => (ctx ? entity.buildPrompt(ctx, brief.trim()) : ""), [ctx, brief, entity]);
+  // Reset paste state when switching mode
+  useEffect(() => {
+    setPasted(""); setParsed(null); setParseError(null); setSelected(new Set());
+  }, [mode]);
+
+  const prompt = useMemo(() => (ctx ? active.buildPrompt(ctx, brief.trim()) : ""), [ctx, brief, active]);
 
   const previewRows: PreviewRow[] = useMemo(() => {
     if (!parsed || !ctx) return [];
-    try { return entity.toPreviewRows(parsed, ctx); } catch { return []; }
-  }, [parsed, ctx, entity]);
+    try { return active.toPreviewRows(parsed, ctx); } catch { return []; }
+  }, [parsed, ctx, active]);
+
+  function defaultSelectable(rows: PreviewRow[]) {
+    if (mode === "update") {
+      // Auto-select rows that matched an existing record
+      return rows.filter((r) => (r.status ?? (r.collides ? "exists" : "new")) === "exists").map((r) => r.key);
+    }
+    return rows.filter((r) => !r.collides).map((r) => r.key);
+  }
 
   function handleValidate() {
     setParseError(null);
@@ -59,15 +80,14 @@ export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitte
     try {
       const raw = pasted.trim().replace(/^```(json)?/i, "").replace(/```$/, "").trim();
       const json = JSON.parse(raw);
-      const result = entity.schema.safeParse(json);
+      const result = active.schema.safeParse(json);
       if (!result.success) {
         setParseError(result.error.issues.slice(0, 4).map((i) => `${i.path.join(".")}: ${i.message}`).join("\n"));
         return;
       }
       setParsed(result.data);
-      // select all by default
-      const rows = entity.toPreviewRows(result.data, ctx!);
-      setSelected(new Set(rows.filter((r) => !r.collides).map((r) => r.key)));
+      const rows = active.toPreviewRows(result.data, ctx!);
+      setSelected(new Set(defaultSelectable(rows)));
     } catch (e: any) {
       setParseError(`Invalid JSON: ${e.message}`);
     }
@@ -77,13 +97,12 @@ export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitte
     if (!parsed || !ctx) return;
     setCommitting(true);
     try {
-      // Filter parsed array/items to only selected rows
-      const rows = entity.toPreviewRows(parsed, ctx);
+      const rows = active.toPreviewRows(parsed, ctx);
       const selectedRows = Array.isArray(parsed)
         ? parsed.filter((_: any, idx: number) => selected.has(rows[idx]?.key))
         : parsed;
-      const count = await entity.commit(selectedRows as any, ctx);
-      toast.success(`Created ${count} item${count === 1 ? "" : "s"}`);
+      const count = await active.commit(selectedRows as any, ctx);
+      toast.success(mode === "update" ? `Updated ${count} row${count === 1 ? "" : "s"}` : `Created ${count} item${count === 1 ? "" : "s"}`);
       setOpen(false); setPasted(""); setParsed(null); setSelected(new Set()); setBrief("");
       onCommitted?.();
     } catch (e: any) {
@@ -103,6 +122,10 @@ export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitte
     }
   }
 
+  const commitLabel = committing
+    ? (mode === "update" ? "Updating…" : "Creating…")
+    : (mode === "update" ? `Update ${selected.size} row${selected.size === 1 ? "" : "s"}` : `Create ${selected.size} item${selected.size === 1 ? "" : "s"}`);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -114,10 +137,22 @@ export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitte
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> {title}</DialogTitle>
           <DialogDescription>
-            Use ChatGPT (or any AI) to draft content, paste the JSON back, preview, and commit.
-            <strong className="ml-1">Create-new only</strong> — existing rows are flagged and excluded by default.
+            {mode === "create"
+              ? "Create new rows. Existing names are flagged and excluded by default."
+              : "Edit existing rows by name. Only fields ChatGPT returns are written — others are left untouched."}
           </DialogDescription>
         </DialogHeader>
+
+        {hasUpdate && (
+          <RadioGroup value={mode} onValueChange={(v) => setMode(v as Mode)} className="flex gap-4 border rounded-md p-2 bg-muted/30">
+            <Label className="flex items-center gap-2 cursor-pointer text-sm">
+              <RadioGroupItem value="create" /><Plus className="w-3 h-3" /> Create new
+            </Label>
+            <Label className="flex items-center gap-2 cursor-pointer text-sm">
+              <RadioGroupItem value="update" /><Pencil className="w-3 h-3" /> Update existing
+            </Label>
+          </RadioGroup>
+        )}
 
         <Tabs defaultValue="prompt" className="flex-1 flex flex-col min-h-0">
           <TabsList className="grid grid-cols-3 w-full">
@@ -132,7 +167,7 @@ export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitte
               <Textarea
                 value={brief}
                 onChange={(e) => setBrief(e.target.value)}
-                placeholder="e.g. '8 gauntlet-tier villains, all 5-star, focus on rim protection'"
+                placeholder={mode === "update" ? "e.g. 'boost all sharpshooters' 3PT by +5'" : "e.g. '8 gauntlet-tier villains, all 5-star'"}
                 rows={2}
                 className="mt-1"
               />
@@ -144,9 +179,6 @@ export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitte
               </Button>
             </div>
             <Textarea readOnly value={prompt} className="font-mono text-[11px] min-h-[280px]" />
-            <p className="text-xs text-muted-foreground">
-              Paste this into ChatGPT, then copy ChatGPT's JSON reply into the next tab.
-            </p>
           </TabsContent>
 
           <TabsContent value="paste" className="flex-1 overflow-y-auto space-y-3 mt-3">
@@ -181,7 +213,10 @@ export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitte
                     else setSelected(new Set(previewRows.map((r) => r.key)));
                   }}
                 />
-                <p className="text-xs text-muted-foreground">{selected.size} of {previewRows.length} selected</p>
+                <p className="text-xs text-muted-foreground">
+                  {selected.size} of {previewRows.length} selected
+                  {mode === "update" && " · only matched rows update; unmatched names are skipped"}
+                </p>
               </>
             )}
           </TabsContent>
@@ -212,7 +247,7 @@ export function ChatGPTExchange<S extends ZodSchema>({ title, entity, onCommitte
         <DialogFooter className="border-t pt-3">
           <Button variant="ghost" onClick={() => setOpen(false)}>Close</Button>
           <Button onClick={handleCommit} disabled={!parsed || !selected.size || committing}>
-            {committing ? "Creating…" : `Create ${selected.size} item${selected.size === 1 ? "" : "s"}`}
+            {commitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
