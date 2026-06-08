@@ -74,3 +74,74 @@ export const SocialPostsExchange: ExchangeEntity<typeof SocialPostImportSchema> 
     return data ?? [];
   },
 };
+
+import {
+  TeamImportSchema, RunImportSchema, ChallengeImportSchema, GemTaskImportSchema, DynamicDuoImportSchema,
+  buildTeamPrompt, buildRunPrompt, buildChallengePrompt, buildGemTaskPrompt, buildDynamicDuoPrompt,
+  commitTeams, commitRuns, commitChallenges, commitGemTasks, commitDynamicDuos,
+} from "@/lib/chatgptSchemas";
+
+export const TeamsExchange: ExchangeEntity<typeof TeamImportSchema> = {
+  schema: TeamImportSchema,
+  buildPrompt: buildTeamPrompt,
+  toPreviewRows: (rows, ctx) => rows.map((r, i) => ({
+    key: `team-${i}-${r.name}`,
+    label: r.name,
+    detail: `${r.category} · unlock ${r.unlock_cost}c · roster: ${r.roster?.length ?? 0}`,
+    collides: flagCollision(r.name, ctx.existingTeamNames),
+  })),
+  commit: async (rows) => (await commitTeams(rows)).length,
+  exportData: async () => (await supabase.from("teams").select("name,category,unlock_cost").order("name")).data ?? [],
+};
+
+export const RunsExchange: ExchangeEntity<typeof RunImportSchema> = {
+  schema: RunImportSchema,
+  buildPrompt: buildRunPrompt,
+  toPreviewRows: (rows) => rows.map((r, i) => ({
+    key: `run-${i}-${r.name}`,
+    label: r.name,
+    detail: `target ${r.target_score} · ${r.milestones?.length ?? 0} milestones · ${r.roster?.length ?? 0} opp.`,
+    collides: false,
+  })),
+  commit: async (rows) => (await commitRuns(rows)).length,
+  exportData: async () => (await supabase.from("runs").select("name,target_score,milestones").order("name")).data ?? [],
+};
+
+export const ChallengesExchange: ExchangeEntity<typeof ChallengeImportSchema> = {
+  schema: ChallengeImportSchema,
+  buildPrompt: buildChallengePrompt,
+  toPreviewRows: (rows) => rows.map((r, i) => ({
+    key: `chal-${i}-${r.name}`,
+    label: r.name,
+    detail: `${r.challenge_type} · ${r.win_condition} · ${r.coin_reward}c/${r.gem_reward}g${r.opponent_team_name ? ` · vs ${r.opponent_team_name}` : ""}`,
+    collides: false,
+  })),
+  commit: async (rows) => (await commitChallenges(rows)).length,
+  exportData: async () => (await supabase.from("challenges").select("name,challenge_type,win_condition,coin_reward,gem_reward,spotlight_group").order("sort_order")).data ?? [],
+};
+
+export const GemTasksExchange: ExchangeEntity<typeof GemTaskImportSchema> = {
+  schema: GemTaskImportSchema,
+  buildPrompt: buildGemTaskPrompt,
+  toPreviewRows: (rows) => rows.map((r, i) => ({
+    key: `gt-${i}-${r.title}`,
+    label: r.title,
+    detail: `${r.category} · ${r.gem_reward}💎 · cd ${r.cooldown_hours}h`,
+    collides: false,
+  })),
+  commit: async (rows) => (await commitGemTasks(rows)).length,
+  exportData: async () => (await supabase.from("gem_tasks").select("title,description,gem_reward,cooldown_hours,category,is_active").order("category")).data ?? [],
+};
+
+export const DynamicDuosExchange: ExchangeEntity<typeof DynamicDuoImportSchema> = {
+  schema: DynamicDuoImportSchema,
+  buildPrompt: buildDynamicDuoPrompt,
+  toPreviewRows: (rows) => rows.map((r, i) => ({
+    key: `duo-${i}-${r.name}`,
+    label: r.name,
+    detail: `${r.player_a_name} + ${r.player_b_name}`,
+    collides: false,
+  })),
+  commit: async (rows) => (await commitDynamicDuos(rows)).length,
+  exportData: async () => (await supabase.from("dynamic_duos").select("name,description,player_card_id_a,player_card_id_b,boosts_a,boosts_b,is_active").order("name")).data ?? [],
+};
