@@ -769,9 +769,12 @@ export default function AdminSocialFeed() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Social Feed Manager</h1>
-        <p className="text-sm text-muted-foreground">Posts, creators, and the location-aware media accounts that auto-tweet about league action.</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold">Social Feed Manager</h1>
+          <p className="text-sm text-muted-foreground">Posts, creators, and the location-aware media accounts that auto-tweet about league action.</p>
+        </div>
+        <ChatGPTExchange title="Bulk import posts from ChatGPT" entity={SocialPostsExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-social-posts"] })} />
       </div>
 
       <Card className={allOk ? "border-emerald-500/30" : "border-amber-500/40"}>
