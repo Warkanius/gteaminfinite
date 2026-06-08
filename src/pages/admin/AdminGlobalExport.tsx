@@ -65,15 +65,15 @@ function computeDiagnostics(tables: Record<string, any[]>): Diagnostics {
   const domGames = tables.domination_games ?? [];
   const domPlayers = tables.domination_game_players ?? [];
 
-  // Unrated: a player only counts as unrated when they have NO rating set
-  // (null/undefined) AND all per-stat values are 0. Any non-null rating —
-  // even a decimal like 0.4 — means the player has been graded.
+  // Unrated: only flag a card when it has NO overall rating AND no per-stat
+  // values. A card with a stat breakdown (e.g. 3PT = 3) is considered rated
+  // even if the overall `rating` column hasn't been filled in yet, and vice
+  // versa. Decimal ratings like 0.4 count as a real rating.
   const unrated_players = players
     .map((p: any) => {
-      const hasRating = p.rating !== null && p.rating !== undefined && p.rating !== "";
+      const ratingNum = p.rating == null || p.rating === "" ? 0 : Number(p.rating);
       const statSum = STAT_KEYS.reduce((s, k) => s + (Number(p[k]) || 0), 0);
-      if (!hasRating && !statSum) return { name: p.name, reason: "no rating, all stats 0" };
-      if (!hasRating) return { name: p.name, reason: "rating missing" };
+      if (!ratingNum && !statSum) return { name: p.name, reason: "no rating and all stats 0" };
       return null;
     })
     .filter(Boolean) as { name: string; reason: string }[];
