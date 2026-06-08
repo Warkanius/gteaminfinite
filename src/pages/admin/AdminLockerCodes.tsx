@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Pencil, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { ChatGPTExchange } from "@/components/admin/ChatGPTExchange";
+import { LockerCodesExchange } from "@/lib/exchangeEntities";
 
 type LockerCode = {
   id: string;
@@ -115,7 +117,10 @@ export default function AdminLockerCodes() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Locker Codes</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold">Locker Codes</h1>
+        <ChatGPTExchange title="Bulk import locker codes from ChatGPT" entity={LockerCodesExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-locker-codes"] })} />
+      </div>
       <DataTable
         data={codes}
         columns={columns}
