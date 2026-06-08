@@ -267,7 +267,7 @@ export async function commitLockerCodes(rows: z.infer<typeof LockerCodeImportSch
   const toInsert = rows.map((r) => ({
     code: r.code,
     reward_type: r.reward_type,
-    reward_value: r.reward_value,
+    reward_value: r.reward_value as any,
     max_redemptions: r.max_redemptions ?? null,
     expires_at: r.expires_at ?? null,
   }));
