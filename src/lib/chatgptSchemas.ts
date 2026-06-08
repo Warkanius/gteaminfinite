@@ -629,7 +629,8 @@ const StatPatch = {
 
 export const PlayerUpdateSchema = z.array(z.object({
   name: z.string().min(1),
-  rating: z.number().int().min(0).max(99).optional(),
+  // rating is numeric in the DB — preserve decimal precision (e.g. 87.5)
+  rating: z.number().min(0).max(99).optional(),
   position1: z.enum(["PG", "SG", "SF", "PF", "C"]).nullable().optional(),
   position2: z.enum(["PG", "SG", "SF", "PF", "C"]).nullable().optional(),
   social_handle: z.string().nullable().optional(),
@@ -710,11 +711,14 @@ ${ctx.existingPlayerNames.slice(0, 120).join(", ")}
 
 JSON SHAPE (array, partial fields):
 [
-  { "name": "Existing Player Name", "rating": 88, "stat_3pt": 92, "stat_ast": 70 }
+  { "name": "Existing Player Name", "rating": 87.5, "stat_3pt": 92, "stat_ast": 70 }
 ]
 
-Stat keys: stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (0-99).
+Stat keys: stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (integers 0-99).
+"rating" is a DECIMAL number 0-99 (one decimal place preferred, e.g. 88.4) — do NOT round to an integer.
 Positions: PG, SG, SF, PF, C.
+
+If the live snapshot's diagnostics.unrated_players list is provided, prioritize rating those players first.
 ${updateRules("name")}`;
 }
 
