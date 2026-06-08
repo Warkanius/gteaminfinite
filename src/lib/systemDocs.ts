@@ -89,10 +89,25 @@ atomically-imported package (\`import-storyline-bundle\` edge function).
 - **Cards** are styled \`aspect-[3/4] w-full\`, image_url should match.
 - **Rewards** are JSON: \`{ gems?: number, pack_id?: uuid, card_id?: uuid }\`.
 - **Storylines** can bundle players + locker_codes + social_posts in one JSON.
+- **Ratings are decimals** (numeric, e.g. \`87.4\`) — preserve to one decimal place. Do not round.
+
+## Diagnostics block (read this FIRST)
+The snapshot includes a top-level \`diagnostics\` object listing what is incomplete:
+- \`diagnostics.unrated_players\` — players with no rating or all-zero stats. When asked
+  to "rate unrated players", iterate this list exclusively.
+- \`diagnostics.incomplete_team_rosters\` — teams with fewer than 3 player slots filled
+  (category included so you know whether it's a domination / run / challenge team).
+- \`diagnostics.incomplete_runs\` — runs missing opponent cards, milestones, or target_score.
+- \`diagnostics.incomplete_domination_paths\` — domination games whose roster has < 3 cards.
+
+When the user gives a broad brief like "finish the missing rosters" or "rate the unrated
+players", emit JSON ONLY for the items listed in the matching diagnostics array.
 
 ## How to use the snapshot below with ChatGPT
 1. Paste the README + the JSON snapshot as a single system message in ChatGPT.
-2. Then ask for content (e.g., "Generate 10 new sharpshooter players for the
-   'East Coast Era' storyline"). ChatGPT will respect existing names + enums.
-3. Paste its JSON output into the matching Admin page's "AI Import / Export" tab.
+2. Ask for content (e.g., "Rate every player in diagnostics.unrated_players" or
+   "Generate 10 new sharpshooters for 'East Coast Era'"). ChatGPT will respect existing
+   names + enums and target only what's incomplete.
+3. Paste its JSON output into the matching Admin page's "AI Import / Export" tab
+   (use **Update existing** mode for edits, **Create** mode for new content).
 `;
