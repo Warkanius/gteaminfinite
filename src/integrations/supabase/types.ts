@@ -1628,8 +1628,11 @@ export type Database = {
           created_at: string
           creator_id: string | null
           event_type: string | null
+          headline_image_url: string | null
+          headline_rank: number | null
           id: string
           image_url: string | null
+          is_headline: boolean
           is_published: boolean
           likes_count: number
           location_account_id: string | null
@@ -1644,8 +1647,11 @@ export type Database = {
           created_at?: string
           creator_id?: string | null
           event_type?: string | null
+          headline_image_url?: string | null
+          headline_rank?: number | null
           id?: string
           image_url?: string | null
+          is_headline?: boolean
           is_published?: boolean
           likes_count?: number
           location_account_id?: string | null
@@ -1660,8 +1666,11 @@ export type Database = {
           created_at?: string
           creator_id?: string | null
           event_type?: string | null
+          headline_image_url?: string | null
+          headline_rank?: number | null
           id?: string
           image_url?: string | null
+          is_headline?: boolean
           is_published?: boolean
           likes_count?: number
           location_account_id?: string | null
@@ -1693,6 +1702,77 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      storyline_entities: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          note: string | null
+          storyline_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          note?: string | null
+          storyline_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          note?: string | null
+          storyline_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storyline_entities_storyline_id_fkey"
+            columns: ["storyline_id"]
+            isOneToOne: false
+            referencedRelation: "storylines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storylines: {
+        Row: {
+          arc_image_url: string | null
+          created_at: string
+          ends_at: string | null
+          id: string
+          starts_at: string | null
+          status: string
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          arc_image_url?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          starts_at?: string | null
+          status?: string
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          arc_image_url?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          starts_at?: string | null
+          status?: string
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       sub_collections: {
         Row: {
