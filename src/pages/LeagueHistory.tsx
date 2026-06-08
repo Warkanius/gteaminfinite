@@ -39,7 +39,7 @@ export default function LeagueHistory() {
         .order("headline_rank", { ascending: true })
         .order("posted_at", { ascending: false })
         .limit(4);
-      return (data ?? []) as SocialPost[];
+      return (data ?? []) as unknown as SocialPost[];
     },
   });
 
@@ -53,7 +53,7 @@ export default function LeagueHistory() {
         .eq("is_headline", false)
         .order("posted_at", { ascending: false })
         .limit(12);
-      return (data ?? []) as SocialPost[];
+      return (data ?? []) as unknown as SocialPost[];
     },
   });
 
@@ -80,7 +80,7 @@ export default function LeagueHistory() {
         .eq("is_published", true)
         .order("posted_at", { ascending: false })
         .limit(6);
-      return (data ?? []) as SocialPost[];
+      return (data ?? []) as unknown as SocialPost[];
     },
   });
 
@@ -94,7 +94,7 @@ export default function LeagueHistory() {
         .eq("is_published", true)
         .order("posted_at", { ascending: false })
         .limit(6);
-      return (data ?? []) as SocialPost[];
+      return (data ?? []) as unknown as SocialPost[];
     },
   });
 
