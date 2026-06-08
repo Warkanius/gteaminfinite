@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Pencil, Trash2, Upload, X, Users, Copy, Radio, MessageSquare, Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { ChatGPTExchange } from "@/components/admin/ChatGPTExchange";
+import { SocialPostsExchange } from "@/lib/exchangeEntities";
 
 /* ── Location accounts + templates ────────── */
 
