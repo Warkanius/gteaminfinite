@@ -25,6 +25,8 @@ import { cn } from "@/lib/utils";
 import { computeOVR } from "@/lib/ovrUtils";
 import { EvoPathEditor } from "@/components/admin/EvoPathEditor";
 import { BASE_BADGE_SLOTS } from "@/lib/badgeEngine";
+import { ChatGPTExchange } from "@/components/admin/ChatGPTExchange";
+import { PlayersExchange } from "@/lib/exchangeEntities";
 
 type PlayerCard = Tables<"player_cards"> & {
   card_color_primary?: string | null;
@@ -397,9 +399,12 @@ export default function AdminPlayers() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Player Card Manager</CardTitle>
-          <CardDescription>Manage the roster of players, their attributes, badges, and card visuals.</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-2">
+          <div>
+            <CardTitle>Player Card Manager</CardTitle>
+            <CardDescription>Manage the roster of players, their attributes, badges, and card visuals.</CardDescription>
+          </div>
+          <ChatGPTExchange title="Bulk import players from ChatGPT" entity={PlayersExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-players"] })} />
         </CardHeader>
         <CardContent>
           <DataTable

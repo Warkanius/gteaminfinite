@@ -47,6 +47,7 @@ const playerItems = [
   { title: "Locker Codes", url: "/locker-codes", icon: KeyRound },
   { title: "Earn Gems", url: "/gem-tasks", icon: Gem },
   { title: "Feed", url: "/feed", icon: Newspaper },
+  { title: "League History", url: "/league", icon: BookOpen },
   { title: "Install App", url: "/install", icon: Download },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
@@ -68,6 +69,7 @@ const adminItems = [
   { title: "Collections", url: "/admin/collections", icon: FolderOpen },
   { title: "Collection Sets", url: "/admin/collection-sets", icon: FolderOpen },
   { title: "Dynamic Duos", url: "/admin/dynamic-duos", icon: Sparkles },
+  { title: "Storylines (AI)", url: "/admin/storylines", icon: BookOpen },
 ];
 
 export function AppSidebar() {
