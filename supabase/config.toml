@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.import-storyline-bundle]
 verify_jwt = false
+
+[functions.grant-rewards]
+verify_jwt = false
