@@ -202,33 +202,17 @@ function EvoTimeline({ playerCardId, userId, glowColor }: { playerCardId: string
   });
 
   const claimMut = useMutation({
-    mutationFn: async ({ step, progressRow }: { step: any; progressRow: any }) => {
-      const evolvesToCardId = (step as any).evolves_to_card_id;
-      if (!evolvesToCardId || !userId) throw new Error("No evolution target configured");
+    mutationFn: async ({ progressRow }: { step: any; progressRow: any }) => {
+      if (!userId) throw new Error("Not signed in");
 
-      // Insert the new evolved card into user's collection
-      const { error: insertErr } = await supabase.from("user_collections").insert({
-        user_id: userId,
-        player_card_id: evolvesToCardId,
+      // The server verifies completion, ownership and the evolution target.
+      const { data, error } = await supabase.functions.invoke("grant-rewards", {
+        body: { action: "evo_claim", progress_id: progressRow.id },
       });
-      if (insertErr) throw insertErr;
-
-      // Remove one copy of the old card
-      const { data: oldCopies } = await supabase.from("user_collections")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("player_card_id", playerCardId)
-        .limit(1);
-      if (oldCopies && oldCopies.length > 0) {
-        await supabase.from("user_collections").delete().eq("id", oldCopies[0].id);
-      }
-
-      // Mark as claimed
-      const { error: claimErr } = await supabase.from("user_evo_progress")
-        .update({ claimed: true } as any)
-        .eq("id", progressRow.id);
-      if (claimErr) throw claimErr;
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
+
     onSuccess: () => {
       toast.success("Evolution claimed! Check your collection for the new card.");
       refetchProgress();
