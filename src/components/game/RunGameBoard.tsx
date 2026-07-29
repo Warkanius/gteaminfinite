@@ -32,6 +32,7 @@ interface Props {
   cpuLineup: any[];
   badgeMap: Record<string, CardBadge[]>;
   traitMap: Record<string, CardTrait[]>;
+  activeDuos?: ActiveDynamicDuo[];
   onGameComplete: () => void;
   runId?: string;
 }
@@ -64,7 +65,7 @@ interface CardAccum {
   statValues: Record<StatKey, number>;
 }
 
-export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, onGameComplete }: Props) {
+export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, activeDuos = [], onGameComplete }: Props) {
   const { user } = useAuth();
   const targetScore = run.target_score;
   const runsContext = { isHome: false, isAway: true, isKeyGame: false, isHomeHeroEligible: false, isRankUpGame: false };
