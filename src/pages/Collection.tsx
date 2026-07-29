@@ -443,7 +443,8 @@ export default function Collection() {
     return results;
   }, [collections, subCollections, allPlayerCards, ownedChainRoots, chainRootOf]);
 
-  // Claim collection reward (handles card / coins / gems / pack)
+  // Claim collection reward (handles card / coins / gems / pack).
+  // The server re-verifies set completion and reads the reward from the DB.
   const claimRewardMutation = useMutation({
     mutationFn: async (params: {
       rewardType: "card" | "coins" | "gems" | "pack";
@@ -454,61 +455,22 @@ export default function Collection() {
       collectionId?: string | null;
       subCollectionId?: string | null;
     }) => {
-      const { rewardType, rewardCardId, coins, gems, packId, collectionId, subCollectionId } = params;
-
-      if (rewardType === "card") {
-        if (!rewardCardId) throw new Error("Missing reward card");
-        const { error } = await supabase.from("user_collections").insert({
-          user_id: user!.id,
-          player_card_id: rewardCardId,
-          source: "collection_reward",
-        });
-        if (error) throw error;
-        return { rewardType };
-      }
-
-      // Non-card reward: requires a target collection/sub_collection to mark claimed
+      const { collectionId, subCollectionId } = params;
       if (!collectionId && !subCollectionId) throw new Error("Missing claim target");
 
-      // Insert claim record first (unique index prevents double-claim)
-      const { error: claimErr } = await supabase.from("user_collection_claims").insert({
-        user_id: user!.id,
-        collection_id: subCollectionId ? null : collectionId,
-        sub_collection_id: subCollectionId ?? null,
-        reward_type: rewardType,
+      const { data, error } = await supabase.functions.invoke("grant-rewards", {
+        body: {
+          action: "collection_claim",
+          collection_id: subCollectionId ? null : collectionId,
+          sub_collection_id: subCollectionId ?? null,
+        },
       });
-      if (claimErr) throw claimErr;
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
-      if (rewardType === "coins" || rewardType === "gems") {
-        const { data: profile, error: pErr } = await supabase
-          .from("profiles")
-          .select("id, coins, gems")
-          .eq("user_id", user!.id)
-          .single();
-        if (pErr || !profile) throw new Error("Profile not found");
-
-        const update: any = {};
-        if (rewardType === "coins") update.coins = (profile.coins ?? 0) + (coins ?? 0);
-        if (rewardType === "gems") update.gems = (profile.gems ?? 0) + (gems ?? 0);
-
-        const { error: upErr } = await supabase.from("profiles").update(update).eq("id", profile.id);
-        if (upErr) throw upErr;
-        return { rewardType, amount: rewardType === "coins" ? coins : gems };
-      }
-
-      if (rewardType === "pack") {
-        if (!packId) throw new Error("Missing pack");
-        const { error } = await supabase.from("user_pack_inventory").insert({
-          user_id: user!.id,
-          pack_id: packId,
-          source: "collection_reward",
-        });
-        if (error) throw error;
-        return { rewardType };
-      }
-
-      throw new Error(`Unknown reward type: ${rewardType}`);
+      return { rewardType: data?.reward_type ?? params.rewardType, amount: data?.amount };
     },
+
     onSuccess: (data: any) => {
       if (data?.rewardType === "coins") toast.success(`Claimed ${data.amount} coins!`);
       else if (data?.rewardType === "gems") toast.success(`Claimed ${data.amount} gems!`);
