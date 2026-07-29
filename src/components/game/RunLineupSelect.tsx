@@ -10,11 +10,18 @@ import { Dices } from "lucide-react";
 import { starStatToRunStat } from "@/lib/gameEngine";
 import { fetchBadgesForCards, type CardBadge } from "@/lib/badgeEngine";
 import { fetchTraitsForCards, type CardTrait } from "@/lib/traitEngine";
+import { resolveActiveDynamicDuos, type ActiveDynamicDuo, type DynamicDuoRow } from "@/lib/dynamicDuos";
 
 interface Props {
   runId: string;
   teamId: string | null;
-  onLineupConfirmed: (playerLineup: any[], cpuLineup: any[], badgeMap: Record<string, CardBadge[]>, traitMap: Record<string, CardTrait[]>) => void;
+  onLineupConfirmed: (
+    playerLineup: any[],
+    cpuLineup: any[],
+    badgeMap: Record<string, CardBadge[]>,
+    traitMap: Record<string, CardTrait[]>,
+    activeDuos: ActiveDynamicDuo[],
+  ) => void;
 }
 
 export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
@@ -225,11 +232,24 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
                     ...playerGameLineup.map((c: any) => c.id),
                     ...cpuGameLineup.map((c: any) => c.id),
                   ];
-                  const [badgeMap, traitMap] = await Promise.all([
+                  const [badgeMap, traitMap, duosRes] = await Promise.all([
                     fetchBadgesForCards(supabase, allCardIds),
                     fetchTraitsForCards(supabase, allCardIds),
+                    supabase.from("dynamic_duos").select("*").eq("is_active", true),
                   ]);
-                  onLineupConfirmed(playerGameLineup, cpuGameLineup, badgeMap, traitMap);
+
+                  // Apply dynamic duo boosts to both 3v3 lineups
+                  const allDuos = (duosRes.data ?? []) as unknown as DynamicDuoRow[];
+                  const userDuoResult = resolveActiveDynamicDuos(playerGameLineup as any[], allDuos);
+                  const cpuDuoResult = resolveActiveDynamicDuos(cpuGameLineup as any[], allDuos);
+
+                  onLineupConfirmed(
+                    userDuoResult.lineup,
+                    cpuDuoResult.lineup,
+                    badgeMap,
+                    traitMap,
+                    userDuoResult.activeDuos,
+                  );
                 }}
               >
                 START GAUNTLET
