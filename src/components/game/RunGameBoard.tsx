@@ -25,6 +25,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { postLeagueEvent } from "@/lib/leagueEvents";
+import type { ActiveDynamicDuo } from "@/lib/dynamicDuos";
 
 interface Props {
   run: any;
