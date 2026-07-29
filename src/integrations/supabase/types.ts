@@ -1400,6 +1400,33 @@ export type Database = {
         }
         Relationships: []
       }
+      reward_grants: {
+        Row: {
+          coins: number
+          created_at: string
+          gems: number
+          grant_key: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          coins?: number
+          created_at?: string
+          gems?: number
+          grant_key: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          coins?: number
+          created_at?: string
+          gems?: number
+          grant_key?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       rule_config: {
         Row: {
           description: string | null
