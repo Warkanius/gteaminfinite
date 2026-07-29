@@ -95,29 +95,6 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Grant a pack reward (random_standard, random_standard_box, or specific ID) */
-  const grantPackReward = async (userId: string, packReward: string, rewardParts: string[], source: string) => {
-    if (packReward === "random_standard") {
-      const { data: standardPacks } = await supabase.from("packs").select("id, name").eq("pack_type", "standard");
-      if (standardPacks && standardPacks.length > 0) {
-        const picked = standardPacks[Math.floor(Math.random() * standardPacks.length)];
-        await supabase.from("user_pack_inventory").insert({ user_id: userId, pack_id: picked.id, source });
-        rewardParts.push(`📦 ${picked.name}`);
-      }
-    } else if (packReward === "random_standard_box") {
-      const { data: boxPacks } = await supabase.from("packs").select("id, name").eq("pack_type", "standard").not("ten_box_cost", "is", null);
-      if (boxPacks && boxPacks.length > 0) {
-        const picked = boxPacks[Math.floor(Math.random() * boxPacks.length)];
-        const rows = Array.from({ length: 10 }, () => ({ user_id: userId, pack_id: picked.id, source }));
-        await supabase.from("user_pack_inventory").insert(rows);
-        rewardParts.push(`📦 ${picked.name} Box (10x)`);
-      }
-    } else {
-      const { data: packInfo } = await supabase.from("packs").select("name").eq("id", packReward).single();
-      await supabase.from("user_pack_inventory").insert({ user_id: userId, pack_id: packReward, source });
-      rewardParts.push(`📦 ${packInfo?.name ?? "Pack"}`);
-    }
-  };
 
   const [playerScore, setPlayerScore] = useState(0);
   const [cpuScore, setCpuScore] = useState(0);
