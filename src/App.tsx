@@ -71,6 +71,23 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, role, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/auth" replace />;
+  if (role !== "admin") return <Navigate to="/" replace />;
+
+  return <AppLayout>{children}</AppLayout>;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -90,33 +107,33 @@ const App = () => (
             <Route path="/runs/:runId" element={<ProtectedRoute><LazyLoad><RunPlay /></LazyLoad></ProtectedRoute>} />
             <Route path="/packs" element={<ProtectedRoute><LazyLoad><PackMarket /></LazyLoad></ProtectedRoute>} />
             <Route path="/gems" element={<ProtectedRoute><LazyLoad><GemMarket /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/players" element={<ProtectedRoute><LazyLoad><AdminPlayers /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/packs" element={<ProtectedRoute><LazyLoad><AdminPacks /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/teams" element={<ProtectedRoute><LazyLoad><AdminTeams /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/badges" element={<ProtectedRoute><LazyLoad><AdminBadgesTraits /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/challenges" element={<ProtectedRoute><LazyLoad><AdminChallenges /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/currencies" element={<ProtectedRoute><LazyLoad><AdminCurrencies /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/rules" element={<ProtectedRoute><LazyLoad><AdminRules /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/locker-codes" element={<ProtectedRoute><LazyLoad><AdminLockerCodes /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/players" element={<AdminRoute><LazyLoad><AdminPlayers /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/packs" element={<AdminRoute><LazyLoad><AdminPacks /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/teams" element={<AdminRoute><LazyLoad><AdminTeams /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/badges" element={<AdminRoute><LazyLoad><AdminBadgesTraits /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/challenges" element={<AdminRoute><LazyLoad><AdminChallenges /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/currencies" element={<AdminRoute><LazyLoad><AdminCurrencies /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/rules" element={<AdminRoute><LazyLoad><AdminRules /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/locker-codes" element={<AdminRoute><LazyLoad><AdminLockerCodes /></LazyLoad></AdminRoute>} />
             <Route path="/locker-codes" element={<ProtectedRoute><LazyLoad><LockerCodes /></LazyLoad></ProtectedRoute>} />
             <Route path="/auction" element={<ProtectedRoute><LazyLoad><AuctionHouse /></LazyLoad></ProtectedRoute>} />
             <Route path="/gem-tasks" element={<ProtectedRoute><LazyLoad><GemTasks /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/gem-tasks" element={<ProtectedRoute><LazyLoad><AdminGemTasks /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/auction" element={<ProtectedRoute><LazyLoad><AdminAuction /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/gem-market" element={<ProtectedRoute><LazyLoad><AdminGemMarket /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/starter-packs" element={<ProtectedRoute><LazyLoad><AdminStarterPacks /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/social-feed" element={<ProtectedRoute><LazyLoad><AdminSocialFeed /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/gem-tasks" element={<AdminRoute><LazyLoad><AdminGemTasks /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/auction" element={<AdminRoute><LazyLoad><AdminAuction /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/gem-market" element={<AdminRoute><LazyLoad><AdminGemMarket /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/starter-packs" element={<AdminRoute><LazyLoad><AdminStarterPacks /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/social-feed" element={<AdminRoute><LazyLoad><AdminSocialFeed /></LazyLoad></AdminRoute>} />
             <Route path="/feed" element={<ProtectedRoute><LazyLoad><SocialFeed /></LazyLoad></ProtectedRoute>} />
             <Route path="/feed/profile/:handle" element={<ProtectedRoute><LazyLoad><FeedProfile /></LazyLoad></ProtectedRoute>} />
             <Route path="/install" element={<ProtectedRoute><LazyLoad><Install /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/collections" element={<ProtectedRoute><LazyLoad><AdminCollections /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/collection-sets" element={<ProtectedRoute><LazyLoad><AdminCollectionSets /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/collections" element={<AdminRoute><LazyLoad><AdminCollections /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/collection-sets" element={<AdminRoute><LazyLoad><AdminCollectionSets /></LazyLoad></AdminRoute>} />
             <Route path="/challenges" element={<ProtectedRoute><LazyLoad><Challenges /></LazyLoad></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><LazyLoad><Settings /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/dynamic-duos" element={<ProtectedRoute><LazyLoad><AdminDynamicDuos /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/storylines" element={<ProtectedRoute><LazyLoad><AdminStorylines /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/dynamic-duos" element={<AdminRoute><LazyLoad><AdminDynamicDuos /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/storylines" element={<AdminRoute><LazyLoad><AdminStorylines /></LazyLoad></AdminRoute>} />
             <Route path="/league" element={<ProtectedRoute><LazyLoad><LeagueHistory /></LazyLoad></ProtectedRoute>} />
-            <Route path="/admin/global-export" element={<ProtectedRoute><LazyLoad><AdminGlobalExport /></LazyLoad></ProtectedRoute>} />
+            <Route path="/admin/global-export" element={<AdminRoute><LazyLoad><AdminGlobalExport /></LazyLoad></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
