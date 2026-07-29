@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { computeOVR } from "@/lib/ovrUtils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, Users, ShoppingBag, Trophy, Gift, Sparkles } from "lucide-react";
@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [claiming, setClaiming] = useState(false);
   const [revealCards, setRevealCards] = useState<any[] | null>(null);
   const [checkedStarter, setCheckedStarter] = useState(false);
+  const [needsFirstCards, setNeedsFirstCards] = useState(false);
 
   useEffect(() => {
     if (user) checkStarterPack();
@@ -54,7 +55,9 @@ export default function Dashboard() {
       .select("id")
       .eq("pack_type", "starter");
 
+    // No starter packs configured — make sure brand-new players still get a path forward
     if (!starters || starters.length === 0) {
+      await checkEmptyCollection();
       setCheckedStarter(true);
       return;
     }
@@ -99,8 +102,18 @@ export default function Dashboard() {
     if (packs.length > 0) {
       setStarterPacks(packs);
       setShowStarterPicker(true);
+    } else {
+      await checkEmptyCollection();
     }
     setCheckedStarter(true);
+  }
+
+  async function checkEmptyCollection() {
+    const { count } = await supabase
+      .from("user_collections")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user!.id);
+    setNeedsFirstCards(!count);
   }
 
   async function claimPack(packId: string) {
@@ -188,6 +201,24 @@ export default function Dashboard() {
           {role === "admin" ? "Admin Dashboard" : "Player Dashboard"}
         </p>
       </div>
+
+      {needsFirstCards && (
+        <Card className="border-amber-500/40 bg-amber-500/10">
+          <CardHeader>
+            <CardTitle className="text-base">Get your first cards</CardTitle>
+            <CardDescription>
+              No starter pack is available right now. Head to the Pack Store to grab your first
+              players, or redeem a locker code if you have one.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => navigate("/packs")}>Open Pack Store</Button>
+            <Button size="sm" variant="outline" onClick={() => navigate("/locker-codes")}>
+              Redeem a code
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {quickActions.map((action) => (

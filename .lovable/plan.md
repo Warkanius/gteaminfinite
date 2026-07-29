@@ -1,149 +1,79 @@
-# ChatGPT-Powered Content Pipeline + League History Page
+## GTeam Infinite Hub — Completion Audit (no files or schema changed)
 
-## Goal
-Make ChatGPT a true co-author by giving every admin section a frictionless copy-prompt → paste-JSON loop, and surface the resulting narrative on a public League History page that looks and reads like NBA.com.
-
----
-
-## Part 1 — Shared Import/Export Framework
-
-A single reusable system every admin page plugs into.
-
-### New components
-- `src/components/admin/ChatGPTExchange.tsx` — One dialog with three tabs:
-  1. **Copy prompt** — shows the pre-built prompt, "Copy" button, and an optional "context brief" textarea you can add ("make these all gauntlet-tier villains")
-  2. **Paste JSON** — textarea + "Validate" → Zod check → preview table of every row (name, key fields, ✅/⚠️ flags)
-  3. **Export** — pretty-printed JSON of current selection, copy/download
-- `src/components/admin/ImportPreviewTable.tsx` — Generic preview grid with per-row include/exclude checkboxes. "Create N items" commits only checked + valid rows. **Create-new only**, never overwrites (matches your safety choice).
-
-### New library
-- `src/lib/chatgptSchemas.ts` — One Zod schema + one prompt builder per entity. Prompts include:
-  - The JSON shape (strict)
-  - Live reference data pulled from the DB at open time: archetypes list, badges, traits, gem tiers, existing rules, current evo paths, current templates
-  - 1–2 real example rows
-  - "Return ONLY a JSON array, no prose, no markdown fences"
-- `src/lib/projectBundle.ts` — Builds a "project context bundle" (rules, archetypes, badges, traits, gem tiers, post templates, location accounts) that any prompt can embed so ChatGPT always has fresh reference.
-
-### Where it plugs in
-Add an **"AI Import / Export"** button to the header of each page:
-
-| Admin page | Entity schema |
-|---|---|
-| AdminPlayers | Player cards (name, archetype, stars, stats, optional badges/traits/evo path slug) |
-| AdminTeams | Team + 5 player slots (uses existing TemplatePicker preview) |
-| AdminRules (Dominations section) | Domination matchups + rank rewards |
-| RunRosterManager | 3v3 run rosters + run_rank_rewards |
-| AdminChallenges | Challenges (criteria, rewards, dates) |
-| AdminLockerCodes | Locker codes (code, contents, expiry, max redemptions) |
-| AdminGemTasks | Gem tasks (objective, reward tier, cadence) |
-| AdminSocialFeed | Post templates AND ad-hoc social posts (with linked account + scheduled_at) |
-| AdminCollections / SubCollections / Sets | Collections + sub-collections |
-| AdminDynamicDuos | Duo pairs + bonus rules |
+Verified against the live codebase, the live database policies, `cron.job`, a typecheck, and the test suite. Overall: the product is far more complete than "prototype" — 39 routes, 17 admin pages, 12 edge functions, 45+ tables all with UI. The blockers are concentrated in **economy integrity** and a handful of **dead ends**, not missing features.
 
 ---
 
-## Part 2 — Storyline Bundle Import (Level-1 flavor)
+## P0 — Launch blockers
 
-A new admin page `src/pages/admin/AdminStorylines.tsx` that accepts a **single multi-entity JSON bundle** from ChatGPT — e.g. one arc that creates a rookie player, his 3 run opponents, a gauntlet team, and 4 timed social posts.
+**1. The entire reward economy is client-authoritative and trivially exploitable (Critical)**
+Live policy confirmed by query: `profiles` UPDATE = `USING (auth.uid() = user_id)` with **no `WITH CHECK` and no column restriction**. Every reward grant is a browser-side read-then-write:
+- `src/components/game/GameResults.tsx:103-106` (win coins), `:177-181` (gems)
+- `src/components/game/RunGameBoard.tsx:223` (milestones), `:284-290` (rank rewards)
+- `src/pages/Collection.tsx:494` (collection reward claims)
 
-- One prompt template ("describe a storyline arc, get back a bundle")
-- One Zod schema with sub-schemas for each entity type
-- Preview screen groups items by type with cross-links shown ("Post #2 references Player: Marcus Hill")
-- Single "Create all (N items)" commit, all-or-nothing transaction via an edge function `supabase/functions/import-storyline-bundle/index.ts`
-- Stores the arc in a new `storylines` table so the League History page can render it as a narrative
+Any signed-in user can run `supabase.from('profiles').update({coins: 999999999})` from devtools. Contrast: all *spending* paths (`open-pack`, `buy-gem-card`, `buy-auction-card`, `redeem-locker-code`, `quicksell-card`) are correctly server-authoritative. This inconsistency is the single biggest issue.
 
----
+Related free-reward surfaces, all client-inserted with only `auth.uid() = user_id` checks:
+- `user_evo_progress` insert/update — `src/lib/evoProgressTracker.ts:147,214`
+- Evolution claim grants the evolved card client-side — `src/components/cards/CardDetailDialog.tsx:210-238`
+- `challenge_completions`, `user_rttr_progress` — `GameResults.tsx:194,216`
+- `user_rank_claims` — `RunGameBoard.tsx:274`
+- `user_collections` self-insert — anyone can grant themselves any card
 
-## Part 3 — League History Page (public, NBA.com-style)
+**Fix shape:** one `grant-rewards` edge function that recomputes rewards server-side from the game log / rank / collection state, plus tightening `profiles` UPDATE to a `WITH CHECK` that forbids coin/gem changes from the client (currency mutable only via service role).
 
-A polished public page at `/league` (and a nav entry).
+**2. `profiles` is world-readable to all signed-in users** — policy `Profiles viewable by authenticated USING (true)` exposes every player's `display_name`, `team_name`, coins and gems. Fine if intentional for leaderboards; otherwise scope it or move to a public view.
 
-### Layout (mobile-first, dark cosmic theme)
-```text
-┌────────────────────────────────────┐
-│  LEAGUE HEADLINES  (big hero card) │  ← top "featured" post
-├────────────────────────────────────┤
-│  Top Story  │  Story  │  Story     │  ← 3-up secondary
-├────────────────────────────────────┤
-│  TRENDING NOW (horizontal scroll)  │  ← latest 10 social posts
-├────────────────────────────────────┤
-│  STORYLINES                        │
-│   • Arc cards with progress + CTA  │
-├────────────────────────────────────┤
-│  RECENT MOVES (signings)           │
-│  GAME RESULTS (last 5)             │
-│  EVOLUTIONS                        │
-└────────────────────────────────────┘
-```
+**3. `/admin/*` has no role gate in the router** — `src/App.tsx:58-71` `ProtectedRoute` checks auth only. Any logged-in user can load `/admin/currencies` and every other admin page. DB RLS blocks most admin *writes* (`has_role` policies), but not the `profiles` writes on `AdminCurrencies.tsx:40,51` (see #1). Needs an `AdminRoute` wrapper using `role` from `useAuth`.
 
-### Data sources (all existing)
-- `social_posts` — filtered/grouped by event type (signing, game_result, appearance, evolution) and by `is_headline` flag
-- `location_accounts` — shown as "publisher" chips
-- `storylines` (new) — arc metadata + linked entity ids
-- `domination_games`, `runs`, `user_runs` — for results widgets
-
-### New fields
-- `social_posts.is_headline boolean default false`
-- `social_posts.headline_rank int` (1 = hero, 2–4 = secondary, null = standard)
-- `social_posts.headline_image_url text` (optional, for hero treatment)
-
-### New admin controls
-In AdminSocialFeed: "Promote to headline" action with rank selector, plus drag-to-reorder of current headlines. ChatGPT prompts for posts include `is_headline` and `headline_rank` so you can ask GPT to draft a full week's front page.
-
-### New components
-- `src/pages/LeagueHistory.tsx`
-- `src/components/league/HeadlineHero.tsx`
-- `src/components/league/StoryGrid.tsx`
-- `src/components/league/TrendingRail.tsx`
-- `src/components/league/StorylineCard.tsx`
-- `src/components/league/ResultsWidget.tsx`
-
-### Profile pages
-Player + team names on the league page link to existing `FeedProfile` / future player profile pages so a reader can click from a headline into the card's full history.
+**4. Broken redirect: `/play/match` refresh → 404** — `src/pages/Play.tsx:72` navigates to `/game-hub`, a route that does not exist (`App.tsx` defines `/play`). Any refresh or direct visit to a match falls through to `NotFound`.
 
 ---
 
-## Database changes (one migration)
+## P1 — Visible incompleteness and journey gaps
 
-- Add `is_headline`, `headline_rank`, `headline_image_url` to `social_posts`
-- Create `storylines` table: title, summary, arc_image_url, status (draft/active/archived), starts_at, ends_at
-- Create `storyline_entities` join: storyline_id, entity_type ('player'|'team'|'run'|'domination'|'post'|'locker_code'|'challenge'), entity_id
-- RLS: read public for both; write admin-only
-- GRANT select to anon for public read
+**5. No free-play / exhibition 5v5.** `/play/match` is only entered from `Domination.tsx:108` and `Challenges.tsx:58`. `GameHub.tsx` lists only Friends (dead), Runs, Challenges — it does not even link Domination. The headline "5v5 match simulation" has no standalone entry point.
 
----
+**6. "Play With Friends" is a shipped dead link.** `src/pages/GameHub.tsx:6-12` → `url: "#"`; `src/pages/Dashboard.tsx:25` shows the same card but points at `/play`, so the two behave differently. Either disable both or ship the mode.
 
-## Technical details
+**7. Dynamic Duos never apply in Runs.** Resolved in `LineupSelect.tsx:314` and consumed by `GameBoard.tsx:27,36`, but `RunLineupSelect.tsx` / `RunGameBoard.tsx` contain zero references. Admin-configured duos silently do nothing in 3v3.
 
-- All Zod schemas live in `src/lib/chatgptSchemas.ts` and are reused by both the dialog validator and the storyline bundle.
-- Prompts are dynamic — they query the DB at open-time and embed current archetypes/badges/traits/gem tiers/rules so ChatGPT can't suggest nonexistent values.
-- Importer enforces **create-new only**: rows whose name+key collide with existing ones are flagged ⚠️ and excluded by default; you can opt-in row-by-row.
-- Storyline bundle commit is wrapped in a single Edge Function so partial failure rolls back the whole arc.
-- League History fetches via a small RPC `get_league_front_page()` that returns hero + secondary + trending + recent moves in one round-trip for fast first paint.
+**8. Nav gaps.** `AppSidebar.tsx:39-53` omits `/challenges` and `/runs` — both only reachable via Dashboard/GameHub cards.
+
+**9. Starter pack silently no-ops.** `Dashboard.tsx:46-104` only offers a starter pack if an admin created a `pack_type="starter"` pack; otherwise a brand-new user lands on an empty collection with no cards, no coins prompt, and no message. Needs a guaranteed onboarding grant.
 
 ---
 
-## File summary
+## P2 — Copy, config, hygiene
 
-**Created**
-- `src/components/admin/ChatGPTExchange.tsx`
-- `src/components/admin/ImportPreviewTable.tsx`
-- `src/lib/chatgptSchemas.ts`
-- `src/lib/projectBundle.ts`
-- `src/pages/admin/AdminStorylines.tsx`
-- `src/pages/LeagueHistory.tsx`
-- `src/components/league/*` (5 components)
-- `supabase/functions/import-storyline-bundle/index.ts`
-- Migration for `storylines`, `storyline_entities`, and headline columns
+**10. `index.html` still ships Lovable defaults**: `<!-- TODO: Update og:title... -->`, `og:title="Lovable App"`, `og:description="Lovable Generated Project"`, `twitter:site="@Lovable"`, duplicate `<meta name="author">`. Title/description are correct; social preview is not.
 
-**Edited**
-- All admin pages listed above — add "AI Import / Export" button
-- `AdminSocialFeed.tsx` — headline promotion controls
-- `AppSidebar.tsx` / `App.tsx` — add `/league` route + admin storylines route
+**11. `public/sw.js:14-15`** references `/pwa-192x192.png`, which does not exist — `public/` contains `icon-192.png` / `icon-512.png`. Push notification icons are broken.
+
+**12. PWA is push-only.** `sw.js` has no `fetch` handler, so `display: standalone` in `manifest.json` gives no offline capability. Fine as a decision; worth stating. No `safe-area-inset-bottom` handling anywhere (only top, `AppLayout.tsx:21`) — bottom content can sit under the iOS home indicator.
+
+**13. Dead files:** `src/pages/Index.tsx` (Lovable scaffold) and `src/pages/Placeholder.tsx` ("coming soon") are unrouted and unused.
+
+**14. `supabase/config.toml` sets `verify_jwt = false` on every function.** Each function does re-check auth today, but the systemic risk is that one future function forgets.
+
+**15. Supabase linter: 12 warnings**, mostly `SECURITY DEFINER` functions executable by `anon`/`authenticated` (`has_role`, `sync_gem_tier_collection`, `handle_new_user*`, `trg_gem_market_sync`) plus a public `social-images` bucket that allows listing. `sync_gem_tier_collection` being anon-callable is the one worth revoking.
+
+**16. Build health is good.** Typecheck passes clean; `bunx vitest run` passes but there is exactly **one** test (`src/test/example.test.ts`) — effectively no coverage of `gameEngine.ts`, `badgeEngine.ts`, `traitEngine.ts`, or `evoProgressTracker.ts`.
+
+**Corrections to note:** cron *is* configured — `refresh-auction` every 5 minutes and `publish-scheduled-posts` every minute are both active in `cron.job` (not visible in migrations, hence easy to misread as missing). MCP tooling is correctly admin-gated and `ALLOWED_TABLES` in `src/lib/mcp/db.ts:5-25` properly excludes `profiles` and user-owned tables.
 
 ---
 
-## Out of scope (deliberately)
-- In-app AI generation via Lovable AI (Level 2) — can layer on later using the same schemas
-- Storyline-driven multi-entity AI generation (Level 3)
-- Upsert/overwrite imports — locked to create-new per your choice
+## Recommended order of work
+
+1. **Server-authoritative rewards** — new `grant-rewards` edge function; migrate `GameResults`, `RunGameBoard`, `Collection`, `CardDetailDialog` to call it; then tighten `profiles` UPDATE with a `WITH CHECK` and lock evo/claim tables.
+2. **`AdminRoute` role gate** on all `/admin/*` routes.
+3. **Fix `/game-hub` → `/play`** in `Play.tsx:72`.
+4. **Onboarding guarantee** — ensure a starter pack always exists or grant a default; add a fallback message.
+5. **Game mode surface** — add Domination + an exhibition 5v5 to GameHub; remove or disable the Friends card; add Challenges and Runs to the sidebar.
+6. **Wire Dynamic Duos into Runs** (`RunLineupSelect` / `RunGameBoard`).
+7. **Metadata + PWA cleanup** — real OG/Twitter tags, fix the SW icon path, bottom safe-area, delete `Index.tsx`/`Placeholder.tsx`.
+8. **Harden the tail** — revoke anon EXECUTE on definer functions, tighten the `social-images` bucket listing policy, decide on `profiles` read scope, add engine unit tests.
+
+Items 1–4 are launch blockers. 5–6 are product completeness. 7–8 are polish and can follow launch.

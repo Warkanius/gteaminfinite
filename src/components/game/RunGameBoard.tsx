@@ -25,6 +25,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { postLeagueEvent } from "@/lib/leagueEvents";
+import type { ActiveDynamicDuo } from "@/lib/dynamicDuos";
 
 interface Props {
   run: any;
@@ -32,6 +33,7 @@ interface Props {
   cpuLineup: any[];
   badgeMap: Record<string, CardBadge[]>;
   traitMap: Record<string, CardTrait[]>;
+  activeDuos?: ActiveDynamicDuo[];
   onGameComplete: () => void;
   runId?: string;
 }
@@ -64,7 +66,7 @@ interface CardAccum {
   statValues: Record<StatKey, number>;
 }
 
-export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, onGameComplete }: Props) {
+export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap, activeDuos = [], onGameComplete }: Props) {
   const { user } = useAuth();
   const targetScore = run.target_score;
   const runsContext = { isHome: false, isAway: true, isKeyGame: false, isHomeHeroEligible: false, isRankUpGame: false };
@@ -95,29 +97,6 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Grant a pack reward (random_standard, random_standard_box, or specific ID) */
-  const grantPackReward = async (userId: string, packReward: string, rewardParts: string[], source: string) => {
-    if (packReward === "random_standard") {
-      const { data: standardPacks } = await supabase.from("packs").select("id, name").eq("pack_type", "standard");
-      if (standardPacks && standardPacks.length > 0) {
-        const picked = standardPacks[Math.floor(Math.random() * standardPacks.length)];
-        await supabase.from("user_pack_inventory").insert({ user_id: userId, pack_id: picked.id, source });
-        rewardParts.push(`📦 ${picked.name}`);
-      }
-    } else if (packReward === "random_standard_box") {
-      const { data: boxPacks } = await supabase.from("packs").select("id, name").eq("pack_type", "standard").not("ten_box_cost", "is", null);
-      if (boxPacks && boxPacks.length > 0) {
-        const picked = boxPacks[Math.floor(Math.random() * boxPacks.length)];
-        const rows = Array.from({ length: 10 }, () => ({ user_id: userId, pack_id: picked.id, source }));
-        await supabase.from("user_pack_inventory").insert(rows);
-        rewardParts.push(`📦 ${picked.name} Box (10x)`);
-      }
-    } else {
-      const { data: packInfo } = await supabase.from("packs").select("name").eq("id", packReward).single();
-      await supabase.from("user_pack_inventory").insert({ user_id: userId, pack_id: packReward, source });
-      rewardParts.push(`📦 ${packInfo?.name ?? "Pack"}`);
-    }
-  };
 
   const [playerScore, setPlayerScore] = useState(0);
   const [cpuScore, setCpuScore] = useState(0);
@@ -182,125 +161,41 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
       });
       await trackEvoProgress(user.id, userCards, winner === "player");
 
-      const { data: userRun } = await supabase
-        .from("user_runs")
-        .select("id, current_wins, highest_wins")
-        .eq("run_id", run.id)
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Streak tracking, milestone rewards and the rank ladder are all
+      // resolved server-side from the run config — the client only reports
+      // the outcome and renders the result.
+      const { data: grant, error: grantErr } = await supabase.functions.invoke("grant-rewards", {
+        body: { action: "run_result", run_id: run.id, won: winner === "player" },
+      });
 
-      const oldHighest = userRun?.highest_wins || 0;
-      const currentWins = winner === "player" ? (userRun?.current_wins || 0) + 1 : 0;
-      const highestWins = Math.max(currentWins, oldHighest);
-
-      if (userRun) {
-        await supabase.from("user_runs").update({ current_wins: currentWins, highest_wins: highestWins }).eq("id", userRun.id);
-      } else {
-        await supabase.from("user_runs").insert({ user_id: user.id, run_id: run.id, current_wins: currentWins, highest_wins: highestWins });
+      if (grantErr || grant?.error) {
+        console.error("[RunGameBoard] grant-rewards failed", grantErr, grant?.error);
       }
 
       // League streak post when a new personal best is set
-      if (winner === "player" && highestWins > oldHighest) {
+      if (grant?.new_best) {
         try {
           const { data: prof } = await supabase.from("profiles").select("display_name, team_name").eq("user_id", user.id).maybeSingle();
           await postLeagueEvent({
             event_type: "streak",
             run_id: run.id,
             user_display: prof?.team_name ?? prof?.display_name ?? "A challenger",
-            streak: highestWins,
+            streak: grant.highest_wins,
           });
         } catch {}
       }
 
-      // --- Per-Run Milestone rewards ---
-      if (winner === "player" && run.milestones && Array.isArray(run.milestones)) {
-        const reachedMilestone = run.milestones.find((m: any) => m.wins_required === currentWins);
-        if (reachedMilestone) {
-          const { data: profile } = await supabase.from("profiles").select("coins, gems").eq("user_id", user.id).single();
-          if (profile) {
-            const newCoins = profile.coins + (reachedMilestone.coin_reward || 0);
-            const newGems = profile.gems + (reachedMilestone.gem_reward || 0);
-            await supabase.from("profiles").update({ coins: newCoins, gems: newGems }).eq("user_id", user.id);
-
-            const rewardParts: string[] = [];
-            if (reachedMilestone.coin_reward) rewardParts.push(`${reachedMilestone.coin_reward} Coins`);
-            if (reachedMilestone.gem_reward) rewardParts.push(`${reachedMilestone.gem_reward} Gems`);
-
-            if (reachedMilestone.pack_reward) {
-              await grantPackReward(user.id, reachedMilestone.pack_reward, rewardParts, "run_milestone");
-            }
-
-            toast({ title: "🏆 Milestone Reached!", description: rewardParts.join(" + ") || "Milestone completed!" });
-          }
-        }
+      if (grant?.milestone_parts?.length) {
+        toast({ title: "🏆 Milestone Reached!", description: grant.milestone_parts.join(" + ") });
       }
 
-      // --- Global Rank Reward Ladder ---
-      if (winner === "player" && highestWins > oldHighest) {
-        // Find all rank rewards between old highest and new highest
-        const { data: rankRewards } = await supabase
-          .from("run_rank_rewards")
-          .select("*")
-          .gt("wins_required", oldHighest)
-          .lte("wins_required", highestWins)
-          .order("sort_order");
-
-        if (rankRewards && rankRewards.length > 0) {
-          // Check which ranks already claimed
-          const rankNames = rankRewards.map(r => r.rank_name);
-          const { data: existingClaims } = await supabase
-            .from("user_rank_claims")
-            .select("rank_name")
-            .eq("user_id", user.id)
-            .in("rank_name", rankNames);
-
-          const claimedSet = new Set((existingClaims ?? []).map(c => c.rank_name));
-          const unclaimedRewards = rankRewards.filter(r => !claimedSet.has(r.rank_name));
-
-          if (unclaimedRewards.length > 0) {
-            let totalCoins = 0;
-            let totalGems = 0;
-            const packParts: string[] = [];
-
-            for (const reward of unclaimedRewards) {
-              totalCoins += reward.coin_reward;
-              totalGems += reward.gem_reward;
-
-              if (reward.pack_reward) {
-                await grantPackReward(user.id, reward.pack_reward, packParts, "rank_reward");
-              }
-
-              // Record claim
-              await supabase.from("user_rank_claims").insert({
-                user_id: user.id,
-                rank_name: reward.rank_name,
-              });
-            }
-
-            // Grant coins/gems
-            if (totalCoins > 0 || totalGems > 0) {
-              const { data: profile } = await supabase.from("profiles").select("coins, gems").eq("user_id", user.id).single();
-              if (profile) {
-                await supabase.from("profiles").update({
-                  coins: profile.coins + totalCoins,
-                  gems: profile.gems + totalGems,
-                }).eq("user_id", user.id);
-              }
-            }
-
-            const highestRank = unclaimedRewards[unclaimedRewards.length - 1];
-            const rewardSummary: string[] = [];
-            if (totalCoins > 0) rewardSummary.push(`${totalCoins.toLocaleString()} Coins`);
-            if (totalGems > 0) rewardSummary.push(`${totalGems} Gems`);
-            rewardSummary.push(...packParts);
-
-            toast({
-              title: `🎖️ Rank Up: ${highestRank.rank_name}!`,
-              description: rewardSummary.join(" + ") || "New rank achieved!",
-            });
-          }
-        }
+      if (grant?.rank_name) {
+        toast({
+          title: `🎖️ Rank Up: ${grant.rank_name}!`,
+          description: grant.rank_parts?.join(" + ") || "New rank achieved!",
+        });
       }
+
     }
     setTimeout(() => onGameComplete(), 2500);
   };
@@ -633,7 +528,20 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
 
   return (
     <div className="space-y-6">
+      {/* Active dynamic duos banner */}
+      {activeDuos.length > 0 && (
+        <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs space-y-1">
+          {activeDuos.map((d) => (
+            <div key={d.id} className="flex items-center gap-2">
+              <span className="font-semibold text-primary">{d.name}</span>
+              <span className="text-muted-foreground truncate">— {d.cardNames.join(" + ")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Scoreboard */}
+
       <div className="bg-card border border-border/50 rounded-xl p-4 flex items-center justify-between shadow-lg">
         <div className="text-center space-y-1">
           <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">You</p>

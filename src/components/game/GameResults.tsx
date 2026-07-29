@@ -92,70 +92,54 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
         await supabase.from("card_game_stats").insert(rows);
       }
 
-      if (won) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("coins")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        if (profile) {
-          await supabase
-            .from("profiles")
-            .update({ coins: profile.coins + reward })
-            .eq("user_id", user.id);
+      if (won && gameLog) {
+        // All coins/gems/cards/packs are granted server-side from the DB
+        // config for the challenge or domination node — never from client state.
+        const { data: grant, error: grantErr } = await supabase.functions.invoke("grant-rewards", {
+          body: {
+            action: "game_result",
+            game_log_id: gameLog.id,
+            challenge_id: challengeId ?? null,
+            domination_game_id: dominationGameId ?? null,
+          },
+        });
+
+        if (grantErr || grant?.error) {
+          console.error("[GameResults] grant-rewards failed", grantErr, grant?.error);
+          toast.error("Couldn't grant match rewards", {
+            description: "Please contact support if this keeps happening.",
+          });
         }
 
-        // Open reward pack if present
-        if (packReward) {
-          let invItemId: string | null = null;
+        // Open the reward pack the server just added to inventory.
+        const invItemId: string | null = grant?.pack_inventory_id ?? null;
+        if (invItemId) {
           try {
-            // Insert pack into inventory first so open-pack treats it as free.
-            // If anything goes wrong below, the row stays so the user can open
-            // it manually from the Pack Market.
-            const { data: invItem, error: invErr } = await supabase
-              .from("user_pack_inventory")
-              .insert({ user_id: user.id, pack_id: packReward, source: "challenge_reward" })
-              .select("id")
-              .single();
+            const { data, error } = await supabase.functions.invoke("open-pack", {
+              body: { inventory_id: invItemId },
+            });
 
-            if (invErr || !invItem) {
-              console.error("[GameResults] failed to add reward pack to inventory", invErr);
-              toast.error("Couldn't grant reward pack", {
-                description: invErr?.message ?? "Please contact support.",
+            if (error || !data || data.error) {
+              console.error("[GameResults] open-pack invoke failed", error, data);
+              toast.error("Reward pack added to inventory", {
+                description: "Open it from the Pack Market.",
               });
+            } else if (data.player_choice && Array.isArray(data.eligible_cards) && data.eligible_cards.length > 0) {
+              // Player's Choice slot — render selection UI; pack inventory
+              // row is preserved server-side until the user confirms.
+              setChoiceState({
+                eligibleCards: data.eligible_cards,
+                packId: data.pack_id,
+                inventoryId: invItemId,
+              });
+            } else if (Array.isArray(data.cards) && data.cards.length > 0) {
+              setRewardCards(data.cards);
+              setShowReveal(true);
             } else {
-              invItemId = invItem.id;
-              const { data, error } = await supabase.functions.invoke("open-pack", {
-                body: { inventory_id: invItem.id },
+              console.error("[GameResults] open-pack returned no cards or choice", data);
+              toast.error("Reward pack added to inventory", {
+                description: "Open it from the Pack Market.",
               });
-
-              if (error || !data) {
-                console.error("[GameResults] open-pack invoke failed", error, data);
-                toast.error("Reward pack added to inventory", {
-                  description: "Open it from the Pack Market.",
-                });
-              } else if (data.error) {
-                console.error("[GameResults] open-pack returned error", data.error);
-                toast.error("Reward pack added to inventory", {
-                  description: "Open it from the Pack Market.",
-                });
-              } else if (data.player_choice && Array.isArray(data.eligible_cards) && data.eligible_cards.length > 0) {
-                // Player's Choice slot — render selection UI; pack inventory
-                // row is preserved server-side until the user confirms.
-                setChoiceState({
-                  eligibleCards: data.eligible_cards,
-                  packId: data.pack_id,
-                  inventoryId: invItemId,
-                });
-              } else if (Array.isArray(data.cards) && data.cards.length > 0) {
-                setRewardCards(data.cards);
-                setShowReveal(true);
-              } else {
-                console.error("[GameResults] open-pack returned no cards or choice", data);
-                toast.error("Reward pack added to inventory", {
-                  description: "Open it from the Pack Market.",
-                });
-              }
             }
           } catch (e) {
             console.error("[GameResults] Failed to open reward pack:", e);
@@ -164,39 +148,8 @@ export function GameResults({ result, onPlayAgain, coinReward, opponentName, mod
             });
           }
         }
-
-        // Grant gem reward
-        if (gemReward && gemReward > 0) {
-          const { data: gemProfile } = await supabase
-            .from("profiles")
-            .select("gems")
-            .eq("user_id", user.id)
-            .maybeSingle();
-          if (gemProfile) {
-            await supabase
-              .from("profiles")
-              .update({ gems: gemProfile.gems + gemReward })
-              .eq("user_id", user.id);
-          }
-        }
-
-        // Grant card reward
-        if (cardRewardId) {
-          await supabase.from("user_collections").insert({
-            user_id: user.id,
-            player_card_id: cardRewardId,
-            source: "challenge_reward",
-          });
-        }
-
-        // Record challenge completion
-        if (challengeId) {
-          await supabase.from("challenge_completions").insert({
-            user_id: user.id,
-            challenge_id: challengeId,
-          }).maybeSingle(); // ignore duplicate
-        }
       }
+
 
       // RTTR replay tracking — record sequential replay win without disturbing
       // the original first-clear domination progression.

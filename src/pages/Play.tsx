@@ -69,7 +69,7 @@ export default function Play() {
 
   useEffect(() => {
     if (!hasState) {
-      navigate("/game-hub", { replace: true });
+      navigate("/play", { replace: true });
     }
   }, [hasState, navigate]);
 
