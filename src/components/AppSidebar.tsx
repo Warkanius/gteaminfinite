@@ -41,6 +41,8 @@ const playerItems = [
   { title: "Collection", url: "/collection", icon: BookOpen },
   { title: "Game Modes", url: "/play", icon: Sparkles },
   { title: "Domination", url: "/domination", icon: Swords },
+  { title: "The Runs", url: "/runs", icon: Trophy },
+  { title: "Challenges", url: "/challenges", icon: Target },
   { title: "Pack Market", url: "/packs", icon: ShoppingBag },
   { title: "Gem Market", url: "/gems", icon: Award },
   { title: "Auction House", url: "/auction", icon: ShoppingCart },
