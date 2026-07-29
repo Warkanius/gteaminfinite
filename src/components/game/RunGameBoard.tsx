@@ -527,7 +527,20 @@ export function RunGameBoard({ run, playerLineup, cpuLineup, badgeMap, traitMap,
 
   return (
     <div className="space-y-6">
+      {/* Active dynamic duos banner */}
+      {activeDuos.length > 0 && (
+        <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs space-y-1">
+          {activeDuos.map((d) => (
+            <div key={d.id} className="flex items-center gap-2">
+              <span className="font-semibold text-primary">{d.name}</span>
+              <span className="text-muted-foreground truncate">— {d.cardNames.join(" + ")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Scoreboard */}
+
       <div className="bg-card border border-border/50 rounded-xl p-4 flex items-center justify-between shadow-lg">
         <div className="text-center space-y-1">
           <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">You</p>
