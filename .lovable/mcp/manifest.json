@@ -1,0 +1,435 @@
+{
+  "version": 1,
+  "sdk_version": "0.25.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://tgcmhmcgxzabimgnzsiu.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "gteam-infinite-hub",
+      "version": "0.1.0",
+      "title": "GTeam Infinite Hub"
+    },
+    "tools": [
+      {
+        "name": "get_system_docs",
+        "title": "Get system reference",
+        "description": "Returns the GTeam Infinite system reference: how players, teams, runs, dominations, packs, gems, evolutions and the social feed connect. Read this before creating or editing content.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_diagnostics",
+        "title": "Get content diagnostics",
+        "description": "Reports incomplete content: unrated players, teams with fewer than 3 cards, runs with no opponent roster, and domination games with no roster. Call this first when asked to fill gaps.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_rows",
+        "title": "List rows",
+        "description": "Read rows from a GTeam Infinite table (players, teams, runs, dominations, challenges, gem tasks, duos, collections, badges, locker codes, evo paths, media accounts). Supports a text search and column selection.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "table": {
+              "type": "string",
+              "enum": [
+                "player_cards",
+                "teams",
+                "team_players",
+                "runs",
+                "run_players",
+                "run_rank_rewards",
+                "domination_games",
+                "domination_game_players",
+                "challenges",
+                "gem_tasks",
+                "gem_tiers",
+                "gem_market_listings",
+                "dynamic_duos",
+                "collections",
+                "badges",
+                "locker_codes",
+                "evo_paths",
+                "location_accounts",
+                "location_post_templates"
+              ],
+              "description": "Table to read."
+            },
+            "search": {
+              "type": "string",
+              "description": "Case-insensitive match against the name/title column."
+            },
+            "columns": {
+              "type": "string",
+              "description": "Comma-separated columns. Defaults to all."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "description": "Max rows (default 100)."
+            }
+          },
+          "required": [
+            "table"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_players",
+        "title": "Create players",
+        "description": "Admin only. Create player cards. Gem tier and team are resolved by name, so you can say `gem_tier: \"Diamond\"` instead of an id. Ratings accept decimals.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "players": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Card name (must be unique-ish; existing names are reported back)."
+                  },
+                  "gem_tier": {
+                    "type": "string",
+                    "description": "Gem tier name, e.g. Emerald / Diamond."
+                  },
+                  "team": {
+                    "type": "string",
+                    "description": "Team name to attach the card to."
+                  },
+                  "position1": {
+                    "type": "string"
+                  },
+                  "position2": {
+                    "type": "string"
+                  },
+                  "rating": {
+                    "type": "number",
+                    "description": "Overall rating, decimals allowed (e.g. 87.4)."
+                  },
+                  "stat_3pt": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 150
+                  },
+                  "stat_mid": {
+                    "$ref": "#/properties/players/items/properties/stat_3pt"
+                  },
+                  "stat_fin": {
+                    "$ref": "#/properties/players/items/properties/stat_3pt"
+                  },
+                  "stat_dnk": {
+                    "$ref": "#/properties/players/items/properties/stat_3pt"
+                  },
+                  "stat_ast": {
+                    "$ref": "#/properties/players/items/properties/stat_3pt"
+                  },
+                  "stat_stl": {
+                    "$ref": "#/properties/players/items/properties/stat_3pt"
+                  },
+                  "stat_reb": {
+                    "$ref": "#/properties/players/items/properties/stat_3pt"
+                  },
+                  "stat_blk": {
+                    "$ref": "#/properties/players/items/properties/stat_3pt"
+                  },
+                  "stat_int": {
+                    "$ref": "#/properties/players/items/properties/stat_3pt"
+                  },
+                  "market_value": {
+                    "type": "number"
+                  },
+                  "social_handle": {
+                    "type": "string"
+                  },
+                  "card_animation": {
+                    "type": "string",
+                    "description": "e.g. none / pulse / shimmer / glow."
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "description": "Players to create."
+            }
+          },
+          "required": [
+            "players"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_rows",
+        "title": "Create rows",
+        "description": "Admin only. Insert new rows into a GTeam Infinite table. Each row is an object of column/value pairs; call list_rows first to learn the shape. Returns the inserted rows.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "table": {
+              "type": "string",
+              "enum": [
+                "player_cards",
+                "teams",
+                "team_players",
+                "runs",
+                "run_players",
+                "run_rank_rewards",
+                "domination_games",
+                "domination_game_players",
+                "challenges",
+                "gem_tasks",
+                "gem_tiers",
+                "gem_market_listings",
+                "dynamic_duos",
+                "collections",
+                "badges",
+                "locker_codes",
+                "evo_paths",
+                "location_accounts",
+                "location_post_templates"
+              ],
+              "description": "Table to insert into."
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Rows to insert as column/value objects."
+            }
+          },
+          "required": [
+            "table",
+            "rows"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "update_rows",
+        "title": "Update rows",
+        "description": "Admin only. Patch existing rows matched by a column value (defaults to `name`, use `title` for gem tasks). Only the fields you send are written; everything else is left untouched.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "table": {
+              "type": "string",
+              "enum": [
+                "player_cards",
+                "teams",
+                "team_players",
+                "runs",
+                "run_players",
+                "run_rank_rewards",
+                "domination_games",
+                "domination_game_players",
+                "challenges",
+                "gem_tasks",
+                "gem_tiers",
+                "gem_market_listings",
+                "dynamic_duos",
+                "collections",
+                "badges",
+                "locker_codes",
+                "evo_paths",
+                "location_accounts",
+                "location_post_templates"
+              ],
+              "description": "Table to update."
+            },
+            "match_column": {
+              "type": "string",
+              "description": "Column used to find the row. Defaults to `name`."
+            },
+            "updates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "match": {
+                    "type": "string",
+                    "description": "Value of the match column, e.g. the player name."
+                  },
+                  "patch": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "description": "Columns to write."
+                  }
+                },
+                "required": [
+                  "match",
+                  "patch"
+                ],
+                "additionalProperties": false
+              },
+              "description": "One entry per row to patch."
+            }
+          },
+          "required": [
+            "table",
+            "updates"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "set_roster",
+        "title": "Set a roster",
+        "description": "Admin only. Replace the roster of a team, a run, or a domination game with the given player card names (in slot order). Player names must already exist — create them first with create_players.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "enum": [
+                "team",
+                "run",
+                "domination"
+              ],
+              "description": "What kind of roster to set."
+            },
+            "name": {
+              "type": "string",
+              "description": "Team name, run name, or domination opponent name."
+            },
+            "players": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Player card names, in slot order (usually 3)."
+            }
+          },
+          "required": [
+            "target",
+            "name",
+            "players"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "delete_rows",
+        "title": "Delete rows",
+        "description": "Admin only. Permanently delete rows matched by id. Destructive — confirm with the user before calling.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "table": {
+              "type": "string",
+              "enum": [
+                "player_cards",
+                "teams",
+                "team_players",
+                "runs",
+                "run_players",
+                "run_rank_rewards",
+                "domination_games",
+                "domination_game_players",
+                "challenges",
+                "gem_tasks",
+                "gem_tiers",
+                "gem_market_listings",
+                "dynamic_duos",
+                "collections",
+                "badges",
+                "locker_codes",
+                "evo_paths",
+                "location_accounts",
+                "location_post_templates"
+              ],
+              "description": "Table to delete from."
+            },
+            "ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Row ids (uuid) to delete."
+            }
+          },
+          "required": [
+            "table",
+            "ids"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
