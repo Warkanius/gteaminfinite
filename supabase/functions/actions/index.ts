@@ -39,7 +39,10 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const base = `${url.origin}/functions/v1/actions`;
-  const path = url.pathname.replace(/^\/functions\/v1\/actions/, "").replace(/\/+$/, "") || "/";
+  const path = url.pathname
+    .replace(/^\/functions\/v1/, "")
+    .replace(/^\/actions/, "")
+    .replace(/\/+$/, "") || "/";
 
   // ---- public, data-free ----
   if (path === "/openapi.json" || path === "/") {
