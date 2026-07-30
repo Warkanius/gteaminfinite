@@ -968,6 +968,33 @@ export type Database = {
         }
         Relationships: []
       }
+      oauth_bridge_sessions: {
+        Row: {
+          auth_code: string | null
+          client_redirect_uri: string
+          code_verifier: string
+          created_at: string
+          id: string
+          state: string
+        }
+        Insert: {
+          auth_code?: string | null
+          client_redirect_uri: string
+          code_verifier: string
+          created_at?: string
+          id?: string
+          state: string
+        }
+        Update: {
+          auth_code?: string | null
+          client_redirect_uri?: string
+          code_verifier?: string
+          created_at?: string
+          id?: string
+          state?: string
+        }
+        Relationships: []
+      }
       pack_odds: {
         Row: {
           description: string | null
