@@ -14,13 +14,14 @@ const statProps = (keys: string[], label: string) =>
 const PlanResponse = {
   type: "object",
   description:
-    "The validated plan. `applied` is false for preview and true for commit. `destructive_operations` lists every set of rows that would be deleted and re-created.",
+    "The validated plan. `applied` is false for preview and true for commit. `destructive_operations` lists every set of rows that would be deleted and re-created (non-player kinds return the same list under `destructive`).",
   properties: {
     kind: { type: "string" },
     mode: { type: "string", enum: ["preview", "commit"] },
     applied: { type: "boolean" },
     operations: { type: "array", items: { type: "object", additionalProperties: true } },
     destructive_operations: { type: "array", items: { type: "object", additionalProperties: true } },
+    destructive: { type: "array", items: { type: "object", additionalProperties: true }, description: "Same as destructive_operations for non-player kinds." },
   },
 };
 
