@@ -2194,6 +2194,10 @@ export type Database = {
         Args: { p_commit?: boolean; p_kind: string; p_payload: Json }
         Returns: Json
       }
+      admin_apply_player: {
+        Args: { p_commit?: boolean; p_payload: Json }
+        Returns: Json
+      }
       admin_resolve_player_ids: { Args: { p_names: Json }; Returns: string[] }
       has_role: {
         Args: {
