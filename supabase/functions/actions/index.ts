@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const url = new URL(req.url);
-  const base = `${url.origin}/functions/v1/actions`;
+  const base = `https://${url.host}/functions/v1/actions`;
   const path = url.pathname
     .replace(/^\/functions\/v1/, "")
     .replace(/^\/actions/, "")
