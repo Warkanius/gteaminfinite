@@ -12,7 +12,7 @@
   "mcp": {
     "server": {
       "name": "gteam-infinite-hub",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "title": "GTeam Infinite Hub"
     },
     "tools": [
@@ -35,7 +35,23 @@
       {
         "name": "get_diagnostics",
         "title": "Get content diagnostics",
-        "description": "Reports incomplete content: unrated players, teams with fewer than 3 cards, runs with no opponent roster, and domination games with no roster. Call this first when asked to fill gaps.",
+        "description": "Reports incomplete or broken content: unrated players, teams with fewer than 3 cards, Runs with no opponent roster, Domination games with no roster, packs with no pool or no odds or odds that do not total 100, locker codes with malformed reward payloads, and storylines whose linked entities no longer exist. Call this first when asked to fill gaps.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_references",
+        "title": "Get reference names",
+        "description": "Returns the exact names/handles the write tools accept: gem tiers, teams, packs, collections and sub-collections, badges, signature traits, media (location) accounts, storylines, challenges, runs, domination roads, and rule_config keys, plus the full player card name list. Call this before writing so every reference resolves.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -51,7 +67,7 @@
       {
         "name": "list_rows",
         "title": "List rows",
-        "description": "Read rows from a GTeam Infinite table (players, teams, runs, dominations, challenges, gem tasks, duos, collections, badges, locker codes, evo paths, media accounts). Supports a text search and column selection.",
+        "description": "Read rows from any GTeam Infinite content table: players, teams and rosters, runs / run rosters / rank rewards, domination games and rosters, challenges, packs with their pools and odds, locker codes, gem tiers and gem market, gem tasks, dynamic duos, collections and sub-collections, badges and signature traits plus their card assignments, evo paths, storylines and storyline entities, social creators and posts, media (location) accounts and post templates, and rule_config. Per-user and economy tables are not exposed.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -77,17 +93,29 @@
                 "gem_market_listings",
                 "dynamic_duos",
                 "collections",
+                "sub_collections",
                 "badges",
+                "signature_traits",
+                "player_card_badges",
+                "player_card_traits",
+                "packs",
+                "pack_odds",
+                "pack_players",
                 "locker_codes",
                 "evo_paths",
+                "storylines",
+                "storyline_entities",
+                "social_creators",
+                "social_posts",
                 "location_accounts",
-                "location_post_templates"
+                "location_post_templates",
+                "rule_config"
               ],
               "description": "Table to read."
             },
             "search": {
               "type": "string",
-              "description": "Case-insensitive match against the name/title column."
+              "description": "Case-insensitive match against the table's name/title/code column."
             },
             "columns": {
               "type": "string",
@@ -204,6 +232,830 @@
         "outputSchema": null
       },
       {
+        "name": "upsert_team",
+        "title": "Create or update a team",
+        "description": "Admin only. Create or update a team by name and optionally REPLACE its ordered roster with the given player card names. Player names must already exist (create them with create_players first). Always call with mode='preview' first.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "preview",
+                "commit"
+              ],
+              "default": "preview",
+              "description": "`preview` validates and returns the exact plan without writing. `commit` applies it."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Team name (match key)."
+            },
+            "category": {
+              "type": "string",
+              "description": "Team category, e.g. domination / run / challenge."
+            },
+            "unlock_cost": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Coin cost to unlock the team."
+            },
+            "roster": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "DESTRUCTIVE: replaces the whole team roster with these player card names, in slot order. Omit to leave the roster untouched."
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "upsert_run",
+        "title": "Create or update a Run",
+        "description": "Admin only. Create or update a 3v3 Run: target score, milestone ladder, the Run's opponent roster, and optionally the global rank-reward ladder. Roster and rank rewards are full replacements. Always call with mode='preview' first.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "preview",
+                "commit"
+              ],
+              "default": "preview",
+              "description": "`preview` validates and returns the exact plan without writing. `commit` applies it."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Run name (match key)."
+            },
+            "target_score": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Score the Run races to (default 21)."
+            },
+            "team": {
+              "type": "string",
+              "description": "Optional team name to link the Run to."
+            },
+            "milestones": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Milestone ladder as stored in runs.milestones (e.g. { wins_required, coin_reward, gem_reward, pack_reward }). Replaces the whole array."
+            },
+            "roster": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "DESTRUCTIVE: replaces the Run's opponent roster with these player card names. Run stats are copied from each card's run_* values (falling back to base stats)."
+            },
+            "rank_rewards": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rank_name": {
+                    "type": "string"
+                  },
+                  "wins_required": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "coin_reward": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "gem_reward": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "pack_reward": {
+                    "type": "string"
+                  },
+                  "sort_order": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "rank_name",
+                  "wins_required"
+                ],
+                "additionalProperties": false
+              },
+              "description": "DESTRUCTIVE and GLOBAL: run_rank_rewards is one ladder shared by every Run. Sending this replaces the entire ladder."
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "upsert_domination_game",
+        "title": "Create or update a Domination game",
+        "description": "Admin only. Create or update a Domination game, matched on road_name + opponent_name: game order, difficulty stars, coin/pack rewards, and optionally its ordered roster (full replacement). Always call with mode='preview' first.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "preview",
+                "commit"
+              ],
+              "default": "preview",
+              "description": "`preview` validates and returns the exact plan without writing. `commit` applies it."
+            },
+            "road_name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Road / path the game belongs to."
+            },
+            "opponent_name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opponent name (match key together with road_name)."
+            },
+            "game_order": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Position of the game on the road."
+            },
+            "difficulty_stars": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Difficulty in stars."
+            },
+            "coin_reward": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Coins awarded for winning."
+            },
+            "pack_reward": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Pack reward identifier, or null to clear it."
+            },
+            "roster": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "DESTRUCTIVE: replaces the opponent roster with these player card names, in slot order."
+            }
+          },
+          "required": [
+            "road_name",
+            "opponent_name"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "upsert_pack",
+        "title": "Create or update a pack",
+        "description": "Admin only. Create or update a pack: cost, ten-box cost, pack type, its player pool (one slot per listed card) and its odds table. Odds are validated the way the pack-opening flow reads them: percentages must total 100, every entry must be above 0, and each result_slot must be `player_choice` or an existing pool slot number. Pool and odds are full replacements. Always call with mode='preview' first.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "preview",
+                "commit"
+              ],
+              "default": "preview",
+              "description": "`preview` validates and returns the exact plan without writing. `commit` applies it."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Pack name (match key)."
+            },
+            "pack_type": {
+              "type": "string",
+              "description": "Pack type, e.g. standard / premium / promo."
+            },
+            "cost": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Coin cost for a single open."
+            },
+            "ten_box_cost": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Coin cost for a ten-box, or null."
+            },
+            "players": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "DESTRUCTIVE: replaces the pack pool. Player card names; the first name becomes slot 1, the second slot 2, and so on."
+            },
+            "odds": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "result_slot": {
+                    "type": "string",
+                    "description": "Pool slot number as a string, or `player_choice`."
+                  },
+                  "percentage": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Chance for this slot; all entries must sum to 100."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Label shown in the odds table."
+                  }
+                },
+                "required": [
+                  "result_slot",
+                  "percentage"
+                ],
+                "additionalProperties": false
+              },
+              "description": "DESTRUCTIVE: replaces the pack's odds rows."
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "upsert_locker_code",
+        "title": "Create or update a locker code",
+        "description": "Admin only. Create or update a locker code (matched on the code, case-insensitive): reward payload, redemption limit and expiry. Reward payloads are validated and normalised to the shape the redeem flow expects — pass `pack_name` or `card_name` and they are resolved to ids. Always call with mode='preview' first.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "preview",
+                "commit"
+              ],
+              "default": "preview",
+              "description": "`preview` validates and returns the exact plan without writing. `commit` applies it."
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The code itself (stored uppercase)."
+            },
+            "reward_type": {
+              "type": "string",
+              "enum": [
+                "coins",
+                "gems",
+                "pack",
+                "card"
+              ],
+              "description": "What the code grants."
+            },
+            "reward_value": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "description": "For coins / gems."
+                },
+                "pack_name": {
+                  "type": "string",
+                  "description": "For a pack reward; resolved to pack_id."
+                },
+                "card_name": {
+                  "type": "string",
+                  "description": "For a card reward; resolved to player_card_id."
+                }
+              },
+              "additionalProperties": false,
+              "description": "Reward payload matching reward_type."
+            },
+            "max_redemptions": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Redemption cap, or null for unlimited."
+            },
+            "expires_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "ISO timestamp, or null for no expiry."
+            }
+          },
+          "required": [
+            "code",
+            "reward_type",
+            "reward_value"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "upsert_challenge",
+        "title": "Create or update a challenge",
+        "description": "Admin only. Create or update a challenge by name: opponent team, win condition and series setup, stat limits, lineup restrictions, timing, prerequisite, and coin / gem / pack / card rewards. Team, player and prerequisite names are resolved to ids and an unknown name fails without writing. Always call with mode='preview' first.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "preview",
+                "commit"
+              ],
+              "default": "preview",
+              "description": "`preview` validates and returns the exact plan without writing. `commit` applies it."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Challenge name (match key)."
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "challenge_type": {
+              "type": "string",
+              "description": "e.g. single / series / stat_limit / spotlight."
+            },
+            "opponent_team": {
+              "type": "string",
+              "description": "Team name to face."
+            },
+            "win_condition": {
+              "type": "string",
+              "description": "e.g. win / win_by / stat_limit."
+            },
+            "win_by_amount": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "series_length": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "series_win_coins": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "series_loss_coins": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "stat_limit_player": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Player card name the stat limit applies to."
+            },
+            "stat_limit_stat": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Stat key, e.g. stat_3pt."
+            },
+            "stat_limit_value": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "coin_reward": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "gem_reward": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pack_reward": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Pack name (resolved to its id) or an existing literal value."
+            },
+            "card_reward": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Player card name granted on completion."
+            },
+            "prerequisite": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Name of the challenge that must be completed first."
+            },
+            "spotlight_group": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sort_order": {
+              "type": "integer"
+            },
+            "lineup_restrictions": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrictions object as used by the admin UI (positions, badge_ids, trait_ids, gem_tier_ids, team_ids, collection_ids, sub_collection_ids, card_colors)."
+            },
+            "is_repeatable": {
+              "type": "boolean"
+            },
+            "expires_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "ISO timestamp, or null for no expiry."
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "upsert_dynamic_duo",
+        "title": "Create or update a dynamic duo",
+        "description": "Admin only. Create or update a dynamic duo by name: the two player cards (resolved by name), the stat boosts each one receives while both are on the floor, and whether the duo is active. Unknown boost keys or player names fail without writing. Always call with mode='preview' first.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "preview",
+                "commit"
+              ],
+              "default": "preview",
+              "description": "`preview` validates and returns the exact plan without writing. `commit` applies it."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Duo name (match key)."
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "player_a": {
+              "type": "string",
+              "description": "First player card name (required when creating)."
+            },
+            "player_b": {
+              "type": "string",
+              "description": "Second player card name (required when creating)."
+            },
+            "boosts_a": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              },
+              "description": "Boosts applied to player A."
+            },
+            "boosts_b": {
+              "$ref": "#/properties/boosts_a",
+              "description": "Boosts applied to player B."
+            },
+            "is_active": {
+              "type": "boolean",
+              "description": "Whether the duo is live in games."
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "import_storyline_bundle",
+        "title": "Import a storyline bundle",
+        "description": "Admin only. Creates a storyline plus its linked new players, locker codes and social posts in one atomic request, reusing the app's existing storyline-bundle importer. mode='preview' validates the bundle (duplicate player names, duplicate codes, unknown media handles) and reports what would be created without writing.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "preview",
+                "commit"
+              ],
+              "default": "preview",
+              "description": "`preview` validates only. `commit` creates the storyline and its entities atomically."
+            },
+            "storyline": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "arc_image_url": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "draft / active / archived."
+                },
+                "starts_at": {
+                  "type": "string"
+                },
+                "ends_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ],
+              "additionalProperties": false,
+              "description": "The storyline arc itself."
+            },
+            "players": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "position1": {
+                    "type": "string"
+                  },
+                  "position2": {
+                    "type": "string"
+                  },
+                  "stars": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "description": "Star tier; converted to a rating by the importer."
+                  },
+                  "social_handle": {
+                    "type": "string"
+                  },
+                  "stat_3pt": {
+                    "type": "number"
+                  },
+                  "stat_mid": {
+                    "type": "number"
+                  },
+                  "stat_fin": {
+                    "type": "number"
+                  },
+                  "stat_dnk": {
+                    "type": "number"
+                  },
+                  "stat_ast": {
+                    "type": "number"
+                  },
+                  "stat_stl": {
+                    "type": "number"
+                  },
+                  "stat_reb": {
+                    "type": "number"
+                  },
+                  "stat_blk": {
+                    "type": "number"
+                  },
+                  "stat_int": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "description": "New player cards created and linked to the storyline."
+            },
+            "locker_codes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "reward_type": {
+                    "type": "string"
+                  },
+                  "reward_value": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "max_redemptions": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "expires_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "posts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "post_type": {
+                    "type": "string"
+                  },
+                  "event_type": {
+                    "type": "string"
+                  },
+                  "location_handle": {
+                    "type": "string",
+                    "description": "Handle of an existing media (location) account."
+                  },
+                  "player_name": {
+                    "type": "string",
+                    "description": "Name of a player created in this same bundle."
+                  },
+                  "image_url": {
+                    "type": "string"
+                  },
+                  "scheduled_at": {
+                    "type": "string"
+                  },
+                  "is_headline": {
+                    "type": "boolean"
+                  },
+                  "headline_rank": {
+                    "type": "integer"
+                  },
+                  "headline_image_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "storyline"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
         "name": "create_rows",
         "title": "Create rows",
         "description": "Admin only. Insert new rows into a GTeam Infinite table. Each row is an object of column/value pairs; call list_rows first to learn the shape. Returns the inserted rows.",
@@ -219,24 +1071,23 @@
               "type": "string",
               "enum": [
                 "player_cards",
-                "teams",
-                "team_players",
-                "runs",
-                "run_players",
-                "run_rank_rewards",
-                "domination_games",
-                "domination_game_players",
-                "challenges",
-                "gem_tasks",
                 "gem_tiers",
+                "gem_tasks",
                 "gem_market_listings",
-                "dynamic_duos",
                 "collections",
+                "sub_collections",
                 "badges",
-                "locker_codes",
+                "signature_traits",
+                "player_card_badges",
+                "player_card_traits",
                 "evo_paths",
+                "storylines",
+                "storyline_entities",
+                "social_creators",
+                "social_posts",
                 "location_accounts",
-                "location_post_templates"
+                "location_post_templates",
+                "rule_config"
               ],
               "description": "Table to insert into."
             },
@@ -274,24 +1125,23 @@
               "type": "string",
               "enum": [
                 "player_cards",
-                "teams",
-                "team_players",
-                "runs",
-                "run_players",
-                "run_rank_rewards",
-                "domination_games",
-                "domination_game_players",
-                "challenges",
-                "gem_tasks",
                 "gem_tiers",
+                "gem_tasks",
                 "gem_market_listings",
-                "dynamic_duos",
                 "collections",
+                "sub_collections",
                 "badges",
-                "locker_codes",
+                "signature_traits",
+                "player_card_badges",
+                "player_card_traits",
                 "evo_paths",
+                "storylines",
+                "storyline_entities",
+                "social_creators",
+                "social_posts",
                 "location_accounts",
-                "location_post_templates"
+                "location_post_templates",
+                "rule_config"
               ],
               "description": "Table to update."
             },
@@ -333,49 +1183,6 @@
         "outputSchema": null
       },
       {
-        "name": "set_roster",
-        "title": "Set a roster",
-        "description": "Admin only. Replace the roster of a team, a run, or a domination game with the given player card names (in slot order). Player names must already exist — create them first with create_players.",
-        "annotations": {
-          "readOnlyHint": false,
-          "destructiveHint": true,
-          "openWorldHint": false
-        },
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "target": {
-              "type": "string",
-              "enum": [
-                "team",
-                "run",
-                "domination"
-              ],
-              "description": "What kind of roster to set."
-            },
-            "name": {
-              "type": "string",
-              "description": "Team name, run name, or domination opponent name."
-            },
-            "players": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Player card names, in slot order (usually 3)."
-            }
-          },
-          "required": [
-            "target",
-            "name",
-            "players"
-          ],
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "outputSchema": null
-      },
-      {
         "name": "delete_rows",
         "title": "Delete rows",
         "description": "Admin only. Permanently delete rows matched by id. Destructive — confirm with the user before calling.",
@@ -392,24 +1199,23 @@
               "type": "string",
               "enum": [
                 "player_cards",
-                "teams",
-                "team_players",
-                "runs",
-                "run_players",
-                "run_rank_rewards",
-                "domination_games",
-                "domination_game_players",
-                "challenges",
-                "gem_tasks",
                 "gem_tiers",
+                "gem_tasks",
                 "gem_market_listings",
-                "dynamic_duos",
                 "collections",
+                "sub_collections",
                 "badges",
-                "locker_codes",
+                "signature_traits",
+                "player_card_badges",
+                "player_card_traits",
                 "evo_paths",
+                "storylines",
+                "storyline_entities",
+                "social_creators",
+                "social_posts",
                 "location_accounts",
-                "location_post_templates"
+                "location_post_templates",
+                "rule_config"
               ],
               "description": "Table to delete from."
             },
