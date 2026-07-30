@@ -4,6 +4,7 @@ import getDiagnostics from "./tools/get-diagnostics";
 import getReferences from "./tools/get-references";
 import listRows from "./tools/list-rows";
 import createPlayers from "./tools/create-players";
+import upsertPlayer from "./tools/upsert-player";
 import upsertTeam from "./tools/upsert-team";
 import upsertRun from "./tools/upsert-run";
 import upsertDominationGame from "./tools/upsert-domination-game";
@@ -34,6 +35,7 @@ export default defineMcp({
     getReferences,
     listRows,
     createPlayers,
+    upsertPlayer,
     upsertTeam,
     upsertRun,
     upsertDominationGame,
