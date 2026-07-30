@@ -1,6 +1,6 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import { ALLOWED_TABLES, ok, fail, adminClient } from "../db";
+import { WRITE_TABLES, ok, fail, adminClient } from "../db";
 
 export default defineTool({
   name: "update_rows",
@@ -8,7 +8,7 @@ export default defineTool({
   description:
     "Admin only. Patch existing rows matched by a column value (defaults to `name`, use `title` for gem tasks). Only the fields you send are written; everything else is left untouched.",
   inputSchema: {
-    table: z.enum(ALLOWED_TABLES).describe("Table to update."),
+    table: z.enum(WRITE_TABLES).describe("Table to update."),
     match_column: z.string().optional().describe("Column used to find the row. Defaults to `name`."),
     updates: z
       .array(

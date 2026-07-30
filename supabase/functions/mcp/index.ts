@@ -5,325 +5,8 @@
 // src/lib/mcp/index.ts
 import { auth, defineMcp } from "npm:@lovable.dev/mcp-js@0.25.0";
 
-// src/lib/mcp/tools/list-rows.ts
-import { defineTool } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z } from "npm:zod@^3.25.76";
-
-// src/lib/mcp/db.ts
-import { createClient } from "npm:@supabase/supabase-js@^2.97.0";
-var ALLOWED_TABLES = [
-  "player_cards",
-  "teams",
-  "team_players",
-  "runs",
-  "run_players",
-  "run_rank_rewards",
-  "domination_games",
-  "domination_game_players",
-  "challenges",
-  "gem_tasks",
-  "gem_tiers",
-  "gem_market_listings",
-  "dynamic_duos",
-  "collections",
-  "badges",
-  "locker_codes",
-  "evo_paths",
-  "location_accounts",
-  "location_post_templates"
-];
-function db(ctx) {
-  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-}
-function ok(payload) {
-  return {
-    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-    structuredContent: payload
-  };
-}
-function fail(message) {
-  return { content: [{ type: "text", text: message }], isError: true };
-}
-async function adminClient(ctx) {
-  if (!ctx.isAuthenticated()) return { error: fail("Not authenticated. Sign in to this app first.") };
-  const client = db(ctx);
-  const { data, error } = await client.rpc("has_role", { _user_id: ctx.getUserId(), _role: "admin" });
-  if (error) return { error: fail(`Could not verify admin role: ${error.message}`) };
-  if (!data) return { error: fail("Admin role required for this tool.") };
-  return { client };
-}
-async function userClient(ctx) {
-  if (!ctx.isAuthenticated()) return { error: fail("Not authenticated. Sign in to this app first.") };
-  return { client: db(ctx) };
-}
-
-// src/lib/mcp/tools/list-rows.ts
-var list_rows_default = defineTool({
-  name: "list_rows",
-  title: "List rows",
-  description: "Read rows from a GTeam Infinite table (players, teams, runs, dominations, challenges, gem tasks, duos, collections, badges, locker codes, evo paths, media accounts). Supports a text search and column selection.",
-  inputSchema: {
-    table: z.enum(ALLOWED_TABLES).describe("Table to read."),
-    search: z.string().optional().describe("Case-insensitive match against the name/title column."),
-    columns: z.string().optional().describe("Comma-separated columns. Defaults to all."),
-    limit: z.number().int().min(1).max(500).optional().describe("Max rows (default 100).")
-  },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ table, search, columns, limit }, ctx) => {
-    const { client, error } = await userClient(ctx);
-    if (error) return error;
-    let query = client.from(table).select(columns || "*").limit(limit ?? 100);
-    if (search) {
-      const nameCol = table === "gem_tasks" ? "title" : table === "domination_games" ? "opponent_name" : "name";
-      query = query.ilike(nameCol, `%${search}%`);
-    }
-    const { data, error: dbError } = await query;
-    if (dbError) return fail(dbError.message);
-    return ok({ table, count: data?.length ?? 0, rows: data ?? [] });
-  }
-});
-
-// src/lib/mcp/tools/create-rows.ts
-import { defineTool as defineTool2 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z2 } from "npm:zod@^3.25.76";
-var create_rows_default = defineTool2({
-  name: "create_rows",
-  title: "Create rows",
-  description: "Admin only. Insert new rows into a GTeam Infinite table. Each row is an object of column/value pairs; call list_rows first to learn the shape. Returns the inserted rows.",
-  inputSchema: {
-    table: z2.enum(ALLOWED_TABLES).describe("Table to insert into."),
-    rows: z2.array(z2.record(z2.string(), z2.any())).describe("Rows to insert as column/value objects.")
-  },
-  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  handler: async ({ table, rows }, ctx) => {
-    const { client, error } = await adminClient(ctx);
-    if (error) return error;
-    if (!rows.length) return fail("No rows supplied.");
-    const { data, error: dbError } = await client.from(table).insert(rows).select();
-    if (dbError) return fail(dbError.message);
-    return ok({ table, inserted: data?.length ?? 0, rows: data ?? [] });
-  }
-});
-
-// src/lib/mcp/tools/update-rows.ts
-import { defineTool as defineTool3 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z3 } from "npm:zod@^3.25.76";
-var update_rows_default = defineTool3({
-  name: "update_rows",
-  title: "Update rows",
-  description: "Admin only. Patch existing rows matched by a column value (defaults to `name`, use `title` for gem tasks). Only the fields you send are written; everything else is left untouched.",
-  inputSchema: {
-    table: z3.enum(ALLOWED_TABLES).describe("Table to update."),
-    match_column: z3.string().optional().describe("Column used to find the row. Defaults to `name`."),
-    updates: z3.array(
-      z3.object({
-        match: z3.string().describe("Value of the match column, e.g. the player name."),
-        patch: z3.record(z3.string(), z3.any()).describe("Columns to write.")
-      })
-    ).describe("One entry per row to patch.")
-  },
-  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  handler: async ({ table, match_column, updates }, ctx) => {
-    const { client, error } = await adminClient(ctx);
-    if (error) return error;
-    const col = match_column || (table === "gem_tasks" ? "title" : "name");
-    const applied = [];
-    const notFound = [];
-    const failed = [];
-    for (const { match, patch } of updates) {
-      const { data, error: dbError } = await client.from(table).update(patch).ilike(col, match).select("id");
-      if (dbError) failed.push({ match, error: dbError.message });
-      else if (!data?.length) notFound.push(match);
-      else applied.push(match);
-    }
-    return ok({ table, match_column: col, updated: applied.length, applied, not_found: notFound, failed });
-  }
-});
-
-// src/lib/mcp/tools/delete-rows.ts
-import { defineTool as defineTool4 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z4 } from "npm:zod@^3.25.76";
-var delete_rows_default = defineTool4({
-  name: "delete_rows",
-  title: "Delete rows",
-  description: "Admin only. Permanently delete rows matched by id. Destructive \u2014 confirm with the user before calling.",
-  inputSchema: {
-    table: z4.enum(ALLOWED_TABLES).describe("Table to delete from."),
-    ids: z4.array(z4.string()).describe("Row ids (uuid) to delete.")
-  },
-  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ table, ids }, ctx) => {
-    const { client, error } = await adminClient(ctx);
-    if (error) return error;
-    if (!ids.length) return fail("No ids supplied.");
-    const { data, error: dbError } = await client.from(table).delete().in("id", ids).select("id");
-    if (dbError) return fail(dbError.message);
-    return ok({ table, deleted: data?.length ?? 0, ids: (data ?? []).map((r) => r.id) });
-  }
-});
-
-// src/lib/mcp/tools/create-players.ts
-import { defineTool as defineTool5 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z5 } from "npm:zod@^3.25.76";
-var StatSchema = z5.number().min(0).max(150);
-var create_players_default = defineTool5({
-  name: "create_players",
-  title: "Create players",
-  description: 'Admin only. Create player cards. Gem tier and team are resolved by name, so you can say `gem_tier: "Diamond"` instead of an id. Ratings accept decimals.',
-  inputSchema: {
-    players: z5.array(
-      z5.object({
-        name: z5.string().describe("Card name (must be unique-ish; existing names are reported back)."),
-        gem_tier: z5.string().optional().describe("Gem tier name, e.g. Emerald / Diamond."),
-        team: z5.string().optional().describe("Team name to attach the card to."),
-        position1: z5.string().optional(),
-        position2: z5.string().optional(),
-        rating: z5.number().optional().describe("Overall rating, decimals allowed (e.g. 87.4)."),
-        stat_3pt: StatSchema.optional(),
-        stat_mid: StatSchema.optional(),
-        stat_fin: StatSchema.optional(),
-        stat_dnk: StatSchema.optional(),
-        stat_ast: StatSchema.optional(),
-        stat_stl: StatSchema.optional(),
-        stat_reb: StatSchema.optional(),
-        stat_blk: StatSchema.optional(),
-        stat_int: StatSchema.optional(),
-        market_value: z5.number().optional(),
-        social_handle: z5.string().optional(),
-        card_animation: z5.string().optional().describe("e.g. none / pulse / shimmer / glow.")
-      })
-    ).describe("Players to create.")
-  },
-  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  handler: async ({ players }, ctx) => {
-    const { client, error } = await adminClient(ctx);
-    if (error) return error;
-    if (!players.length) return fail("No players supplied.");
-    const [{ data: tiers }, { data: teams }] = await Promise.all([
-      client.from("gem_tiers").select("id, name"),
-      client.from("teams").select("id, name")
-    ]);
-    const tierByName = new Map((tiers ?? []).map((t) => [String(t.name).toLowerCase(), t.id]));
-    const teamByName = new Map((teams ?? []).map((t) => [String(t.name).toLowerCase(), t.id]));
-    const unresolved = [];
-    const rows = players.map((p) => {
-      const { gem_tier, team, ...rest } = p;
-      const gem_tier_id = gem_tier ? tierByName.get(gem_tier.toLowerCase()) : void 0;
-      const team_id = team ? teamByName.get(team.toLowerCase()) : void 0;
-      if (gem_tier && !gem_tier_id) unresolved.push(`gem tier "${gem_tier}" (${p.name})`);
-      if (team && !team_id) unresolved.push(`team "${team}" (${p.name})`);
-      return { ...rest, gem_tier_id: gem_tier_id ?? null, team_id: team_id ?? null };
-    });
-    const { data, error: dbError } = await client.from("player_cards").insert(rows).select("id, name, rating");
-    if (dbError) return fail(dbError.message);
-    return ok({ created: data?.length ?? 0, players: data ?? [], unresolved_references: unresolved });
-  }
-});
-
-// src/lib/mcp/tools/set-roster.ts
-import { defineTool as defineTool6 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z6 } from "npm:zod@^3.25.76";
-var set_roster_default = defineTool6({
-  name: "set_roster",
-  title: "Set a roster",
-  description: "Admin only. Replace the roster of a team, a run, or a domination game with the given player card names (in slot order). Player names must already exist \u2014 create them first with create_players.",
-  inputSchema: {
-    target: z6.enum(["team", "run", "domination"]).describe("What kind of roster to set."),
-    name: z6.string().describe("Team name, run name, or domination opponent name."),
-    players: z6.array(z6.string()).describe("Player card names, in slot order (usually 3).")
-  },
-  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-  handler: async ({ target, name, players }, ctx) => {
-    const { client, error } = await adminClient(ctx);
-    if (error) return error;
-    const config = {
-      team: { parent: "teams", nameCol: "name", child: "team_players", fk: "team_id", slots: true },
-      run: { parent: "runs", nameCol: "name", child: "run_players", fk: "run_id", slots: false },
-      domination: {
-        parent: "domination_games",
-        nameCol: "opponent_name",
-        child: "domination_game_players",
-        fk: "domination_game_id",
-        slots: true
-      }
-    }[target];
-    const { data: parent, error: parentErr } = await client.from(config.parent).select("id").ilike(config.nameCol, name).maybeSingle();
-    if (parentErr) return fail(parentErr.message);
-    if (!parent) return fail(`No ${target} named "${name}".`);
-    const { data: cards, error: cardErr } = await client.from("player_cards").select("id, name").in("name", players);
-    if (cardErr) return fail(cardErr.message);
-    const byName = new Map((cards ?? []).map((c) => [String(c.name).toLowerCase(), c.id]));
-    const missing = players.filter((p) => !byName.has(p.toLowerCase()));
-    if (missing.length) return fail(`Unknown player cards: ${missing.join(", ")}`);
-    const { error: delErr } = await client.from(config.child).delete().eq(config.fk, parent.id);
-    if (delErr) return fail(delErr.message);
-    const rows = players.map((p, idx) => ({
-      [config.fk]: parent.id,
-      player_card_id: byName.get(p.toLowerCase()),
-      ...config.slots ? { slot: idx + 1 } : {}
-    }));
-    const { error: insErr } = await client.from(config.child).insert(rows);
-    if (insErr) return fail(insErr.message);
-    return ok({ target, name, roster: players, size: rows.length });
-  }
-});
-
-// src/lib/mcp/tools/get-diagnostics.ts
-import { defineTool as defineTool7 } from "npm:@lovable.dev/mcp-js@0.25.0";
-var get_diagnostics_default = defineTool7({
-  name: "get_diagnostics",
-  title: "Get content diagnostics",
-  description: "Reports incomplete content: unrated players, teams with fewer than 3 cards, runs with no opponent roster, and domination games with no roster. Call this first when asked to fill gaps.",
-  inputSchema: {},
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async (_input, ctx) => {
-    const { client, error } = await userClient(ctx);
-    if (error) return error;
-    const [players, teams, teamPlayers, runs, runPlayers, doms, domPlayers] = await Promise.all([
-      client.from("player_cards").select("id, name, rating, stat_3pt, stat_fin, stat_mid"),
-      client.from("teams").select("id, name"),
-      client.from("team_players").select("team_id"),
-      client.from("runs").select("id, name"),
-      client.from("run_players").select("run_id"),
-      client.from("domination_games").select("id, road_name, opponent_name"),
-      client.from("domination_game_players").select("domination_game_id")
-    ]);
-    const countBy = (rows, key) => {
-      const map = /* @__PURE__ */ new Map();
-      (rows ?? []).forEach((r) => map.set(r[key], (map.get(r[key]) ?? 0) + 1));
-      return map;
-    };
-    const teamCounts = countBy(teamPlayers.data, "team_id");
-    const runCounts = countBy(runPlayers.data, "run_id");
-    const domCounts = countBy(domPlayers.data, "domination_game_id");
-    const unrated = (players.data ?? []).filter((p) => !p.rating && !p.stat_3pt && !p.stat_fin && !p.stat_mid).map((p) => p.name);
-    const payload = {
-      unrated_players: unrated,
-      incomplete_team_rosters: (teams.data ?? []).map((t) => ({ name: t.name, cards: teamCounts.get(t.id) ?? 0 })).filter((t) => t.cards < 3),
-      incomplete_runs: (runs.data ?? []).map((r) => ({ name: r.name, opponents: runCounts.get(r.id) ?? 0 })).filter((r) => r.opponents < 3),
-      incomplete_domination_paths: (doms.data ?? []).map((d) => ({
-        road: d.road_name,
-        opponent: d.opponent_name,
-        cards: domCounts.get(d.id) ?? 0
-      })).filter((d) => d.cards < 3)
-    };
-    return ok({
-      ...payload,
-      summary: {
-        unrated_players: payload.unrated_players.length,
-        incomplete_team_rosters: payload.incomplete_team_rosters.length,
-        incomplete_runs: payload.incomplete_runs.length,
-        incomplete_domination_paths: payload.incomplete_domination_paths.length
-      }
-    });
-  }
-});
-
 // src/lib/mcp/tools/get-system-docs.ts
-import { defineTool as defineTool8 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { defineTool } from "npm:@lovable.dev/mcp-js@0.25.0";
 
 // src/lib/systemDocs.ts
 var SYSTEM_DOCS_MARKDOWN = `# G-Team Infinite \u2014 System Reference
@@ -438,7 +121,7 @@ players", emit JSON ONLY for the items listed in the matching diagnostics array.
 `;
 
 // src/lib/mcp/tools/get-system-docs.ts
-var get_system_docs_default = defineTool8({
+var get_system_docs_default = defineTool({
   name: "get_system_docs",
   title: "Get system reference",
   description: "Returns the GTeam Infinite system reference: how players, teams, runs, dominations, packs, gems, evolutions and the social feed connect. Read this before creating or editing content.",
@@ -447,13 +130,798 @@ var get_system_docs_default = defineTool8({
   handler: () => ({ content: [{ type: "text", text: SYSTEM_DOCS_MARKDOWN }] })
 });
 
+// src/lib/mcp/tools/get-diagnostics.ts
+import { defineTool as defineTool2 } from "npm:@lovable.dev/mcp-js@0.25.0";
+
+// src/lib/mcp/db.ts
+import { createClient } from "npm:@supabase/supabase-js@^2.97.0";
+var READ_TABLES = [
+  "player_cards",
+  "teams",
+  "team_players",
+  "runs",
+  "run_players",
+  "run_rank_rewards",
+  "domination_games",
+  "domination_game_players",
+  "challenges",
+  "gem_tasks",
+  "gem_tiers",
+  "gem_market_listings",
+  "dynamic_duos",
+  "collections",
+  "sub_collections",
+  "badges",
+  "signature_traits",
+  "player_card_badges",
+  "player_card_traits",
+  "packs",
+  "pack_odds",
+  "pack_players",
+  "locker_codes",
+  "evo_paths",
+  "storylines",
+  "storyline_entities",
+  "social_creators",
+  "social_posts",
+  "location_accounts",
+  "location_post_templates",
+  "rule_config"
+];
+var WRITE_TABLES = [
+  "player_cards",
+  "gem_tiers",
+  "gem_tasks",
+  "gem_market_listings",
+  "collections",
+  "sub_collections",
+  "badges",
+  "signature_traits",
+  "player_card_badges",
+  "player_card_traits",
+  "evo_paths",
+  "storylines",
+  "storyline_entities",
+  "social_creators",
+  "social_posts",
+  "location_accounts",
+  "location_post_templates",
+  "rule_config"
+];
+var SEARCH_COLUMN = {
+  player_cards: "name",
+  teams: "name",
+  runs: "name",
+  run_rank_rewards: "rank_name",
+  domination_games: "opponent_name",
+  challenges: "name",
+  gem_tasks: "title",
+  gem_tiers: "name",
+  dynamic_duos: "name",
+  collections: "name",
+  sub_collections: "name",
+  badges: "name",
+  signature_traits: "name",
+  packs: "name",
+  locker_codes: "code",
+  storylines: "title",
+  social_creators: "name",
+  social_posts: "content",
+  location_accounts: "name",
+  location_post_templates: "template_text",
+  rule_config: "key"
+};
+function db(ctx) {
+  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
+    global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}
+function ok(payload) {
+  return {
+    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+    structuredContent: payload
+  };
+}
+function fail(message) {
+  return { content: [{ type: "text", text: message }], isError: true };
+}
+async function adminClient(ctx) {
+  if (!ctx.isAuthenticated()) return { error: fail("Not authenticated. Sign in to this app first.") };
+  const client = db(ctx);
+  const { data, error } = await client.rpc("has_role", { _user_id: ctx.getUserId(), _role: "admin" });
+  if (error) return { error: fail(`Could not verify admin role: ${error.message}`) };
+  if (!data) return { error: fail("Admin role required for this tool.") };
+  return { client };
+}
+async function userClient(ctx) {
+  if (!ctx.isAuthenticated()) return { error: fail("Not authenticated. Sign in to this app first.") };
+  return { client: db(ctx) };
+}
+function clean(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) if (v !== void 0) out[k] = v;
+  return out;
+}
+async function applyContent(ctx, kind, payload, mode8) {
+  const { client, error } = await adminClient(ctx);
+  if (error) return error;
+  const { data, error: dbError } = await client.rpc("admin_apply_content", {
+    p_kind: kind,
+    p_payload: clean(payload),
+    p_commit: mode8 === "commit"
+  });
+  if (dbError) return fail(`${mode8 === "commit" ? "Commit" : "Preview"} failed (nothing was written): ${dbError.message}`);
+  return ok(data);
+}
+async function callFunction(ctx, name, body) {
+  const res = await fetch(`${process.env.SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${ctx.getToken()}`,
+      apikey: process.env.SUPABASE_PUBLISHABLE_KEY ?? ""
+    },
+    body: JSON.stringify(body)
+  });
+  const text = await res.text();
+  let parsed = text;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+  }
+  return { status: res.status, okStatus: res.ok, body: parsed };
+}
+
+// src/lib/mcp/tools/get-diagnostics.ts
+var get_diagnostics_default = defineTool2({
+  name: "get_diagnostics",
+  title: "Get content diagnostics",
+  description: "Reports incomplete or broken content: unrated players, teams with fewer than 3 cards, Runs with no opponent roster, Domination games with no roster, packs with no pool or no odds or odds that do not total 100, locker codes with malformed reward payloads, and storylines whose linked entities no longer exist. Call this first when asked to fill gaps.",
+  inputSchema: {},
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async (_input, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    const [
+      players,
+      teams,
+      teamPlayers,
+      runs,
+      runPlayers,
+      doms,
+      domPlayers,
+      packs,
+      packPlayers,
+      packOdds,
+      codes,
+      storylines,
+      links
+    ] = await Promise.all([
+      client.from("player_cards").select("id, name, rating, stat_3pt, stat_fin, stat_mid"),
+      client.from("teams").select("id, name"),
+      client.from("team_players").select("team_id"),
+      client.from("runs").select("id, name"),
+      client.from("run_players").select("run_id"),
+      client.from("domination_games").select("id, road_name, opponent_name"),
+      client.from("domination_game_players").select("domination_game_id"),
+      client.from("packs").select("id, name, pack_type"),
+      client.from("pack_players").select("pack_id, slot_number"),
+      client.from("pack_odds").select("pack_id, pack_type, result_slot, percentage"),
+      client.from("locker_codes").select("id, code, reward_type, reward_value"),
+      client.from("storylines").select("id, title"),
+      client.from("storyline_entities").select("storyline_id, entity_type, entity_id")
+    ]);
+    const countBy = (rows, key) => {
+      const map = /* @__PURE__ */ new Map();
+      (rows ?? []).forEach((r) => map.set(r[key], (map.get(r[key]) ?? 0) + 1));
+      return map;
+    };
+    const teamCounts = countBy(teamPlayers.data, "team_id");
+    const runCounts = countBy(runPlayers.data, "run_id");
+    const domCounts = countBy(domPlayers.data, "domination_game_id");
+    const unrated = (players.data ?? []).filter((p) => !p.rating && !p.stat_3pt && !p.stat_fin && !p.stat_mid).map((p) => p.name);
+    const poolSlots = /* @__PURE__ */ new Map();
+    (packPlayers.data ?? []).forEach((r) => {
+      if (!poolSlots.has(r.pack_id)) poolSlots.set(r.pack_id, /* @__PURE__ */ new Set());
+      poolSlots.get(r.pack_id).add(r.slot_number);
+    });
+    const oddsByPack = /* @__PURE__ */ new Map();
+    const oddsByType = /* @__PURE__ */ new Map();
+    (packOdds.data ?? []).forEach((r) => {
+      if (r.pack_id) {
+        if (!oddsByPack.has(r.pack_id)) oddsByPack.set(r.pack_id, []);
+        oddsByPack.get(r.pack_id).push(r);
+      } else if (r.pack_type) {
+        if (!oddsByType.has(r.pack_type)) oddsByType.set(r.pack_type, []);
+        oddsByType.get(r.pack_type).push(r);
+      }
+    });
+    const brokenPacks = (packs.data ?? []).map((p) => {
+      const slots = poolSlots.get(p.id) ?? /* @__PURE__ */ new Set();
+      const odds = oddsByPack.get(p.id) ?? oddsByType.get(p.pack_type) ?? [];
+      const issues = [];
+      if (slots.size === 0) issues.push("no player pool");
+      if (odds.length === 0) issues.push("no odds rows");
+      if (odds.length) {
+        const total = odds.reduce((s, o) => s + Number(o.percentage ?? 0), 0);
+        if (Math.abs(total - 100) > 0.01) issues.push(`odds total ${total} instead of 100`);
+        odds.forEach((o) => {
+          const slot = String(o.result_slot ?? "");
+          if (slot !== "player_choice" && /^[0-9]+$/.test(slot) && slots.size && !slots.has(Number(slot))) {
+            issues.push(`odds slot ${slot} has no cards`);
+          }
+          if (slot !== "player_choice" && !/^[0-9]+$/.test(slot)) issues.push(`invalid result_slot "${slot}"`);
+        });
+      }
+      return { name: p.name, issues };
+    }).filter((p) => p.issues.length);
+    const malformedCodes = (codes.data ?? []).map((c) => {
+      const v = c.reward_value ?? {};
+      const issues = [];
+      if (!["coins", "gems", "pack", "card"].includes(c.reward_type)) issues.push(`unknown reward_type "${c.reward_type}"`);
+      if (["coins", "gems"].includes(c.reward_type) && !(Number(v.amount) > 0)) issues.push("missing reward_value.amount");
+      if (c.reward_type === "pack" && !v.pack_id) issues.push("missing reward_value.pack_id");
+      if (c.reward_type === "card" && !v.player_card_id) issues.push("missing reward_value.player_card_id");
+      return { code: c.code, issues };
+    }).filter((c) => c.issues.length);
+    const known = {
+      player: new Set((players.data ?? []).map((p) => p.id)),
+      locker_code: new Set((codes.data ?? []).map((c) => c.id))
+    };
+    const storyNames = new Map((storylines.data ?? []).map((s) => [s.id, s.title]));
+    const brokenLinks = [];
+    (links.data ?? []).forEach((l) => {
+      const set = known[l.entity_type];
+      if (set && !set.has(l.entity_id)) {
+        brokenLinks.push({
+          storyline: storyNames.get(l.storyline_id) ?? l.storyline_id,
+          entity_type: l.entity_type,
+          entity_id: l.entity_id
+        });
+      }
+    });
+    const payload = {
+      unrated_players: unrated,
+      incomplete_team_rosters: (teams.data ?? []).map((t) => ({ name: t.name, cards: teamCounts.get(t.id) ?? 0 })).filter((t) => t.cards < 3),
+      incomplete_runs: (runs.data ?? []).map((r) => ({ name: r.name, opponents: runCounts.get(r.id) ?? 0 })).filter((r) => r.opponents < 3),
+      incomplete_domination_paths: (doms.data ?? []).map((d) => ({
+        road: d.road_name,
+        opponent: d.opponent_name,
+        cards: domCounts.get(d.id) ?? 0
+      })).filter((d) => d.cards < 3),
+      broken_packs: brokenPacks,
+      malformed_locker_codes: malformedCodes,
+      broken_storyline_links: brokenLinks
+    };
+    return ok({
+      ...payload,
+      summary: {
+        unrated_players: payload.unrated_players.length,
+        incomplete_team_rosters: payload.incomplete_team_rosters.length,
+        incomplete_runs: payload.incomplete_runs.length,
+        incomplete_domination_paths: payload.incomplete_domination_paths.length,
+        broken_packs: payload.broken_packs.length,
+        malformed_locker_codes: payload.malformed_locker_codes.length,
+        broken_storyline_links: payload.broken_storyline_links.length
+      }
+    });
+  }
+});
+
+// src/lib/mcp/tools/get-references.ts
+import { defineTool as defineTool3 } from "npm:@lovable.dev/mcp-js@0.25.0";
+var get_references_default = defineTool3({
+  name: "get_references",
+  title: "Get reference names",
+  description: "Returns the exact names/handles the write tools accept: gem tiers, teams, packs, collections and sub-collections, badges, signature traits, media (location) accounts, storylines, challenges, runs, domination roads, and rule_config keys, plus the full player card name list. Call this before writing so every reference resolves.",
+  inputSchema: {},
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async (_input, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    const [tiers, teams, packs, collections, subs, badges, traits, accounts, storylines, challenges, runs, doms, rules, players] = await Promise.all([
+      client.from("gem_tiers").select("name, stars, gem_value, sort_order").order("sort_order"),
+      client.from("teams").select("name, category, unlock_cost").order("name"),
+      client.from("packs").select("name, pack_type, cost, ten_box_cost").order("name"),
+      client.from("collections").select("name, reward_type").order("name"),
+      client.from("sub_collections").select("name, collection_id").order("name"),
+      client.from("badges").select("name, abbreviation, effect_type").order("name"),
+      client.from("signature_traits").select("name, abbreviation, condition_type").order("name"),
+      client.from("location_accounts").select("name, handle, personality, location_type, is_active").order("name"),
+      client.from("storylines").select("title, status").order("title"),
+      client.from("challenges").select("name, challenge_type").order("name"),
+      client.from("runs").select("name, target_score").order("name"),
+      client.from("domination_games").select("road_name, opponent_name, game_order").order("road_name"),
+      client.from("rule_config").select("key, description").order("key"),
+      client.from("player_cards").select("name, rating, gem_name").order("name").limit(2e3)
+    ]);
+    return ok({
+      gem_tiers: tiers.data ?? [],
+      teams: teams.data ?? [],
+      packs: packs.data ?? [],
+      collections: collections.data ?? [],
+      sub_collections: subs.data ?? [],
+      badges: badges.data ?? [],
+      signature_traits: traits.data ?? [],
+      media_accounts: accounts.data ?? [],
+      storylines: storylines.data ?? [],
+      challenges: challenges.data ?? [],
+      runs: runs.data ?? [],
+      domination_games: doms.data ?? [],
+      rule_config_keys: rules.data ?? [],
+      player_cards: players.data ?? [],
+      counts: {
+        player_cards: players.data?.length ?? 0,
+        teams: teams.data?.length ?? 0,
+        packs: packs.data?.length ?? 0
+      }
+    });
+  }
+});
+
+// src/lib/mcp/tools/list-rows.ts
+import { defineTool as defineTool4 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z } from "npm:zod@^3.25.76";
+var list_rows_default = defineTool4({
+  name: "list_rows",
+  title: "List rows",
+  description: "Read rows from any GTeam Infinite content table: players, teams and rosters, runs / run rosters / rank rewards, domination games and rosters, challenges, packs with their pools and odds, locker codes, gem tiers and gem market, gem tasks, dynamic duos, collections and sub-collections, badges and signature traits plus their card assignments, evo paths, storylines and storyline entities, social creators and posts, media (location) accounts and post templates, and rule_config. Per-user and economy tables are not exposed.",
+  inputSchema: {
+    table: z.enum(READ_TABLES).describe("Table to read."),
+    search: z.string().optional().describe("Case-insensitive match against the table's name/title/code column."),
+    columns: z.string().optional().describe("Comma-separated columns. Defaults to all."),
+    limit: z.number().int().min(1).max(500).optional().describe("Max rows (default 100).")
+  },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async ({ table, search, columns, limit }, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    let query = client.from(table).select(columns || "*").limit(limit ?? 100);
+    if (search) {
+      const col = SEARCH_COLUMN[table];
+      if (!col) return fail(`Table "${table}" has no searchable text column. Omit \`search\`.`);
+      query = query.ilike(col, `%${search}%`);
+    }
+    const { data, error: dbError } = await query;
+    if (dbError) return fail(dbError.message);
+    return ok({ table, count: data?.length ?? 0, rows: data ?? [] });
+  }
+});
+
+// src/lib/mcp/tools/create-players.ts
+import { defineTool as defineTool5 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z2 } from "npm:zod@^3.25.76";
+var StatSchema = z2.number().min(0).max(150);
+var create_players_default = defineTool5({
+  name: "create_players",
+  title: "Create players",
+  description: 'Admin only. Create player cards. Gem tier and team are resolved by name, so you can say `gem_tier: "Diamond"` instead of an id. Ratings accept decimals.',
+  inputSchema: {
+    players: z2.array(
+      z2.object({
+        name: z2.string().describe("Card name (must be unique-ish; existing names are reported back)."),
+        gem_tier: z2.string().optional().describe("Gem tier name, e.g. Emerald / Diamond."),
+        team: z2.string().optional().describe("Team name to attach the card to."),
+        position1: z2.string().optional(),
+        position2: z2.string().optional(),
+        rating: z2.number().optional().describe("Overall rating, decimals allowed (e.g. 87.4)."),
+        stat_3pt: StatSchema.optional(),
+        stat_mid: StatSchema.optional(),
+        stat_fin: StatSchema.optional(),
+        stat_dnk: StatSchema.optional(),
+        stat_ast: StatSchema.optional(),
+        stat_stl: StatSchema.optional(),
+        stat_reb: StatSchema.optional(),
+        stat_blk: StatSchema.optional(),
+        stat_int: StatSchema.optional(),
+        market_value: z2.number().optional(),
+        social_handle: z2.string().optional(),
+        card_animation: z2.string().optional().describe("e.g. none / pulse / shimmer / glow.")
+      })
+    ).describe("Players to create.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  handler: async ({ players }, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    if (!players.length) return fail("No players supplied.");
+    const [{ data: tiers }, { data: teams }] = await Promise.all([
+      client.from("gem_tiers").select("id, name"),
+      client.from("teams").select("id, name")
+    ]);
+    const tierByName = new Map((tiers ?? []).map((t) => [String(t.name).toLowerCase(), t.id]));
+    const teamByName = new Map((teams ?? []).map((t) => [String(t.name).toLowerCase(), t.id]));
+    const unresolved = [];
+    const rows = players.map((p) => {
+      const { gem_tier, team, ...rest } = p;
+      const gem_tier_id = gem_tier ? tierByName.get(gem_tier.toLowerCase()) : void 0;
+      const team_id = team ? teamByName.get(team.toLowerCase()) : void 0;
+      if (gem_tier && !gem_tier_id) unresolved.push(`gem tier "${gem_tier}" (${p.name})`);
+      if (team && !team_id) unresolved.push(`team "${team}" (${p.name})`);
+      return { ...rest, gem_tier_id: gem_tier_id ?? null, team_id: team_id ?? null };
+    });
+    const { data, error: dbError } = await client.from("player_cards").insert(rows).select("id, name, rating");
+    if (dbError) return fail(dbError.message);
+    return ok({ created: data?.length ?? 0, players: data ?? [], unresolved_references: unresolved });
+  }
+});
+
+// src/lib/mcp/tools/upsert-team.ts
+import { defineTool as defineTool6 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z3 } from "npm:zod@^3.25.76";
+var mode = z3.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_team_default = defineTool6({
+  name: "upsert_team",
+  title: "Create or update a team",
+  description: "Admin only. Create or update a team by name and optionally REPLACE its ordered roster with the given player card names. Player names must already exist (create them with create_players first). Always call with mode='preview' first.",
+  inputSchema: {
+    mode,
+    name: z3.string().min(1).describe("Team name (match key)."),
+    category: z3.string().optional().describe("Team category, e.g. domination / run / challenge."),
+    unlock_cost: z3.number().int().min(0).optional().describe("Coin cost to unlock the team."),
+    roster: z3.array(z3.string()).optional().describe("DESTRUCTIVE: replaces the whole team roster with these player card names, in slot order. Omit to leave the roster untouched.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "team", payload, m)
+});
+
+// src/lib/mcp/tools/upsert-run.ts
+import { defineTool as defineTool7 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z4 } from "npm:zod@^3.25.76";
+var mode2 = z4.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_run_default = defineTool7({
+  name: "upsert_run",
+  title: "Create or update a Run",
+  description: "Admin only. Create or update a 3v3 Run: target score, milestone ladder, the Run's opponent roster, and optionally the global rank-reward ladder. Roster and rank rewards are full replacements. Always call with mode='preview' first.",
+  inputSchema: {
+    mode: mode2,
+    name: z4.string().min(1).describe("Run name (match key)."),
+    target_score: z4.number().int().min(1).optional().describe("Score the Run races to (default 21)."),
+    team: z4.string().optional().describe("Optional team name to link the Run to."),
+    milestones: z4.array(z4.record(z4.string(), z4.any())).optional().describe("Milestone ladder as stored in runs.milestones (e.g. { wins_required, coin_reward, gem_reward, pack_reward }). Replaces the whole array."),
+    roster: z4.array(z4.string()).optional().describe("DESTRUCTIVE: replaces the Run's opponent roster with these player card names. Run stats are copied from each card's run_* values (falling back to base stats)."),
+    rank_rewards: z4.array(
+      z4.object({
+        rank_name: z4.string(),
+        wins_required: z4.number().int().min(0),
+        coin_reward: z4.number().int().min(0).optional(),
+        gem_reward: z4.number().int().min(0).optional(),
+        pack_reward: z4.string().optional(),
+        sort_order: z4.number().int().optional()
+      })
+    ).optional().describe("DESTRUCTIVE and GLOBAL: run_rank_rewards is one ladder shared by every Run. Sending this replaces the entire ladder.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "run", payload, m)
+});
+
+// src/lib/mcp/tools/upsert-domination-game.ts
+import { defineTool as defineTool8 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z5 } from "npm:zod@^3.25.76";
+var mode3 = z5.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_domination_game_default = defineTool8({
+  name: "upsert_domination_game",
+  title: "Create or update a Domination game",
+  description: "Admin only. Create or update a Domination game, matched on road_name + opponent_name: game order, difficulty stars, coin/pack rewards, and optionally its ordered roster (full replacement). Always call with mode='preview' first.",
+  inputSchema: {
+    mode: mode3,
+    road_name: z5.string().min(1).describe("Road / path the game belongs to."),
+    opponent_name: z5.string().min(1).describe("Opponent name (match key together with road_name)."),
+    game_order: z5.number().int().min(1).optional().describe("Position of the game on the road."),
+    difficulty_stars: z5.number().int().min(1).max(5).optional().describe("Difficulty in stars."),
+    coin_reward: z5.number().int().min(0).optional().describe("Coins awarded for winning."),
+    pack_reward: z5.string().nullable().optional().describe("Pack reward identifier, or null to clear it."),
+    roster: z5.array(z5.string()).optional().describe("DESTRUCTIVE: replaces the opponent roster with these player card names, in slot order.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "domination_game", payload, m)
+});
+
+// src/lib/mcp/tools/upsert-pack.ts
+import { defineTool as defineTool9 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z6 } from "npm:zod@^3.25.76";
+var mode4 = z6.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_pack_default = defineTool9({
+  name: "upsert_pack",
+  title: "Create or update a pack",
+  description: "Admin only. Create or update a pack: cost, ten-box cost, pack type, its player pool (one slot per listed card) and its odds table. Odds are validated the way the pack-opening flow reads them: percentages must total 100, every entry must be above 0, and each result_slot must be `player_choice` or an existing pool slot number. Pool and odds are full replacements. Always call with mode='preview' first.",
+  inputSchema: {
+    mode: mode4,
+    name: z6.string().min(1).describe("Pack name (match key)."),
+    pack_type: z6.string().optional().describe("Pack type, e.g. standard / premium / promo."),
+    cost: z6.number().int().min(0).optional().describe("Coin cost for a single open."),
+    ten_box_cost: z6.number().int().min(0).nullable().optional().describe("Coin cost for a ten-box, or null."),
+    players: z6.array(z6.string()).optional().describe("DESTRUCTIVE: replaces the pack pool. Player card names; the first name becomes slot 1, the second slot 2, and so on."),
+    odds: z6.array(
+      z6.object({
+        result_slot: z6.string().describe("Pool slot number as a string, or `player_choice`."),
+        percentage: z6.number().positive().describe("Chance for this slot; all entries must sum to 100."),
+        description: z6.string().optional().describe("Label shown in the odds table.")
+      })
+    ).optional().describe("DESTRUCTIVE: replaces the pack's odds rows.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "pack", payload, m)
+});
+
+// src/lib/mcp/tools/upsert-locker-code.ts
+import { defineTool as defineTool10 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z7 } from "npm:zod@^3.25.76";
+var mode5 = z7.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_locker_code_default = defineTool10({
+  name: "upsert_locker_code",
+  title: "Create or update a locker code",
+  description: "Admin only. Create or update a locker code (matched on the code, case-insensitive): reward payload, redemption limit and expiry. Reward payloads are validated and normalised to the shape the redeem flow expects \u2014 pass `pack_name` or `card_name` and they are resolved to ids. Always call with mode='preview' first.",
+  inputSchema: {
+    mode: mode5,
+    code: z7.string().min(1).describe("The code itself (stored uppercase)."),
+    reward_type: z7.enum(["coins", "gems", "pack", "card"]).describe("What the code grants."),
+    reward_value: z7.object({
+      amount: z7.number().int().positive().optional().describe("For coins / gems."),
+      pack_name: z7.string().optional().describe("For a pack reward; resolved to pack_id."),
+      card_name: z7.string().optional().describe("For a card reward; resolved to player_card_id.")
+    }).describe("Reward payload matching reward_type."),
+    max_redemptions: z7.number().int().min(1).nullable().optional().describe("Redemption cap, or null for unlimited."),
+    expires_at: z7.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "locker_code", payload, m)
+});
+
+// src/lib/mcp/tools/upsert-challenge.ts
+import { defineTool as defineTool11 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z8 } from "npm:zod@^3.25.76";
+var mode6 = z8.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_challenge_default = defineTool11({
+  name: "upsert_challenge",
+  title: "Create or update a challenge",
+  description: "Admin only. Create or update a challenge by name: opponent team, win condition and series setup, stat limits, lineup restrictions, timing, prerequisite, and coin / gem / pack / card rewards. Team, player and prerequisite names are resolved to ids and an unknown name fails without writing. Always call with mode='preview' first.",
+  inputSchema: {
+    mode: mode6,
+    name: z8.string().min(1).describe("Challenge name (match key)."),
+    description: z8.string().nullable().optional(),
+    challenge_type: z8.string().optional().describe("e.g. single / series / stat_limit / spotlight."),
+    opponent_team: z8.string().optional().describe("Team name to face."),
+    win_condition: z8.string().optional().describe("e.g. win / win_by / stat_limit."),
+    win_by_amount: z8.number().int().nullable().optional(),
+    series_length: z8.number().int().nullable().optional(),
+    series_win_coins: z8.number().int().min(0).optional(),
+    series_loss_coins: z8.number().int().min(0).optional(),
+    stat_limit_player: z8.string().nullable().optional().describe("Player card name the stat limit applies to."),
+    stat_limit_stat: z8.string().nullable().optional().describe("Stat key, e.g. stat_3pt."),
+    stat_limit_value: z8.number().int().nullable().optional(),
+    coin_reward: z8.number().int().min(0).optional(),
+    gem_reward: z8.number().int().min(0).optional(),
+    pack_reward: z8.string().nullable().optional().describe("Pack name (resolved to its id) or an existing literal value."),
+    card_reward: z8.string().nullable().optional().describe("Player card name granted on completion."),
+    prerequisite: z8.string().nullable().optional().describe("Name of the challenge that must be completed first."),
+    spotlight_group: z8.string().nullable().optional(),
+    sort_order: z8.number().int().optional(),
+    lineup_restrictions: z8.record(z8.string(), z8.any()).nullable().optional().describe("Restrictions object as used by the admin UI (positions, badge_ids, trait_ids, gem_tier_ids, team_ids, collection_ids, sub_collection_ids, card_colors)."),
+    is_repeatable: z8.boolean().optional(),
+    expires_at: z8.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "challenge", payload, m)
+});
+
+// src/lib/mcp/tools/upsert-dynamic-duo.ts
+import { defineTool as defineTool12 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z9 } from "npm:zod@^3.25.76";
+var mode7 = z9.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var boosts = z9.record(z9.string(), z9.number()).describe("Stat boosts keyed by stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int.");
+var upsert_dynamic_duo_default = defineTool12({
+  name: "upsert_dynamic_duo",
+  title: "Create or update a dynamic duo",
+  description: "Admin only. Create or update a dynamic duo by name: the two player cards (resolved by name), the stat boosts each one receives while both are on the floor, and whether the duo is active. Unknown boost keys or player names fail without writing. Always call with mode='preview' first.",
+  inputSchema: {
+    mode: mode7,
+    name: z9.string().min(1).describe("Duo name (match key)."),
+    description: z9.string().nullable().optional(),
+    player_a: z9.string().optional().describe("First player card name (required when creating)."),
+    player_b: z9.string().optional().describe("Second player card name (required when creating)."),
+    boosts_a: boosts.optional().describe("Boosts applied to player A."),
+    boosts_b: boosts.optional().describe("Boosts applied to player B."),
+    is_active: z9.boolean().optional().describe("Whether the duo is live in games.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "dynamic_duo", payload, m)
+});
+
+// src/lib/mcp/tools/import-storyline-bundle.ts
+import { defineTool as defineTool13 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z10 } from "npm:zod@^3.25.76";
+var import_storyline_bundle_default = defineTool13({
+  name: "import_storyline_bundle",
+  title: "Import a storyline bundle",
+  description: "Admin only. Creates a storyline plus its linked new players, locker codes and social posts in one atomic request, reusing the app's existing storyline-bundle importer. mode='preview' validates the bundle (duplicate player names, duplicate codes, unknown media handles) and reports what would be created without writing.",
+  inputSchema: {
+    mode: z10.enum(["preview", "commit"]).default("preview").describe("`preview` validates only. `commit` creates the storyline and its entities atomically."),
+    storyline: z10.object({
+      title: z10.string().min(1),
+      summary: z10.string().optional(),
+      arc_image_url: z10.string().optional(),
+      status: z10.string().optional().describe("draft / active / archived."),
+      starts_at: z10.string().optional(),
+      ends_at: z10.string().optional()
+    }).describe("The storyline arc itself."),
+    players: z10.array(
+      z10.object({
+        name: z10.string().min(1),
+        position1: z10.string().optional(),
+        position2: z10.string().optional(),
+        stars: z10.number().min(1).max(5).optional().describe("Star tier; converted to a rating by the importer."),
+        social_handle: z10.string().optional(),
+        stat_3pt: z10.number().optional(),
+        stat_mid: z10.number().optional(),
+        stat_fin: z10.number().optional(),
+        stat_dnk: z10.number().optional(),
+        stat_ast: z10.number().optional(),
+        stat_stl: z10.number().optional(),
+        stat_reb: z10.number().optional(),
+        stat_blk: z10.number().optional(),
+        stat_int: z10.number().optional()
+      })
+    ).optional().describe("New player cards created and linked to the storyline."),
+    locker_codes: z10.array(
+      z10.object({
+        code: z10.string().min(1),
+        reward_type: z10.string().optional(),
+        reward_value: z10.record(z10.string(), z10.any()).optional(),
+        max_redemptions: z10.number().int().nullable().optional(),
+        expires_at: z10.string().nullable().optional()
+      })
+    ).optional(),
+    posts: z10.array(
+      z10.object({
+        content: z10.string().min(1),
+        post_type: z10.string().optional(),
+        event_type: z10.string().optional(),
+        location_handle: z10.string().optional().describe("Handle of an existing media (location) account."),
+        player_name: z10.string().optional().describe("Name of a player created in this same bundle."),
+        image_url: z10.string().optional(),
+        scheduled_at: z10.string().optional(),
+        is_headline: z10.boolean().optional(),
+        headline_rank: z10.number().int().optional(),
+        headline_image_url: z10.string().optional()
+      })
+    ).optional()
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  handler: async ({ mode: mode8, ...bundle }, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    const players = bundle.players ?? [];
+    const codes = bundle.locker_codes ?? [];
+    const posts = bundle.posts ?? [];
+    const problems = [];
+    if (players.length) {
+      const names = players.map((p) => p.name);
+      const { data: existing } = await client.from("player_cards").select("name").in("name", names);
+      (existing ?? []).forEach((r) => problems.push(`Player card already exists: "${r.name}"`));
+    }
+    if (codes.length) {
+      const upper = codes.map((c) => c.code.toUpperCase());
+      const { data: existing } = await client.from("locker_codes").select("code").in("code", upper);
+      (existing ?? []).forEach((r) => problems.push(`Locker code already exists: "${r.code}"`));
+    }
+    const handles = posts.map((p) => p.location_handle).filter(Boolean);
+    if (handles.length) {
+      const { data: accounts } = await client.from("location_accounts").select("handle");
+      const known = new Set((accounts ?? []).map((a) => a.handle.toLowerCase()));
+      handles.forEach((h) => {
+        if (!known.has(h.toLowerCase())) problems.push(`Unknown media account handle: "${h}"`);
+      });
+    }
+    const newPlayerNames = new Set(players.map((p) => p.name.toLowerCase()));
+    posts.forEach((p) => {
+      if (p.player_name && !newPlayerNames.has(p.player_name.toLowerCase())) {
+        problems.push(`Post references "${p.player_name}", which is not created in this bundle (it will be linked to no card).`);
+      }
+    });
+    const plan = {
+      storyline: bundle.storyline.title,
+      would_create: { players: players.length, locker_codes: codes.length, posts: posts.length },
+      warnings: problems
+    };
+    if (mode8 === "preview") return ok({ mode: "preview", applied: false, ...plan });
+    if (problems.some((p) => p.startsWith("Player card already exists") || p.startsWith("Locker code already exists") || p.startsWith("Unknown media account"))) {
+      return fail(`Bundle not imported. Fix these first:
+- ${problems.join("\n- ")}`);
+    }
+    const res = await callFunction(ctx, "import-storyline-bundle", bundle);
+    if (!res.okStatus) return fail(`Storyline import failed (nothing was written): ${JSON.stringify(res.body)}`);
+    return ok({ mode: "commit", applied: true, ...plan, result: res.body });
+  }
+});
+
+// src/lib/mcp/tools/create-rows.ts
+import { defineTool as defineTool14 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z11 } from "npm:zod@^3.25.76";
+var create_rows_default = defineTool14({
+  name: "create_rows",
+  title: "Create rows",
+  description: "Admin only. Insert new rows into a GTeam Infinite table. Each row is an object of column/value pairs; call list_rows first to learn the shape. Returns the inserted rows.",
+  inputSchema: {
+    table: z11.enum(WRITE_TABLES).describe("Table to insert into."),
+    rows: z11.array(z11.record(z11.string(), z11.any())).describe("Rows to insert as column/value objects.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  handler: async ({ table, rows }, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    if (!rows.length) return fail("No rows supplied.");
+    const { data, error: dbError } = await client.from(table).insert(rows).select();
+    if (dbError) return fail(dbError.message);
+    return ok({ table, inserted: data?.length ?? 0, rows: data ?? [] });
+  }
+});
+
+// src/lib/mcp/tools/update-rows.ts
+import { defineTool as defineTool15 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z12 } from "npm:zod@^3.25.76";
+var update_rows_default = defineTool15({
+  name: "update_rows",
+  title: "Update rows",
+  description: "Admin only. Patch existing rows matched by a column value (defaults to `name`, use `title` for gem tasks). Only the fields you send are written; everything else is left untouched.",
+  inputSchema: {
+    table: z12.enum(WRITE_TABLES).describe("Table to update."),
+    match_column: z12.string().optional().describe("Column used to find the row. Defaults to `name`."),
+    updates: z12.array(
+      z12.object({
+        match: z12.string().describe("Value of the match column, e.g. the player name."),
+        patch: z12.record(z12.string(), z12.any()).describe("Columns to write.")
+      })
+    ).describe("One entry per row to patch.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  handler: async ({ table, match_column, updates }, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    const col = match_column || (table === "gem_tasks" ? "title" : "name");
+    const applied = [];
+    const notFound = [];
+    const failed = [];
+    for (const { match, patch } of updates) {
+      const { data, error: dbError } = await client.from(table).update(patch).ilike(col, match).select("id");
+      if (dbError) failed.push({ match, error: dbError.message });
+      else if (!data?.length) notFound.push(match);
+      else applied.push(match);
+    }
+    return ok({ table, match_column: col, updated: applied.length, applied, not_found: notFound, failed });
+  }
+});
+
+// src/lib/mcp/tools/delete-rows.ts
+import { defineTool as defineTool16 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z13 } from "npm:zod@^3.25.76";
+var delete_rows_default = defineTool16({
+  name: "delete_rows",
+  title: "Delete rows",
+  description: "Admin only. Permanently delete rows matched by id. Destructive \u2014 confirm with the user before calling.",
+  inputSchema: {
+    table: z13.enum(WRITE_TABLES).describe("Table to delete from."),
+    ids: z13.array(z13.string()).describe("Row ids (uuid) to delete.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async ({ table, ids }, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    if (!ids.length) return fail("No ids supplied.");
+    const { data, error: dbError } = await client.from(table).delete().in("id", ids).select("id");
+    if (dbError) return fail(dbError.message);
+    return ok({ table, deleted: data?.length ?? 0, ids: (data ?? []).map((r) => r.id) });
+  }
+});
+
 // src/lib/mcp/index.ts
 var projectRef = "tgcmhmcgxzabimgnzsiu";
 var mcp_default = defineMcp({
   name: "gteam-infinite-hub",
   title: "GTeam Infinite Hub",
-  version: "0.1.0",
-  instructions: "Tools for building and editing GTeam Infinite content. Start with get_system_docs for the data model and get_diagnostics for gaps. Use list_rows to inspect current data, create_players / create_rows to add content, update_rows to patch existing rows by name, set_roster to fill team / run / domination rosters, and delete_rows only after confirming with the user. All writes require an admin account.",
+  version: "0.2.0",
+  instructions: "Tools for building and editing GTeam Infinite content. Start with get_system_docs for the data model, get_diagnostics for gaps, and get_references for the exact names every write tool accepts. Use list_rows to inspect any content table. Use the purpose-built upsert tools (upsert_team, upsert_run, upsert_domination_game, upsert_pack, upsert_locker_code, upsert_challenge, upsert_dynamic_duo) and import_storyline_bundle for composite content: they resolve names to ids, validate everything, and write atomically. Every upsert tool takes mode='preview' (validate and show the plan, no writes) or mode='commit' \u2014 always preview first and repeat any destructive replacement back to the user before committing. create_players, create_rows, update_rows and delete_rows remain for low-level edits to players, gem tiers, collections, badges, traits, evo paths, social/media content and rule_config only. All writes require an admin account; per-user and economy data is never exposed.",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated"
@@ -461,11 +929,19 @@ var mcp_default = defineMcp({
   tools: [
     get_system_docs_default,
     get_diagnostics_default,
+    get_references_default,
     list_rows_default,
     create_players_default,
+    upsert_team_default,
+    upsert_run_default,
+    upsert_domination_game_default,
+    upsert_pack_default,
+    upsert_locker_code_default,
+    upsert_challenge_default,
+    upsert_dynamic_duo_default,
+    import_storyline_bundle_default,
     create_rows_default,
     update_rows_default,
-    set_roster_default,
     delete_rows_default
   ]
 });

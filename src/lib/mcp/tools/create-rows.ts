@@ -1,6 +1,6 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import { ALLOWED_TABLES, ok, fail, adminClient } from "../db";
+import { WRITE_TABLES, ok, fail, adminClient } from "../db";
 
 export default defineTool({
   name: "create_rows",
@@ -8,7 +8,7 @@ export default defineTool({
   description:
     "Admin only. Insert new rows into a GTeam Infinite table. Each row is an object of column/value pairs; call list_rows first to learn the shape. Returns the inserted rows.",
   inputSchema: {
-    table: z.enum(ALLOWED_TABLES).describe("Table to insert into."),
+    table: z.enum(WRITE_TABLES).describe("Table to insert into."),
     rows: z.array(z.record(z.string(), z.any())).describe("Rows to insert as column/value objects."),
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },

@@ -1,6 +1,6 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import { ALLOWED_TABLES, ok, fail, adminClient } from "../db";
+import { WRITE_TABLES, ok, fail, adminClient } from "../db";
 
 export default defineTool({
   name: "delete_rows",
@@ -8,7 +8,7 @@ export default defineTool({
   description:
     "Admin only. Permanently delete rows matched by id. Destructive — confirm with the user before calling.",
   inputSchema: {
-    table: z.enum(ALLOWED_TABLES).describe("Table to delete from."),
+    table: z.enum(WRITE_TABLES).describe("Table to delete from."),
     ids: z.array(z.string()).describe("Row ids (uuid) to delete."),
   },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
