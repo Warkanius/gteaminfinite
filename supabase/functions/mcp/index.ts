@@ -547,48 +547,110 @@ var create_players_default = defineTool5({
   }
 });
 
-// src/lib/mcp/tools/upsert-team.ts
+// src/lib/mcp/tools/upsert-player.ts
 import { defineTool as defineTool6 } from "npm:@lovable.dev/mcp-js@0.25.0";
 import { z as z3 } from "npm:zod@^3.25.76";
-var mode = z3.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
-var upsert_team_default = defineTool6({
+var TIERS = ["base", "gold", "hof", "diamond", "actolytrene"];
+var STATS = [
+  "stat_3pt",
+  "stat_mid",
+  "stat_fin",
+  "stat_dnk",
+  "stat_ast",
+  "stat_stl",
+  "stat_reb",
+  "stat_blk",
+  "stat_int"
+];
+var statFields = Object.fromEntries(STATS.map((s) => [s, z3.number().min(0).max(150).optional()]));
+var runStatFields = Object.fromEntries(
+  STATS.map((s) => [s.replace("stat_", "run_stat_"), z3.number().int().min(0).max(150).optional()])
+);
+var upsert_player_default = defineTool6({
+  name: "upsert_player",
+  title: "Create or update a player card",
+  description: "Admin only. Create or update one player card atomically, matched on `name`. Gem tier, team, collection, sub-collection, badges and signature traits are resolved by exact name; an unknown or ambiguous reference fails with zero writes. Sending `badges` or `traits` REPLACES all of that card's assignments. Always call with mode='preview' first.",
+  inputSchema: {
+    mode: z3.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it."),
+    name: z3.string().min(1).describe("Existing card name to edit, or the name of the new card."),
+    new_name: z3.string().optional().describe("Rename the card."),
+    gem_tier: z3.string().optional(),
+    gem_name: z3.string().nullable().optional(),
+    team: z3.string().optional(),
+    collection: z3.string().optional(),
+    sub_collection: z3.string().optional(),
+    position1: z3.string().nullable().optional(),
+    position2: z3.string().nullable().optional(),
+    rating: z3.number().optional().describe("Decimals preserved, e.g. 87.4."),
+    run_rating: z3.number().int().nullable().optional(),
+    ...statFields,
+    ...runStatFields,
+    market_value: z3.number().int().optional(),
+    social_handle: z3.string().nullable().optional(),
+    avatar_url: z3.string().nullable().optional(),
+    is_collection_reward: z3.boolean().optional(),
+    card_color_primary: z3.string().nullable().optional(),
+    card_color_secondary: z3.string().nullable().optional(),
+    card_glow_color: z3.string().nullable().optional(),
+    card_animation: z3.string().nullable().optional(),
+    badges: z3.array(z3.object({ badge: z3.string(), tier: z3.enum(TIERS).optional() })).optional().describe("DESTRUCTIVE: replaces every badge assignment on this card."),
+    traits: z3.array(z3.object({ trait: z3.string(), tier: z3.enum(TIERS).optional(), target_stat: z3.enum(STATS).nullable().optional() })).optional().describe("DESTRUCTIVE: replaces every signature-trait assignment on this card.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  handler: async ({ mode: mode8, ...payload }, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    const { data, error: dbError } = await client.rpc("admin_apply_player", {
+      p_payload: clean(payload),
+      p_commit: mode8 === "commit"
+    });
+    if (dbError) return fail(`${mode8 === "commit" ? "Commit" : "Preview"} failed (nothing was written): ${dbError.message}`);
+    return ok(data);
+  }
+});
+
+// src/lib/mcp/tools/upsert-team.ts
+import { defineTool as defineTool7 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z4 } from "npm:zod@^3.25.76";
+var mode = z4.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_team_default = defineTool7({
   name: "upsert_team",
   title: "Create or update a team",
   description: "Admin only. Create or update a team by name and optionally REPLACE its ordered roster with the given player card names. Player names must already exist (create them with create_players first). Always call with mode='preview' first.",
   inputSchema: {
     mode,
-    name: z3.string().min(1).describe("Team name (match key)."),
-    category: z3.string().optional().describe("Team category, e.g. domination / run / challenge."),
-    unlock_cost: z3.number().int().min(0).optional().describe("Coin cost to unlock the team."),
-    roster: z3.array(z3.string()).optional().describe("DESTRUCTIVE: replaces the whole team roster with these player card names, in slot order. Omit to leave the roster untouched.")
+    name: z4.string().min(1).describe("Team name (match key)."),
+    category: z4.string().optional().describe("Team category, e.g. domination / run / challenge."),
+    unlock_cost: z4.number().int().min(0).optional().describe("Coin cost to unlock the team."),
+    roster: z4.array(z4.string()).optional().describe("DESTRUCTIVE: replaces the whole team roster with these player card names, in slot order. Omit to leave the roster untouched.")
   },
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
   handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "team", payload, m)
 });
 
 // src/lib/mcp/tools/upsert-run.ts
-import { defineTool as defineTool7 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z4 } from "npm:zod@^3.25.76";
-var mode2 = z4.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
-var upsert_run_default = defineTool7({
+import { defineTool as defineTool8 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z5 } from "npm:zod@^3.25.76";
+var mode2 = z5.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_run_default = defineTool8({
   name: "upsert_run",
   title: "Create or update a Run",
   description: "Admin only. Create or update a 3v3 Run: target score, milestone ladder, the Run's opponent roster, and optionally the global rank-reward ladder. Roster and rank rewards are full replacements. Always call with mode='preview' first.",
   inputSchema: {
     mode: mode2,
-    name: z4.string().min(1).describe("Run name (match key)."),
-    target_score: z4.number().int().min(1).optional().describe("Score the Run races to (default 21)."),
-    team: z4.string().optional().describe("Optional team name to link the Run to."),
-    milestones: z4.array(z4.record(z4.string(), z4.any())).optional().describe("Milestone ladder as stored in runs.milestones (e.g. { wins_required, coin_reward, gem_reward, pack_reward }). Replaces the whole array."),
-    roster: z4.array(z4.string()).optional().describe("DESTRUCTIVE: replaces the Run's opponent roster with these player card names. Run stats are copied from each card's run_* values (falling back to base stats)."),
-    rank_rewards: z4.array(
-      z4.object({
-        rank_name: z4.string(),
-        wins_required: z4.number().int().min(0),
-        coin_reward: z4.number().int().min(0).optional(),
-        gem_reward: z4.number().int().min(0).optional(),
-        pack_reward: z4.string().optional(),
-        sort_order: z4.number().int().optional()
+    name: z5.string().min(1).describe("Run name (match key)."),
+    target_score: z5.number().int().min(1).optional().describe("Score the Run races to (default 21)."),
+    team: z5.string().optional().describe("Optional team name to link the Run to."),
+    milestones: z5.array(z5.record(z5.string(), z5.any())).optional().describe("Milestone ladder as stored in runs.milestones (e.g. { wins_required, coin_reward, gem_reward, pack_reward }). Replaces the whole array."),
+    roster: z5.array(z5.string()).optional().describe("DESTRUCTIVE: replaces the Run's opponent roster with these player card names. Run stats are copied from each card's run_* values (falling back to base stats)."),
+    rank_rewards: z5.array(
+      z5.object({
+        rank_name: z5.string(),
+        wins_required: z5.number().int().min(0),
+        coin_reward: z5.number().int().min(0).optional(),
+        gem_reward: z5.number().int().min(0).optional(),
+        pack_reward: z5.string().optional(),
+        sort_order: z5.number().int().optional()
       })
     ).optional().describe("DESTRUCTIVE and GLOBAL: run_rank_rewards is one ladder shared by every Run. Sending this replaces the entire ladder.")
   },
@@ -597,47 +659,47 @@ var upsert_run_default = defineTool7({
 });
 
 // src/lib/mcp/tools/upsert-domination-game.ts
-import { defineTool as defineTool8 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z5 } from "npm:zod@^3.25.76";
-var mode3 = z5.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
-var upsert_domination_game_default = defineTool8({
+import { defineTool as defineTool9 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z6 } from "npm:zod@^3.25.76";
+var mode3 = z6.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_domination_game_default = defineTool9({
   name: "upsert_domination_game",
   title: "Create or update a Domination game",
   description: "Admin only. Create or update a Domination game, matched on road_name + opponent_name: game order, difficulty stars, coin/pack rewards, and optionally its ordered roster (full replacement). Always call with mode='preview' first.",
   inputSchema: {
     mode: mode3,
-    road_name: z5.string().min(1).describe("Road / path the game belongs to."),
-    opponent_name: z5.string().min(1).describe("Opponent name (match key together with road_name)."),
-    game_order: z5.number().int().min(1).optional().describe("Position of the game on the road."),
-    difficulty_stars: z5.number().int().min(1).max(5).optional().describe("Difficulty in stars."),
-    coin_reward: z5.number().int().min(0).optional().describe("Coins awarded for winning."),
-    pack_reward: z5.string().nullable().optional().describe("Pack reward identifier, or null to clear it."),
-    roster: z5.array(z5.string()).optional().describe("DESTRUCTIVE: replaces the opponent roster with these player card names, in slot order.")
+    road_name: z6.string().min(1).describe("Road / path the game belongs to."),
+    opponent_name: z6.string().min(1).describe("Opponent name (match key together with road_name)."),
+    game_order: z6.number().int().min(1).optional().describe("Position of the game on the road."),
+    difficulty_stars: z6.number().int().min(1).max(5).optional().describe("Difficulty in stars."),
+    coin_reward: z6.number().int().min(0).optional().describe("Coins awarded for winning."),
+    pack_reward: z6.string().nullable().optional().describe("Pack reward identifier, or null to clear it."),
+    roster: z6.array(z6.string()).optional().describe("DESTRUCTIVE: replaces the opponent roster with these player card names, in slot order.")
   },
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
   handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "domination_game", payload, m)
 });
 
 // src/lib/mcp/tools/upsert-pack.ts
-import { defineTool as defineTool9 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z6 } from "npm:zod@^3.25.76";
-var mode4 = z6.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
-var upsert_pack_default = defineTool9({
+import { defineTool as defineTool10 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z7 } from "npm:zod@^3.25.76";
+var mode4 = z7.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_pack_default = defineTool10({
   name: "upsert_pack",
   title: "Create or update a pack",
   description: "Admin only. Create or update a pack: cost, ten-box cost, pack type, its player pool (one slot per listed card) and its odds table. Odds are validated the way the pack-opening flow reads them: percentages must total 100, every entry must be above 0, and each result_slot must be `player_choice` or an existing pool slot number. Pool and odds are full replacements. Always call with mode='preview' first.",
   inputSchema: {
     mode: mode4,
-    name: z6.string().min(1).describe("Pack name (match key)."),
-    pack_type: z6.string().optional().describe("Pack type, e.g. standard / premium / promo."),
-    cost: z6.number().int().min(0).optional().describe("Coin cost for a single open."),
-    ten_box_cost: z6.number().int().min(0).nullable().optional().describe("Coin cost for a ten-box, or null."),
-    players: z6.array(z6.string()).optional().describe("DESTRUCTIVE: replaces the pack pool. Player card names; the first name becomes slot 1, the second slot 2, and so on."),
-    odds: z6.array(
-      z6.object({
-        result_slot: z6.string().describe("Pool slot number as a string, or `player_choice`."),
-        percentage: z6.number().positive().describe("Chance for this slot; all entries must sum to 100."),
-        description: z6.string().optional().describe("Label shown in the odds table.")
+    name: z7.string().min(1).describe("Pack name (match key)."),
+    pack_type: z7.string().optional().describe("Pack type, e.g. standard / premium / promo."),
+    cost: z7.number().int().min(0).optional().describe("Coin cost for a single open."),
+    ten_box_cost: z7.number().int().min(0).nullable().optional().describe("Coin cost for a ten-box, or null."),
+    players: z7.array(z7.string()).optional().describe("DESTRUCTIVE: replaces the pack pool. Player card names; the first name becomes slot 1, the second slot 2, and so on."),
+    odds: z7.array(
+      z7.object({
+        result_slot: z7.string().describe("Pool slot number as a string, or `player_choice`."),
+        percentage: z7.number().positive().describe("Chance for this slot; all entries must sum to 100."),
+        description: z7.string().optional().describe("Label shown in the odds table.")
       })
     ).optional().describe("DESTRUCTIVE: replaces the pack's odds rows.")
   },
@@ -646,145 +708,145 @@ var upsert_pack_default = defineTool9({
 });
 
 // src/lib/mcp/tools/upsert-locker-code.ts
-import { defineTool as defineTool10 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z7 } from "npm:zod@^3.25.76";
-var mode5 = z7.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
-var upsert_locker_code_default = defineTool10({
+import { defineTool as defineTool11 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z8 } from "npm:zod@^3.25.76";
+var mode5 = z8.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_locker_code_default = defineTool11({
   name: "upsert_locker_code",
   title: "Create or update a locker code",
   description: "Admin only. Create or update a locker code (matched on the code, case-insensitive): reward payload, redemption limit and expiry. Reward payloads are validated and normalised to the shape the redeem flow expects \u2014 pass `pack_name` or `card_name` and they are resolved to ids. Always call with mode='preview' first.",
   inputSchema: {
     mode: mode5,
-    code: z7.string().min(1).describe("The code itself (stored uppercase)."),
-    reward_type: z7.enum(["coins", "gems", "pack", "card"]).describe("What the code grants."),
-    reward_value: z7.object({
-      amount: z7.number().int().positive().optional().describe("For coins / gems."),
-      pack_name: z7.string().optional().describe("For a pack reward; resolved to pack_id."),
-      card_name: z7.string().optional().describe("For a card reward; resolved to player_card_id.")
+    code: z8.string().min(1).describe("The code itself (stored uppercase)."),
+    reward_type: z8.enum(["coins", "gems", "pack", "card"]).describe("What the code grants."),
+    reward_value: z8.object({
+      amount: z8.number().int().positive().optional().describe("For coins / gems."),
+      pack_name: z8.string().optional().describe("For a pack reward; resolved to pack_id."),
+      card_name: z8.string().optional().describe("For a card reward; resolved to player_card_id.")
     }).describe("Reward payload matching reward_type."),
-    max_redemptions: z7.number().int().min(1).nullable().optional().describe("Redemption cap, or null for unlimited."),
-    expires_at: z7.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
+    max_redemptions: z8.number().int().min(1).nullable().optional().describe("Redemption cap, or null for unlimited."),
+    expires_at: z8.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "locker_code", payload, m)
 });
 
 // src/lib/mcp/tools/upsert-challenge.ts
-import { defineTool as defineTool11 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z8 } from "npm:zod@^3.25.76";
-var mode6 = z8.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
-var upsert_challenge_default = defineTool11({
+import { defineTool as defineTool12 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z9 } from "npm:zod@^3.25.76";
+var mode6 = z9.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var upsert_challenge_default = defineTool12({
   name: "upsert_challenge",
   title: "Create or update a challenge",
   description: "Admin only. Create or update a challenge by name: opponent team, win condition and series setup, stat limits, lineup restrictions, timing, prerequisite, and coin / gem / pack / card rewards. Team, player and prerequisite names are resolved to ids and an unknown name fails without writing. Always call with mode='preview' first.",
   inputSchema: {
     mode: mode6,
-    name: z8.string().min(1).describe("Challenge name (match key)."),
-    description: z8.string().nullable().optional(),
-    challenge_type: z8.string().optional().describe("e.g. single / series / stat_limit / spotlight."),
-    opponent_team: z8.string().optional().describe("Team name to face."),
-    win_condition: z8.string().optional().describe("e.g. win / win_by / stat_limit."),
-    win_by_amount: z8.number().int().nullable().optional(),
-    series_length: z8.number().int().nullable().optional(),
-    series_win_coins: z8.number().int().min(0).optional(),
-    series_loss_coins: z8.number().int().min(0).optional(),
-    stat_limit_player: z8.string().nullable().optional().describe("Player card name the stat limit applies to."),
-    stat_limit_stat: z8.string().nullable().optional().describe("Stat key, e.g. stat_3pt."),
-    stat_limit_value: z8.number().int().nullable().optional(),
-    coin_reward: z8.number().int().min(0).optional(),
-    gem_reward: z8.number().int().min(0).optional(),
-    pack_reward: z8.string().nullable().optional().describe("Pack name (resolved to its id) or an existing literal value."),
-    card_reward: z8.string().nullable().optional().describe("Player card name granted on completion."),
-    prerequisite: z8.string().nullable().optional().describe("Name of the challenge that must be completed first."),
-    spotlight_group: z8.string().nullable().optional(),
-    sort_order: z8.number().int().optional(),
-    lineup_restrictions: z8.record(z8.string(), z8.any()).nullable().optional().describe("Restrictions object as used by the admin UI (positions, badge_ids, trait_ids, gem_tier_ids, team_ids, collection_ids, sub_collection_ids, card_colors)."),
-    is_repeatable: z8.boolean().optional(),
-    expires_at: z8.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
+    name: z9.string().min(1).describe("Challenge name (match key)."),
+    description: z9.string().nullable().optional(),
+    challenge_type: z9.string().optional().describe("e.g. single / series / stat_limit / spotlight."),
+    opponent_team: z9.string().optional().describe("Team name to face."),
+    win_condition: z9.string().optional().describe("e.g. win / win_by / stat_limit."),
+    win_by_amount: z9.number().int().nullable().optional(),
+    series_length: z9.number().int().nullable().optional(),
+    series_win_coins: z9.number().int().min(0).optional(),
+    series_loss_coins: z9.number().int().min(0).optional(),
+    stat_limit_player: z9.string().nullable().optional().describe("Player card name the stat limit applies to."),
+    stat_limit_stat: z9.string().nullable().optional().describe("Stat key, e.g. stat_3pt."),
+    stat_limit_value: z9.number().int().nullable().optional(),
+    coin_reward: z9.number().int().min(0).optional(),
+    gem_reward: z9.number().int().min(0).optional(),
+    pack_reward: z9.string().nullable().optional().describe("Pack name (resolved to its id) or an existing literal value."),
+    card_reward: z9.string().nullable().optional().describe("Player card name granted on completion."),
+    prerequisite: z9.string().nullable().optional().describe("Name of the challenge that must be completed first."),
+    spotlight_group: z9.string().nullable().optional(),
+    sort_order: z9.number().int().optional(),
+    lineup_restrictions: z9.record(z9.string(), z9.any()).nullable().optional().describe("Restrictions object as used by the admin UI (positions, badge_ids, trait_ids, gem_tier_ids, team_ids, collection_ids, sub_collection_ids, card_colors)."),
+    is_repeatable: z9.boolean().optional(),
+    expires_at: z9.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "challenge", payload, m)
 });
 
 // src/lib/mcp/tools/upsert-dynamic-duo.ts
-import { defineTool as defineTool12 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z9 } from "npm:zod@^3.25.76";
-var mode7 = z9.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
-var boosts = z9.record(z9.string(), z9.number()).describe("Stat boosts keyed by stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int.");
-var upsert_dynamic_duo_default = defineTool12({
+import { defineTool as defineTool13 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z10 } from "npm:zod@^3.25.76";
+var mode7 = z10.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var boosts = z10.record(z10.string(), z10.number()).describe("Stat boosts keyed by stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int.");
+var upsert_dynamic_duo_default = defineTool13({
   name: "upsert_dynamic_duo",
   title: "Create or update a dynamic duo",
   description: "Admin only. Create or update a dynamic duo by name: the two player cards (resolved by name), the stat boosts each one receives while both are on the floor, and whether the duo is active. Unknown boost keys or player names fail without writing. Always call with mode='preview' first.",
   inputSchema: {
     mode: mode7,
-    name: z9.string().min(1).describe("Duo name (match key)."),
-    description: z9.string().nullable().optional(),
-    player_a: z9.string().optional().describe("First player card name (required when creating)."),
-    player_b: z9.string().optional().describe("Second player card name (required when creating)."),
+    name: z10.string().min(1).describe("Duo name (match key)."),
+    description: z10.string().nullable().optional(),
+    player_a: z10.string().optional().describe("First player card name (required when creating)."),
+    player_b: z10.string().optional().describe("Second player card name (required when creating)."),
     boosts_a: boosts.optional().describe("Boosts applied to player A."),
     boosts_b: boosts.optional().describe("Boosts applied to player B."),
-    is_active: z9.boolean().optional().describe("Whether the duo is live in games.")
+    is_active: z10.boolean().optional().describe("Whether the duo is live in games.")
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "dynamic_duo", payload, m)
 });
 
 // src/lib/mcp/tools/import-storyline-bundle.ts
-import { defineTool as defineTool13 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z10 } from "npm:zod@^3.25.76";
-var import_storyline_bundle_default = defineTool13({
+import { defineTool as defineTool14 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z11 } from "npm:zod@^3.25.76";
+var import_storyline_bundle_default = defineTool14({
   name: "import_storyline_bundle",
   title: "Import a storyline bundle",
   description: "Admin only. Creates a storyline plus its linked new players, locker codes and social posts in one atomic request, reusing the app's existing storyline-bundle importer. mode='preview' validates the bundle (duplicate player names, duplicate codes, unknown media handles) and reports what would be created without writing.",
   inputSchema: {
-    mode: z10.enum(["preview", "commit"]).default("preview").describe("`preview` validates only. `commit` creates the storyline and its entities atomically."),
-    storyline: z10.object({
-      title: z10.string().min(1),
-      summary: z10.string().optional(),
-      arc_image_url: z10.string().optional(),
-      status: z10.string().optional().describe("draft / active / archived."),
-      starts_at: z10.string().optional(),
-      ends_at: z10.string().optional()
+    mode: z11.enum(["preview", "commit"]).default("preview").describe("`preview` validates only. `commit` creates the storyline and its entities atomically."),
+    storyline: z11.object({
+      title: z11.string().min(1),
+      summary: z11.string().optional(),
+      arc_image_url: z11.string().optional(),
+      status: z11.string().optional().describe("draft / active / archived."),
+      starts_at: z11.string().optional(),
+      ends_at: z11.string().optional()
     }).describe("The storyline arc itself."),
-    players: z10.array(
-      z10.object({
-        name: z10.string().min(1),
-        position1: z10.string().optional(),
-        position2: z10.string().optional(),
-        stars: z10.number().min(1).max(5).optional().describe("Star tier; converted to a rating by the importer."),
-        social_handle: z10.string().optional(),
-        stat_3pt: z10.number().optional(),
-        stat_mid: z10.number().optional(),
-        stat_fin: z10.number().optional(),
-        stat_dnk: z10.number().optional(),
-        stat_ast: z10.number().optional(),
-        stat_stl: z10.number().optional(),
-        stat_reb: z10.number().optional(),
-        stat_blk: z10.number().optional(),
-        stat_int: z10.number().optional()
+    players: z11.array(
+      z11.object({
+        name: z11.string().min(1),
+        position1: z11.string().optional(),
+        position2: z11.string().optional(),
+        stars: z11.number().min(1).max(5).optional().describe("Star tier; converted to a rating by the importer."),
+        social_handle: z11.string().optional(),
+        stat_3pt: z11.number().optional(),
+        stat_mid: z11.number().optional(),
+        stat_fin: z11.number().optional(),
+        stat_dnk: z11.number().optional(),
+        stat_ast: z11.number().optional(),
+        stat_stl: z11.number().optional(),
+        stat_reb: z11.number().optional(),
+        stat_blk: z11.number().optional(),
+        stat_int: z11.number().optional()
       })
     ).optional().describe("New player cards created and linked to the storyline."),
-    locker_codes: z10.array(
-      z10.object({
-        code: z10.string().min(1),
-        reward_type: z10.string().optional(),
-        reward_value: z10.record(z10.string(), z10.any()).optional(),
-        max_redemptions: z10.number().int().nullable().optional(),
-        expires_at: z10.string().nullable().optional()
+    locker_codes: z11.array(
+      z11.object({
+        code: z11.string().min(1),
+        reward_type: z11.string().optional(),
+        reward_value: z11.record(z11.string(), z11.any()).optional(),
+        max_redemptions: z11.number().int().nullable().optional(),
+        expires_at: z11.string().nullable().optional()
       })
     ).optional(),
-    posts: z10.array(
-      z10.object({
-        content: z10.string().min(1),
-        post_type: z10.string().optional(),
-        event_type: z10.string().optional(),
-        location_handle: z10.string().optional().describe("Handle of an existing media (location) account."),
-        player_name: z10.string().optional().describe("Name of a player created in this same bundle."),
-        image_url: z10.string().optional(),
-        scheduled_at: z10.string().optional(),
-        is_headline: z10.boolean().optional(),
-        headline_rank: z10.number().int().optional(),
-        headline_image_url: z10.string().optional()
+    posts: z11.array(
+      z11.object({
+        content: z11.string().min(1),
+        post_type: z11.string().optional(),
+        event_type: z11.string().optional(),
+        location_handle: z11.string().optional().describe("Handle of an existing media (location) account."),
+        player_name: z11.string().optional().describe("Name of a player created in this same bundle."),
+        image_url: z11.string().optional(),
+        scheduled_at: z11.string().optional(),
+        is_headline: z11.boolean().optional(),
+        headline_rank: z11.number().int().optional(),
+        headline_image_url: z11.string().optional()
       })
     ).optional()
   },
@@ -837,15 +899,15 @@ var import_storyline_bundle_default = defineTool13({
 });
 
 // src/lib/mcp/tools/create-rows.ts
-import { defineTool as defineTool14 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z11 } from "npm:zod@^3.25.76";
-var create_rows_default = defineTool14({
+import { defineTool as defineTool15 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z12 } from "npm:zod@^3.25.76";
+var create_rows_default = defineTool15({
   name: "create_rows",
   title: "Create rows",
   description: "Admin only. Insert new rows into a GTeam Infinite table. Each row is an object of column/value pairs; call list_rows first to learn the shape. Returns the inserted rows.",
   inputSchema: {
-    table: z11.enum(WRITE_TABLES).describe("Table to insert into."),
-    rows: z11.array(z11.record(z11.string(), z11.any())).describe("Rows to insert as column/value objects.")
+    table: z12.enum(WRITE_TABLES).describe("Table to insert into."),
+    rows: z12.array(z12.record(z12.string(), z12.any())).describe("Rows to insert as column/value objects.")
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async ({ table, rows }, ctx) => {
@@ -859,19 +921,19 @@ var create_rows_default = defineTool14({
 });
 
 // src/lib/mcp/tools/update-rows.ts
-import { defineTool as defineTool15 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z12 } from "npm:zod@^3.25.76";
-var update_rows_default = defineTool15({
+import { defineTool as defineTool16 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z13 } from "npm:zod@^3.25.76";
+var update_rows_default = defineTool16({
   name: "update_rows",
   title: "Update rows",
   description: "Admin only. Patch existing rows matched by a column value (defaults to `name`, use `title` for gem tasks). Only the fields you send are written; everything else is left untouched.",
   inputSchema: {
-    table: z12.enum(WRITE_TABLES).describe("Table to update."),
-    match_column: z12.string().optional().describe("Column used to find the row. Defaults to `name`."),
-    updates: z12.array(
-      z12.object({
-        match: z12.string().describe("Value of the match column, e.g. the player name."),
-        patch: z12.record(z12.string(), z12.any()).describe("Columns to write.")
+    table: z13.enum(WRITE_TABLES).describe("Table to update."),
+    match_column: z13.string().optional().describe("Column used to find the row. Defaults to `name`."),
+    updates: z13.array(
+      z13.object({
+        match: z13.string().describe("Value of the match column, e.g. the player name."),
+        patch: z13.record(z13.string(), z13.any()).describe("Columns to write.")
       })
     ).describe("One entry per row to patch.")
   },
@@ -894,15 +956,15 @@ var update_rows_default = defineTool15({
 });
 
 // src/lib/mcp/tools/delete-rows.ts
-import { defineTool as defineTool16 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z13 } from "npm:zod@^3.25.76";
-var delete_rows_default = defineTool16({
+import { defineTool as defineTool17 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z14 } from "npm:zod@^3.25.76";
+var delete_rows_default = defineTool17({
   name: "delete_rows",
   title: "Delete rows",
   description: "Admin only. Permanently delete rows matched by id. Destructive \u2014 confirm with the user before calling.",
   inputSchema: {
-    table: z13.enum(WRITE_TABLES).describe("Table to delete from."),
-    ids: z13.array(z13.string()).describe("Row ids (uuid) to delete.")
+    table: z14.enum(WRITE_TABLES).describe("Table to delete from."),
+    ids: z14.array(z14.string()).describe("Row ids (uuid) to delete.")
   },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ table, ids }, ctx) => {
@@ -932,6 +994,7 @@ var mcp_default = defineMcp({
     get_references_default,
     list_rows_default,
     create_players_default,
+    upsert_player_default,
     upsert_team_default,
     upsert_run_default,
     upsert_domination_game_default,
