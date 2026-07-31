@@ -122,7 +122,7 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
     const { data, error } = await supabase.rpc("admin_road_bulk", {
       p_payload: body as never,
       p_commit: false,
-      p_preview_token: null,
+      p_preview_token: undefined,
     });
     setBusy(false);
     if (error) {
