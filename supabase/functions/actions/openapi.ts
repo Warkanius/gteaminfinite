@@ -350,6 +350,95 @@ export function buildOpenApi(baseUrl: string) {
     }
   }
 
+  // ---------------------------------------------------------- Domination roads
+  const roadTarget = {
+    road_id: strProp("Immutable road id (preferred target)."),
+    road_name: strProp("Case-insensitive exact road name. Also used to name a new road."),
+  };
+
+  paths["/domination-roads"] = {
+    get: {
+      operationId: "listDominationRoads",
+      summary: "List Domination roads",
+      description: "Every road with its road_id, name, description, sort order, active flag and game count.",
+      "x-openai-isConsequential": false,
+      responses: { "200": { description: "Roads", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } }, "401": { description: "Not signed in." } },
+    },
+  };
+
+  paths["/domination-roads/export"] = {
+    post: {
+      operationId: "exportDominationRoad",
+      summary: "Export a whole Domination road",
+      description:
+        "Returns one road exactly in the shape the road import body expects: road settings plus every game in game_order with its domination_game_id, opponent, opponent_team_id, difficulty stars, coin reward, pack_reward_id and full ordered roster, plus a rematch summary and warnings.",
+      "x-openai-isConsequential": false,
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: { type: "object", properties: roadTarget }, example: { road_name: "Tortuga" } } },
+      },
+      responses: { "200": { description: "Road payload", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } }, "401": { description: "Not signed in." }, "404": { description: "Unknown road." } },
+    },
+  };
+
+  const RoadBulkInput = {
+    type: "object",
+    description:
+      "Bulk import or replacement of one Domination road. Create or rename the road, set its metadata, and create / update / reorder / delete its games and rosters in a single transaction.",
+    properties: {
+      ...roadTarget,
+      new_road_name: strProp("Rename the road; every game on it follows."),
+      description: strProp("Road description."),
+      sort_order: intProp("Display order among roads."),
+      is_active: { type: "boolean" },
+      mode: { type: "string", enum: ["merge", "replace"], description: "'merge' touches only the game_orders sent. 'replace' DESTRUCTIVELY makes the road match the payload exactly: games on that road whose game_order is absent are deleted; matched games keep their ids." },
+      games: { type: "array", items: DominationInput, description: "Every game to create or update. Targeted by domination_game_id or game_order, never by opponent name." },
+      preview_token: strProp("Commit only: the token returned by the matching preview."),
+    },
+  };
+
+  for (const mode of ["preview", "commit"] as const) {
+    const isCommit = mode === "commit";
+    paths[`/domination-roads/${mode}`] = {
+      post: {
+        operationId: `${mode}DominationRoad`,
+        summary: `${isCommit ? "Apply" : "Validate"} a bulk Domination road import`,
+        description: isCommit
+          ? "Applies a previously previewed road import atomically. Requires the single-use preview_token and a byte-identical body; a differing body is rejected with PREVIEW_MISMATCH and writes nothing. In mode='replace' games omitted from the payload are DELETED."
+          : "Full validation with ZERO writes. Returns road_creates, road_updates, game_operations, destructive_operations and warnings plus a single-use preview_token. Always call this first and show the destructive operations to the user.",
+        "x-openai-isConsequential": isCommit,
+        requestBody: { required: true, content: { "application/json": { schema: RoadBulkInput } } },
+        responses: {
+          "200": { description: "Plan", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+          "400": { description: "Rejected; nothing was written." },
+          "401": { description: "Not signed in." },
+          "403": { description: "Signed in but not an admin." },
+        },
+      },
+    };
+
+    paths[`/domination-roads/delete/${mode}`] = {
+      post: {
+        operationId: `${mode}DeleteDominationRoad`,
+        summary: `${isCommit ? "Delete" : "Preview deleting"} a whole Domination road`,
+        description: isCommit
+          ? "DESTRUCTIVE. Deletes the road with all of its games and rosters. Requires the preview_token from the matching preview. Player cards are never deleted."
+          : "Reports every game and roster row that deleting the whole road would remove. Writes nothing and returns a single-use preview_token.",
+        "x-openai-isConsequential": isCommit,
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { ...roadTarget, preview_token: strProp("Commit only.") } } } },
+        },
+        responses: {
+          "200": { description: "Plan", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+          "400": { description: "Rejected; nothing was written." },
+          "401": { description: "Not signed in." },
+          "403": { description: "Signed in but not an admin." },
+        },
+      },
+    };
+  }
+
   paths["/diagnostics"] = {
     get: {
       operationId: "getDiagnostics",
