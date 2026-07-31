@@ -2379,6 +2379,15 @@ export type Database = {
       }
       admin_resolve_player: { Args: { p_ref: Json }; Returns: string }
       admin_resolve_player_ids: { Args: { p_names: Json }; Returns: string[] }
+      admin_road_bulk: {
+        Args: { p_commit?: boolean; p_payload: Json; p_preview_token?: string }
+        Returns: Json
+      }
+      admin_road_delete: {
+        Args: { p_commit?: boolean; p_payload: Json; p_preview_token?: string }
+        Returns: Json
+      }
+      admin_road_export: { Args: { p_ref: Json }; Returns: Json }
       admin_road_raise: {
         Args: {
           p_code: string
