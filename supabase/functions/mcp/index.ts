@@ -1335,9 +1335,169 @@ var commitDeleteDominationGame = defineTool19({
 });
 var dominationDeleteTools = [previewDeleteDominationGame, commitDeleteDominationGame];
 
-// src/lib/mcp/tools/planning-reads.ts
+// src/lib/mcp/tools/domination-roads.ts
 import { defineTool as defineTool20 } from "npm:@lovable.dev/mcp-js@0.25.0";
 import { z as z18 } from "npm:zod@^3.25.76";
+var rosterEntry = z18.any().describe("{ player_id } | { card_key } | { player_name } (exact, unique) | 'ref:player:...' from the same batch.");
+var gameSchema = z18.object({
+  domination_game_id: z18.string().uuid().optional().describe("Immutable id of an existing game on this road \u2014 the only fully unambiguous target."),
+  game_order: z18.number().int().min(1).describe("Position on the road. Unique per road; the fallback target."),
+  opponent_name: z18.string().optional().describe("Display name only. The same opponent may repeat (rematches)."),
+  opponent_team_id: z18.string().uuid().optional().describe("Optional link to a teams row."),
+  difficulty_stars: z18.number().int().min(1).max(5).optional(),
+  coin_reward: z18.number().int().min(0).optional(),
+  pack_reward_id: z18.string().uuid().nullable().optional().describe("Preferred pack reward target. null clears it."),
+  pack_reward: z18.string().nullable().optional().describe("Legacy: pack id or exact unique pack name."),
+  roster: z18.array(rosterEntry).optional().describe("Ordered opponent roster. DESTRUCTIVE full replacement for THIS game only.")
+});
+var bulkFields = {
+  road_id: z18.string().uuid().optional().describe("Preferred target: the immutable road id (see listDominationRoads)."),
+  road_name: z18.string().optional().describe("Road name (case-insensitive exact). Used to target an existing road, or to create a new one."),
+  new_road_name: z18.string().optional().describe("Rename the road. Every game on it follows automatically."),
+  description: z18.string().nullable().optional(),
+  sort_order: z18.number().int().optional().describe("Display order among roads."),
+  is_active: z18.boolean().optional(),
+  mode: z18.enum(["merge", "replace"]).default("merge").describe(
+    "'merge' only touches the game_orders present in `games`. 'replace' DESTRUCTIVELY makes the road match the payload exactly: games on this road whose game_order is absent are deleted, matched games keep their ids."
+  ),
+  games: z18.array(gameSchema).default([]).describe("Every game to create or update, in any order.")
+};
+var bulkSafety = " Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction. Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.";
+async function runBulk(ctx, input, commit, previewToken) {
+  const { client, error } = await adminClient(ctx);
+  if (error) return error;
+  if (commit && !previewToken) {
+    return fail(
+      JSON.stringify({
+        error_code: "PREVIEW_REQUIRED",
+        message: "Run previewDominationRoadImport with the same payload first, then commit with its preview_token."
+      })
+    );
+  }
+  const { data, error: dbError } = await client.rpc("admin_road_bulk", {
+    p_payload: clean(input),
+    p_commit: commit,
+    p_preview_token: previewToken ?? null
+  });
+  if (dbError) return fail(structuredError(dbError.message, commit ? "commit" : "preview"));
+  return ok(data);
+}
+var listDominationRoads = defineTool20({
+  name: "listDominationRoads",
+  title: "List Domination roads",
+  description: "Read-only. Every Domination road with its immutable road_id, name, slug, description, sort order, active flag and game count. Start here before any road-level edit.",
+  inputSchema: {},
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async (_input, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    const { data: roads, error: dbError } = await client.from("domination_roads").select("id,name,slug,description,sort_order,is_active").order("sort_order");
+    if (dbError) return fail(dbError.message);
+    const { data: games } = await client.from("domination_games").select("road_id,game_order");
+    return ok({
+      roads: (roads ?? []).map((r) => {
+        const mine = (games ?? []).filter((g) => g.road_id === r.id);
+        return {
+          road_id: r.id,
+          road_name: r.name,
+          slug: r.slug,
+          description: r.description,
+          sort_order: r.sort_order,
+          is_active: r.is_active,
+          game_count: mine.length,
+          game_orders: mine.map((g) => g.game_order).sort((a, b) => a - b)
+        };
+      })
+    });
+  }
+});
+var exportDominationRoad = defineTool20({
+  name: "exportDominationRoad",
+  title: "Export a full Domination road",
+  description: "Read-only. Returns one road exactly in the shape previewDominationRoadImport accepts: road settings plus every game in game_order with its domination_game_id, opponent (and opponent_team_id), difficulty stars, coin reward, pack_reward_id and full ordered roster, plus a rematch summary and warnings (order gaps, empty rosters, missing pack rewards). Edit the JSON and send it straight back.",
+  inputSchema: {
+    road_id: z18.string().uuid().optional(),
+    road_name: z18.string().optional().describe("Case-insensitive exact road name.")
+  },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async (input, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    const { data, error: dbError } = await client.rpc("admin_road_export", { p_ref: clean(input) });
+    if (dbError) return fail(structuredError(dbError.message, "preview"));
+    return ok(data);
+  }
+});
+var previewDominationRoadImport = defineTool20({
+  name: "previewDominationRoadImport",
+  title: "Preview a bulk Domination road import",
+  description: "Bulk-import or replace an entire Domination road in one atomic operation: create or rename the road, set its description/sort order/active flag, and create, update, reorder or delete its games and opponent rosters. Rematch-safe: games are targeted by domination_game_id or game_order only, never by opponent name, so one opponent may legally appear at several game_orders. Validates unique game_order, difficulty range 1-5, non-negative rewards and every opponent_team_id / pack_reward_id / roster reference, reporting the offending game_order and field. With mode='replace' the road ends up matching the payload exactly (omitted game_orders on THAT road are deleted)." + bulkSafety,
+  inputSchema: bulkFields,
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  handler: (input, ctx) => runBulk(ctx, input, false)
+});
+var commitDominationRoadImport = defineTool20({
+  name: "commitDominationRoadImport",
+  title: "Commit a bulk Domination road import",
+  description: "Applies a road import previously returned by previewDominationRoadImport. Send the byte-identical payload plus its preview_token; a differing payload is rejected with PREVIEW_MISMATCH and writes nothing. Tokens are single-use and the whole import runs as one transaction.",
+  inputSchema: {
+    ...bulkFields,
+    preview_token: z18.string().describe("The preview_token from the matching preview.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  handler: ({ preview_token, ...rest }, ctx) => runBulk(ctx, rest, true, preview_token)
+});
+var roadTarget = {
+  road_id: z18.string().uuid().optional().describe("Preferred target."),
+  road_name: z18.string().optional().describe("Case-insensitive exact road name.")
+};
+async function runDelete(ctx, input, commit, previewToken) {
+  const { client, error } = await adminClient(ctx);
+  if (error) return error;
+  if (commit && !previewToken) {
+    return fail(
+      JSON.stringify({
+        error_code: "PREVIEW_REQUIRED",
+        message: "Run previewDeleteDominationRoad first and commit with its preview_token."
+      })
+    );
+  }
+  const { data, error: dbError } = await client.rpc("admin_road_delete", {
+    p_payload: clean(input),
+    p_commit: commit,
+    p_preview_token: previewToken ?? null
+  });
+  if (dbError) return fail(structuredError(dbError.message, commit ? "commit" : "preview"));
+  return ok(data);
+}
+var previewDeleteDominationRoad = defineTool20({
+  name: "previewDeleteDominationRoad",
+  title: "Preview deleting a whole Domination road",
+  description: "Reports exactly what deleting an entire road would remove \u2014 every game with its id, game_order and opponent, plus the total roster rows \u2014 and writes nothing. Player cards themselves are never deleted. Requires explicit user approval before committing.",
+  inputSchema: roadTarget,
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  handler: (input, ctx) => runDelete(ctx, input, false)
+});
+var commitDeleteDominationRoad = defineTool20({
+  name: "commitDeleteDominationRoad",
+  title: "Delete a whole Domination road",
+  description: "DESTRUCTIVE. Deletes a road together with all of its games and their rosters. Requires the single-use preview_token from previewDeleteDominationRoad for the same road.",
+  inputSchema: { ...roadTarget, preview_token: z18.string() },
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  handler: ({ preview_token, ...rest }, ctx) => runDelete(ctx, rest, true, preview_token)
+});
+var dominationRoadTools = [
+  listDominationRoads,
+  exportDominationRoad,
+  previewDominationRoadImport,
+  commitDominationRoadImport,
+  previewDeleteDominationRoad,
+  commitDeleteDominationRoad
+];
+
+// src/lib/mcp/tools/planning-reads.ts
+import { defineTool as defineTool21 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z19 } from "npm:zod@^3.25.76";
 async function resolvePlayer(client, input) {
   const { data, error } = await client.rpc("admin_resolve_player", {
     p_target: {
@@ -1350,11 +1510,11 @@ async function resolvePlayer(client, input) {
   return { id: data };
 }
 var targetFields2 = {
-  player_id: z18.string().uuid().optional(),
-  card_key: z18.string().optional(),
-  name: z18.string().optional().describe("Exact display name. Rejected if several cards share it.")
+  player_id: z19.string().uuid().optional(),
+  card_key: z19.string().optional(),
+  name: z19.string().optional().describe("Exact display name. Rejected if several cards share it.")
 };
-var getEvoChain = defineTool20({
+var getEvoChain = defineTool21({
   name: "getEvoChain",
   title: "Get a card's full evolution chain",
   description: "Read-only. Returns the complete evolution sequence a card belongs to \u2014 every step in order with its source card, destination card, gem tiers, challenge type/stat/target, stat boosts and new badges \u2014 so you can extend or edit the chain without guessing ids.",
@@ -1390,11 +1550,11 @@ var getEvoChain = defineTool20({
     return ok({ requested_player_id: resolved.id, root_player_id: rootId, steps: chain, cards: cards ?? [] });
   }
 });
-var getPlayerVersions = defineTool20({
+var getPlayerVersions = defineTool21({
   name: "getPlayerVersions",
   title: "List every card sharing a display name",
   description: "Read-only. Duplicate display names are legal, so use this before targeting a player by name: it returns every card with that name plus its player_id, card_key, card_variant, evo_stage, rating, gem tier and team, letting you pick the exact card to edit.",
-  inputSchema: { name: z18.string().min(1).describe("Display name to look up (case-insensitive, exact).") },
+  inputSchema: { name: z19.string().min(1).describe("Display name to look up (case-insensitive, exact).") },
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ name }, ctx) => {
     const { client, error } = await userClient(ctx);
@@ -1404,13 +1564,13 @@ var getPlayerVersions = defineTool20({
     return ok({ name, count: data?.length ?? 0, versions: data ?? [] });
   }
 });
-var getTeamRoster = defineTool20({
+var getTeamRoster = defineTool21({
   name: "getTeamRoster",
   title: "Get a team's roster in slot order",
   description: "Read-only. Returns the team plus its roster in slot order with each card's player_id, card_key, name, rating and gem tier \u2014 the exact input shape previewTeamBatch expects for a roster replacement.",
   inputSchema: {
-    team_id: z18.string().uuid().optional(),
-    name: z18.string().optional().describe("Exact team name.")
+    team_id: z19.string().uuid().optional(),
+    name: z19.string().optional().describe("Exact team name.")
   },
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async (input, ctx) => {
@@ -1426,11 +1586,11 @@ var getTeamRoster = defineTool20({
     return ok({ team, roster: roster ?? [], roster_size: roster?.length ?? 0 });
   }
 });
-var getDominationRoad = defineTool20({
+var getDominationRoad = defineTool21({
   name: "getDominationRoad",
   title: "Get a Domination road template",
   description: "Read-only. Returns every game on a Domination road in game_order with its immutable domination_game_id, opponent_team_id, difficulty stars, coin/pack rewards (pack_reward_id plus the resolved pack name) and full ordered opponent roster \u2014 the exact structure previewDominationRoad accepts, so you can edit and send it straight back. Rematches are visible as separate games sharing an opponent_name at different game_orders; always target games by domination_game_id or game_order, never by opponent name. Omit road_name to list all road names with their game counts.",
-  inputSchema: { road_name: z18.string().optional().describe("Road to fetch. Omit to list all roads.") },
+  inputSchema: { road_name: z19.string().optional().describe("Road to fetch. Omit to list all roads.") },
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ road_name }, ctx) => {
     const { client, error } = await userClient(ctx);
@@ -1477,14 +1637,14 @@ var getDominationRoad = defineTool20({
     });
   }
 });
-var getBatchReferences = defineTool20({
+var getBatchReferences = defineTool21({
   name: "getBatchReferences",
   title: "Get ids and keys for batch payloads",
   description: "Read-only. Returns the immutable identifiers batch tools accept: gem tiers, teams, collections, sub-collections, badges, signature traits, packs, runs, roads and (optionally) player cards with player_id + card_key. Call this before building a batch so every reference is an id or card_key rather than a fuzzy name.",
   inputSchema: {
-    include_players: z18.boolean().default(false).describe("Include player cards (id, card_key, name, rating). Large."),
-    player_search: z18.string().optional().describe("Only players whose name contains this text."),
-    limit: z18.number().int().min(1).max(500).default(200)
+    include_players: z19.boolean().default(false).describe("Include player cards (id, card_key, name, rating). Large."),
+    player_search: z19.string().optional().describe("Only players whose name contains this text."),
+    limit: z19.number().int().min(1).max(500).default(200)
   },
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ include_players, player_search, limit }, ctx) => {
@@ -1530,6 +1690,7 @@ var mcp_default = defineMcp({
     list_rows_default,
     ...planningReadTools,
     ...batchTools,
+    ...dominationRoadTools,
     ...dominationDeleteTools,
     create_players_default,
     upsert_player_default,

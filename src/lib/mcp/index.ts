@@ -18,6 +18,7 @@ import updateRows from "./tools/update-rows";
 import deleteRows from "./tools/delete-rows";
 import { batchTools } from "./tools/batch-tools";
 import { dominationDeleteTools } from "./tools/domination-delete";
+import { dominationRoadTools } from "./tools/domination-roads";
 import { planningReadTools } from "./tools/planning-reads";
 
 
@@ -41,7 +42,9 @@ export default defineMcp({
     listRows,
     ...planningReadTools,
     ...batchTools,
+    ...dominationRoadTools,
     ...dominationDeleteTools,
+
 
     createPlayers,
     upsertPlayer,
