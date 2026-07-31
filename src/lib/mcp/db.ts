@@ -77,6 +77,7 @@ export const SEARCH_COLUMN: Partial<Record<ReadTable, string>> = {
   teams: "name",
   runs: "name",
   run_rank_rewards: "rank_name",
+  domination_roads: "name",
   domination_games: "opponent_name",
   challenges: "name",
   gem_tasks: "title",
