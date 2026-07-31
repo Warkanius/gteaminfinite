@@ -13,6 +13,7 @@ export const READ_TABLES = [
   "runs",
   "run_players",
   "run_rank_rewards",
+  "domination_roads",
   "domination_games",
   "domination_game_players",
   "challenges",

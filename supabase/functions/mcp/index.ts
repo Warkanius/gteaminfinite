@@ -142,6 +142,7 @@ var READ_TABLES = [
   "runs",
   "run_players",
   "run_rank_rewards",
+  "domination_roads",
   "domination_games",
   "domination_game_players",
   "challenges",
@@ -277,7 +278,7 @@ async function callFunction(ctx, name, body) {
 var get_diagnostics_default = defineTool2({
   name: "get_diagnostics",
   title: "Get content diagnostics",
-  description: "Reports incomplete or broken content: unrated players, teams with fewer than 3 cards, Runs with no opponent roster, Domination games with no roster, packs with no pool or no odds or odds that do not total 100, locker codes with malformed reward payloads, and storylines whose linked entities no longer exist. Call this first when asked to fill gaps.",
+  description: "Reports incomplete or broken content: unrated players, teams with fewer than 3 cards, Runs with no opponent roster, Domination games with no roster, Domination roads with order gaps / duplicate orders / missing pack rewards / empty rosters, Domination games detached from any road, packs with no pool or no odds or odds that do not total 100, locker codes with malformed reward payloads, and storylines whose linked entities no longer exist. Call this first when asked to fill gaps.",
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async (_input, ctx) => {
