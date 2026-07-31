@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_preview_tokens: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          kind: string
+          normalized_payload: Json
+          payload_hash: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          kind: string
+          normalized_payload: Json
+          payload_hash: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          kind?: string
+          normalized_payload?: Json
+          payload_hash?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       auction_listings: {
         Row: {
           bought_at: string | null
@@ -485,6 +521,7 @@ export type Database = {
           from_tier_id: string | null
           id: string
           new_badges: Json
+          new_traits: Json
           player_card_id: string
           stat_boosts: Json
           step_order: number
@@ -501,6 +538,7 @@ export type Database = {
           from_tier_id?: string | null
           id?: string
           new_badges?: Json
+          new_traits?: Json
           player_card_id: string
           stat_boosts?: Json
           step_order?: number
@@ -517,6 +555,7 @@ export type Database = {
           from_tier_id?: string | null
           id?: string
           new_badges?: Json
+          new_traits?: Json
           player_card_id?: string
           stat_boosts?: Json
           step_order?: number
@@ -1212,12 +1251,16 @@ export type Database = {
       player_cards: {
         Row: {
           avatar_url: string | null
+          base_card_id: string | null
           card_animation: string | null
           card_color_primary: string | null
           card_color_secondary: string | null
           card_glow_color: string | null
+          card_key: string
+          card_variant: string | null
           collection_id: string | null
           created_at: string
+          evo_stage: number
           gem_name: string | null
           gem_tier_id: string | null
           id: string
@@ -1253,12 +1296,16 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          base_card_id?: string | null
           card_animation?: string | null
           card_color_primary?: string | null
           card_color_secondary?: string | null
           card_glow_color?: string | null
+          card_key?: string
+          card_variant?: string | null
           collection_id?: string | null
           created_at?: string
+          evo_stage?: number
           gem_name?: string | null
           gem_tier_id?: string | null
           id?: string
@@ -1294,12 +1341,16 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          base_card_id?: string | null
           card_animation?: string | null
           card_color_primary?: string | null
           card_color_secondary?: string | null
           card_glow_color?: string | null
+          card_key?: string
+          card_variant?: string | null
           collection_id?: string | null
           created_at?: string
+          evo_stage?: number
           gem_name?: string | null
           gem_tier_id?: string | null
           id?: string
@@ -1334,6 +1385,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "player_cards_base_card_id_fkey"
+            columns: ["base_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "player_cards_collection_id_fkey"
             columns: ["collection_id"]
@@ -2217,7 +2275,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_apply_batch: {
+        Args: {
+          p_commit?: boolean
+          p_kind?: string
+          p_payload: Json
+          p_preview_token?: string
+        }
+        Returns: Json
+      }
       admin_apply_content: {
+        Args: { p_commit?: boolean; p_kind: string; p_payload: Json }
+        Returns: Json
+      }
+      admin_apply_extra: {
         Args: { p_commit?: boolean; p_kind: string; p_payload: Json }
         Returns: Json
       }
@@ -2225,7 +2296,18 @@ export type Database = {
         Args: { p_commit?: boolean; p_payload: Json }
         Returns: Json
       }
+      admin_diff_fields: {
+        Args: { p_fields: Json; p_id: string; p_table: string }
+        Returns: Json
+      }
+      admin_player_matches: { Args: { p_name: string }; Returns: Json }
+      admin_resolve_player: { Args: { p_ref: Json }; Returns: string }
       admin_resolve_player_ids: { Args: { p_names: Json }; Returns: string[] }
+      admin_slugify: { Args: { p_text: string }; Returns: string }
+      admin_substitute_refs: {
+        Args: { p_item: Json; p_refs: Json }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

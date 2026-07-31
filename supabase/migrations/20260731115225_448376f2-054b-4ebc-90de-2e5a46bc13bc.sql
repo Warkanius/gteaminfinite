@@ -1,0 +1,1 @@
+ALTER FUNCTION public.admin_apply_batch(jsonb, boolean, text, text) SET search_path = public, extensions;
