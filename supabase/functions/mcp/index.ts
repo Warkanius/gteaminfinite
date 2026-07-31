@@ -296,7 +296,8 @@ var get_diagnostics_default = defineTool2({
       packOdds,
       codes,
       storylines,
-      links
+      links,
+      roads
     ] = await Promise.all([
       client.from("player_cards").select("id, name, rating, stat_3pt, stat_fin, stat_mid"),
       client.from("teams").select("id, name"),

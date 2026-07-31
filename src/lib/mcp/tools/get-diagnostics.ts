@@ -26,6 +26,7 @@ export default defineTool({
       codes,
       storylines,
       links,
+      roads,
     ] = await Promise.all([
       client.from("player_cards").select("id, name, rating, stat_3pt, stat_fin, stat_mid"),
       client.from("teams").select("id, name"),
