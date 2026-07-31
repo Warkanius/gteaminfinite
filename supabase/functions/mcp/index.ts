@@ -383,6 +383,26 @@ var get_diagnostics_default = defineTool2({
         });
       }
     });
+    const brokenRoads = (roads.data ?? []).map((r) => {
+      const mine = (doms.data ?? []).filter((g) => g.road_id === r.id);
+      const orders = mine.map((g) => g.game_order).sort((a, b) => a - b);
+      const issues = [];
+      if (!orders.length) issues.push("road has no games");
+      else {
+        if (orders[0] !== 1) issues.push(`game_order starts at ${orders[0]} instead of 1`);
+        const gaps = [];
+        for (let i = orders[0]; i <= orders[orders.length - 1]; i++) if (!orders.includes(i)) gaps.push(i);
+        if (gaps.length) issues.push(`missing game_order ${gaps.join(", ")}`);
+        const dupes = orders.filter((o, i) => orders.indexOf(o) !== i);
+        if (dupes.length) issues.push(`duplicate game_order ${Array.from(new Set(dupes)).join(", ")}`);
+        const noPack = mine.filter((g) => !g.pack_reward_id).map((g) => g.game_order);
+        if (noPack.length) issues.push(`no pack_reward_id on game_order ${noPack.sort((a, b) => a - b).join(", ")}`);
+        const emptyRosters = mine.filter((g) => (domCounts.get(g.id) ?? 0) === 0).map((g) => g.game_order);
+        if (emptyRosters.length) issues.push(`empty roster on game_order ${emptyRosters.sort((a, b) => a - b).join(", ")}`);
+      }
+      return { road_id: r.id, road_name: r.name, games: orders.length, is_active: r.is_active, issues };
+    }).filter((r) => r.issues.length);
+    const orphanGames = (doms.data ?? []).filter((g) => !(roads.data ?? []).some((r) => r.id === g.road_id)).map((g) => ({ domination_game_id: g.id, road_name: g.road_name, game_order: g.game_order }));
     const payload = {
       unrated_players: unrated,
       incomplete_team_rosters: (teams.data ?? []).map((t) => ({ name: t.name, cards: teamCounts.get(t.id) ?? 0 })).filter((t) => t.cards < 3),
@@ -392,6 +412,8 @@ var get_diagnostics_default = defineTool2({
         opponent: d.opponent_name,
         cards: domCounts.get(d.id) ?? 0
       })).filter((d) => d.cards < 3),
+      broken_domination_roads: brokenRoads,
+      orphaned_domination_games: orphanGames,
       broken_packs: brokenPacks,
       malformed_locker_codes: malformedCodes,
       broken_storyline_links: brokenLinks
@@ -403,6 +425,8 @@ var get_diagnostics_default = defineTool2({
         incomplete_team_rosters: payload.incomplete_team_rosters.length,
         incomplete_runs: payload.incomplete_runs.length,
         incomplete_domination_paths: payload.incomplete_domination_paths.length,
+        broken_domination_roads: payload.broken_domination_roads.length,
+        orphaned_domination_games: payload.orphaned_domination_games.length,
         broken_packs: payload.broken_packs.length,
         malformed_locker_codes: payload.malformed_locker_codes.length,
         broken_storyline_links: payload.broken_storyline_links.length
