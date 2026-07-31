@@ -275,13 +275,36 @@ export default function AdminTeams() {
     queryKey: ["admin-dom"], queryFn: async () => { const { data, error } = await supabase.from("domination_games").select("*").order("game_order"); if (error) throw error; return data; },
   });
 
+  const { data: domRoads = [] } = useQuery({
+    queryKey: ["admin-dom-roads"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("domination_roads").select("*").order("sort_order");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const domSave = useMutation({
     mutationFn: async () => {
-      const payload = { ...domForm, pack_reward: domForm.pack_reward || null };
-      if (domEditId) { const { error } = await supabase.from("domination_games").update(payload).eq("id", domEditId); if (error) throw error; }
-      else { const { error } = await supabase.from("domination_games").insert(payload); if (error) throw error; }
+      const roadName = domForm.road_name.trim();
+      if (!roadName) throw new Error("Road name is required");
+      const road = domRoads.find((r) => r.name.toLowerCase() === roadName.toLowerCase());
+      const payload = {
+        ...domForm,
+        road_name: roadName,
+        road_id: road?.id,
+        pack_reward: domForm.pack_reward || null,
+      };
+      // road_id is resolved (or the road auto-created) by the database trigger.
+      if (domEditId) { const { error } = await supabase.from("domination_games").update(payload as never).eq("id", domEditId); if (error) throw error; }
+      else { const { error } = await supabase.from("domination_games").insert(payload as never); if (error) throw error; }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-dom"] }); setDomDialog(false); toast.success("Saved"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-dom"] });
+      qc.invalidateQueries({ queryKey: ["admin-dom-roads"] });
+      setDomDialog(false);
+      toast.success("Saved");
+    },
     onError: (e) => toast.error(e.message),
   });
 
