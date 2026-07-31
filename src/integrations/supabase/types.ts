@@ -448,6 +448,7 @@ export type Database = {
           opponent_team_id: string | null
           pack_reward: string | null
           pack_reward_id: string | null
+          road_id: string
           road_name: string
         }
         Insert: {
@@ -460,6 +461,7 @@ export type Database = {
           opponent_team_id?: string | null
           pack_reward?: string | null
           pack_reward_id?: string | null
+          road_id: string
           road_name: string
         }
         Update: {
@@ -472,6 +474,7 @@ export type Database = {
           opponent_team_id?: string | null
           pack_reward?: string | null
           pack_reward_id?: string | null
+          road_id?: string
           road_name?: string
         }
         Relationships: [
@@ -489,7 +492,47 @@ export type Database = {
             referencedRelation: "packs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "domination_games_road_id_fkey"
+            columns: ["road_id"]
+            isOneToOne: false
+            referencedRelation: "domination_roads"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      domination_roads: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       dynamic_duos: {
         Row: {
@@ -2336,6 +2379,15 @@ export type Database = {
       }
       admin_resolve_player: { Args: { p_ref: Json }; Returns: string }
       admin_resolve_player_ids: { Args: { p_names: Json }; Returns: string[] }
+      admin_road_bulk: {
+        Args: { p_commit?: boolean; p_payload: Json; p_preview_token?: string }
+        Returns: Json
+      }
+      admin_road_delete: {
+        Args: { p_commit?: boolean; p_payload: Json; p_preview_token?: string }
+        Returns: Json
+      }
+      admin_road_export: { Args: { p_ref: Json }; Returns: Json }
       admin_road_raise: {
         Args: {
           p_code: string

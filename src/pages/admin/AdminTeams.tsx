@@ -5,6 +5,7 @@ import { computeOVR } from "@/lib/ovrUtils";
 import { DataTable, Column } from "@/components/admin/DataTable";
 import { FormDialog } from "@/components/admin/FormDialog";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import { RoadBulkImport } from "@/components/admin/RoadBulkImport";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -275,13 +276,60 @@ export default function AdminTeams() {
     queryKey: ["admin-dom"], queryFn: async () => { const { data, error } = await supabase.from("domination_games").select("*").order("game_order"); if (error) throw error; return data; },
   });
 
+  const { data: domRoads = [] } = useQuery({
+    queryKey: ["admin-dom-roads"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("domination_roads").select("*").order("sort_order");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const domSave = useMutation({
     mutationFn: async () => {
-      const payload = { ...domForm, pack_reward: domForm.pack_reward || null };
-      if (domEditId) { const { error } = await supabase.from("domination_games").update(payload).eq("id", domEditId); if (error) throw error; }
-      else { const { error } = await supabase.from("domination_games").insert(payload); if (error) throw error; }
+      const roadName = domForm.road_name.trim();
+      if (!roadName) throw new Error("Road name is required");
+      const road = domRoads.find((r) => r.name.toLowerCase() === roadName.toLowerCase());
+      const payload = {
+        ...domForm,
+        road_name: roadName,
+        road_id: road?.id,
+        pack_reward: domForm.pack_reward || null,
+      };
+      // road_id is resolved (or the road auto-created) by the database trigger.
+      if (domEditId) { const { error } = await supabase.from("domination_games").update(payload as never).eq("id", domEditId); if (error) throw error; }
+      else { const { error } = await supabase.from("domination_games").insert(payload as never); if (error) throw error; }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-dom"] }); setDomDialog(false); toast.success("Saved"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-dom"] });
+      qc.invalidateQueries({ queryKey: ["admin-dom-roads"] });
+      setDomDialog(false);
+      toast.success("Saved");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [roadDeleteName, setRoadDeleteName] = useState<string | null>(null);
+
+  // Whole-road deletion goes through the preview -> commit token protocol so the
+  // server validates the plan before anything is removed.
+  const roadDelete = useMutation({
+    mutationFn: async (roadName: string) => {
+      const road = domRoads.find((r) => r.name === roadName);
+      const ref = road ? { road_id: road.id } : { road_name: roadName };
+      const { data: preview, error: pErr } = await supabase.rpc("admin_road_delete", { p_payload: ref as never, p_commit: false });
+      if (pErr) throw pErr;
+      const token = (preview as any)?.preview_token;
+      if (!token) throw new Error("No preview token returned");
+      const { error } = await supabase.rpc("admin_road_delete", { p_payload: ref as never, p_commit: true, p_preview_token: token });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-dom"] });
+      qc.invalidateQueries({ queryKey: ["admin-dom-roads"] });
+      setRoadDeleteName(null);
+      toast.success("Road deleted");
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -549,6 +597,14 @@ export default function AdminTeams() {
         <div className="flex flex-wrap gap-2">
           <ChatGPTExchange title="Teams · AI Import / Export" entity={TeamsExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-teams"] })} />
           <ChatGPTExchange title="Runs · AI Import / Export" entity={RunsExchange} onCommitted={() => qc.invalidateQueries({ queryKey: ["admin-runs"] })} />
+          <RoadBulkImport
+            roads={domRoads.map((r) => ({ id: r.id, name: r.name }))}
+            onCommitted={() => {
+              qc.invalidateQueries({ queryKey: ["admin-dom"] });
+              qc.invalidateQueries({ queryKey: ["admin-dom-roads"] });
+              qc.invalidateQueries({ queryKey: ["admin-dom-players"] });
+            }}
+          />
         </div>
       </div>
 
@@ -587,7 +643,19 @@ export default function AdminTeams() {
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 data-[state=open]:border-b">
                         <div className="flex items-center justify-between w-full pr-4">
                           <span className="font-semibold text-lg">{road}</span>
-                          <span className="text-sm text-muted-foreground font-normal">{games.length} Games</span>
+                          <span className="flex items-center gap-2 text-sm text-muted-foreground font-normal">
+                            {games.length} Games
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              title="Delete entire road"
+                              className="p-1 rounded hover:bg-destructive/10"
+                              onClick={(e) => { e.stopPropagation(); setRoadDeleteName(road); }}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setRoadDeleteName(road); } }}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </span>
+                          </span>
                         </div>
                       </AccordionTrigger>
                       <AccordionContent className="p-0">
@@ -952,6 +1020,7 @@ export default function AdminTeams() {
 
       <ConfirmDialog open={!!teamDeleteId} onOpenChange={(o) => !o && setTeamDeleteId(null)} title="Delete Team" description="This will permanently delete this team and its roster." onConfirm={() => teamDeleteId && teamDelete.mutate(teamDeleteId)} loading={teamDelete.isPending} />
       <ConfirmDialog open={!!domDeleteId} onOpenChange={(o) => !o && setDomDeleteId(null)} title="Delete Game" description="This will permanently delete this domination game." onConfirm={() => domDeleteId && domDelete.mutate(domDeleteId)} loading={domDelete.isPending} />
+      <ConfirmDialog open={!!roadDeleteName} onOpenChange={(o) => !o && setRoadDeleteName(null)} title="Delete Road" description={`This permanently deletes the road "${roadDeleteName ?? ""}" with all of its games and rosters. Player cards are not affected.`} onConfirm={() => roadDeleteName && roadDelete.mutate(roadDeleteName)} loading={roadDelete.isPending} />
       <ConfirmDialog open={!!runDeleteId} onOpenChange={(o) => !o && setRunDeleteId(null)} title="Delete Run" description="This will permanently delete this run." onConfirm={() => runDeleteId && runDelete.mutate(runDeleteId)} loading={runDelete.isPending} />
 
       <PlayerQuickEdit playerId={quickEditPlayerId} onClose={() => setQuickEditPlayerId(null)} onSwitchPlayer={setQuickEditPlayerId} />

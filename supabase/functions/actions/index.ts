@@ -15,7 +15,7 @@ const err = (message: string, status: number) => json({ error: message }, status
 
 const SEARCH_COLUMN: Record<string, string> = {
   player_cards: "name", teams: "name", runs: "name", run_rank_rewards: "rank_name",
-  domination_games: "opponent_name", challenges: "name", gem_tasks: "title", gem_tiers: "name",
+  domination_roads: "name", domination_games: "opponent_name", challenges: "name", gem_tasks: "title", gem_tiers: "name",
   dynamic_duos: "name", collections: "name", sub_collections: "name", badges: "name",
   signature_traits: "name", packs: "name", locker_codes: "code", storylines: "title",
   social_creators: "name", social_posts: "content", location_accounts: "name",
@@ -82,6 +82,52 @@ Deno.serve(async (req) => {
     if (path === "/entity" && req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       return await entity(supabase, body);
+    }
+
+    // ------------------------------------------------------ Domination roads
+    if (path === "/domination-roads" && req.method === "GET") {
+      const { data: roads, error } = await supabase
+        .from("domination_roads")
+        .select("id,name,slug,description,sort_order,is_active")
+        .order("sort_order");
+      if (error) return err(error.message, 400);
+      const { data: games } = await supabase.from("domination_games").select("road_id,game_order");
+      return json({
+        roads: (roads ?? []).map((r: any) => {
+          const mine = (games ?? []).filter((g: any) => g.road_id === r.id);
+          return {
+            road_id: r.id, road_name: r.name, slug: r.slug, description: r.description,
+            sort_order: r.sort_order, is_active: r.is_active,
+            game_count: mine.length,
+            game_orders: mine.map((g: any) => g.game_order).sort((a: number, b: number) => a - b),
+          };
+        }),
+      });
+    }
+
+    if (path === "/domination-roads/export" && req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      return await rpcResult(supabase.rpc("admin_road_export", { p_ref: body }));
+    }
+
+    const roadMatch = path.match(/^\/domination-roads\/(preview|commit)$/);
+    if (roadMatch && req.method === "POST") {
+      const commit = roadMatch[1] === "commit";
+      const { preview_token, ...payload } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      if (commit && !preview_token) return err("preview_token is required to commit: preview the same body first.", 400);
+      return await rpcResult(
+        supabase.rpc("admin_road_bulk", { p_payload: payload, p_commit: commit, p_preview_token: preview_token ?? null }),
+      );
+    }
+
+    const roadDelete = path.match(/^\/domination-roads\/delete\/(preview|commit)$/);
+    if (roadDelete && req.method === "POST") {
+      const commit = roadDelete[1] === "commit";
+      const { preview_token, ...payload } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      if (commit && !preview_token) return err("preview_token is required to commit: preview the same body first.", 400);
+      return await rpcResult(
+        supabase.rpc("admin_road_delete", { p_payload: payload, p_commit: commit, p_preview_token: preview_token ?? null }),
+      );
     }
 
     const m = path.match(/^\/([a-z-]+)\/(preview|commit)$/);
