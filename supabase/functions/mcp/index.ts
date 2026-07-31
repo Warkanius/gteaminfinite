@@ -977,13 +977,444 @@ var delete_rows_default = defineTool17({
   }
 });
 
+// src/lib/mcp/tools/batch-tools.ts
+import { defineTool as defineTool18 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z16 } from "npm:zod@^3.25.76";
+
+// src/lib/mcp/batch.ts
+import { z as z15 } from "npm:zod@^3.25.76";
+var modeField = z15.enum(["preview", "commit"]).default("preview").describe("`preview` validates everything and writes nothing. `commit` applies the approved plan.");
+var previewTokenField = z15.string().optional().describe(
+  "Required for mode='commit': the preview_token returned by the matching preview. The commit is rejected unless the payload hashes identically to that preview, and each token works only once."
+);
+var STAT_KEYS = [
+  "stat_3pt",
+  "stat_mid",
+  "stat_fin",
+  "stat_dnk",
+  "stat_ast",
+  "stat_stl",
+  "stat_reb",
+  "stat_blk",
+  "stat_int"
+];
+var CHALLENGE_TYPES = [
+  "points_scored",
+  "games_won",
+  "total_stat",
+  "single_game_stat",
+  "multi_condition"
+];
+var itemArray = (what) => z15.array(z15.record(z15.string(), z15.any())).min(1).describe(what);
+async function runBatch(ctx, payload, mode8, previewToken, kind) {
+  const { client, error } = await adminClient(ctx);
+  if (error) return error;
+  if (mode8 === "commit" && !previewToken) {
+    return fail(
+      JSON.stringify({
+        error_code: "PREVIEW_REQUIRED",
+        message: "Run the same payload with mode='preview' first, get user approval, then commit with its preview_token."
+      })
+    );
+  }
+  const { data, error: dbError } = await client.rpc("admin_apply_batch", {
+    p_payload: clean(payload),
+    p_commit: mode8 === "commit",
+    p_preview_token: previewToken ?? null,
+    p_kind: kind
+  });
+  if (dbError) return fail(structuredError(dbError.message, mode8));
+  return ok(data);
+}
+function structuredError(message, mode8) {
+  const codeMatch = message.match(/^([A-Z_]{3,}):\s*([\s\S]*)$/);
+  let matches;
+  let text = message;
+  if (codeMatch) text = codeMatch[2];
+  const m = text.match(/matches=(\[[\s\S]*\])\s*$/);
+  if (m) {
+    try {
+      matches = JSON.parse(m[1]);
+      text = text.slice(0, m.index).trim();
+    } catch {
+    }
+  }
+  return JSON.stringify(
+    {
+      error_code: codeMatch ? codeMatch[1] : "INVALID_PAYLOAD",
+      message: text,
+      mode: mode8,
+      wrote_anything: false,
+      ...matches ? { matches } : {}
+    },
+    null,
+    2
+  );
+}
+var SAFETY = " Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.";
+var safetyNote = SAFETY;
+
+// src/lib/mcp/tools/batch-tools.ts
+function pair(opts) {
+  const previewTool = defineTool18({
+    name: `preview${opts.base}`,
+    title: `Preview: ${opts.title}`,
+    description: `Admin only. ZERO WRITES. ${opts.description} Returns creates, updates, deletes, replacements, warnings, resolved_references, normalized_payload, payload_hash and a one-time preview_token. ${safetyNote}`,
+    inputSchema: opts.fields,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    handler: async (input, ctx) => runBatch(ctx, opts.toPayload(input), "preview", void 0, opts.kind)
+  });
+  const commitTool = defineTool18({
+    name: `commit${opts.base}`,
+    title: `Commit: ${opts.title}`,
+    description: `Admin only. Applies a previously previewed and user-approved payload atomically. The payload must be byte-identical to the preview it came from; otherwise the commit is rejected with PREVIEW_MISMATCH and nothing is written.`,
+    inputSchema: {
+      ...opts.fields,
+      preview_token: z16.string().describe("The preview_token returned by the matching preview. Single use.")
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    handler: async (input, ctx) => {
+      const { preview_token, ...rest } = input;
+      return runBatch(ctx, opts.toPayload(rest), "commit", preview_token, opts.kind);
+    }
+  });
+  return [previewTool, commitTool];
+}
+var GROUP_KEYS = [
+  "players",
+  "teams",
+  "runs",
+  "domination_roads",
+  "domination_games",
+  "packs",
+  "locker_codes",
+  "challenges",
+  "dynamic_duos",
+  "evo_paths",
+  "storylines"
+];
+var groupFields = Object.fromEntries(
+  GROUP_KEYS.map((k) => [
+    k,
+    z16.array(z16.record(z16.string(), z16.any())).optional().describe(
+      `${k} to create/update. Each item may carry action ('create' | 'update' | 'upsert' | 'replace'), an immutable id (player_id / team_id / run_id / pack_id / challenge_id / domination_game_id / evo_path_id / storyline_id), a temp_ref for later items to reference, and any of the fields the matching single-entity tool accepts.`
+    )
+  ])
+);
+var contentBatch = pair({
+  base: "ContentBatch",
+  title: "mixed content batch",
+  kind: "content_batch",
+  description: "Preview one batch spanning any mix of players, teams, runs, domination roads, domination games, packs, locker codes, challenges, dynamic duos, evo paths and storylines. Groups execute in dependency order (players first, then teams/runs/roads, then evo paths and storylines). Items may declare temp_ref: 'ref:player:my-new-card' and later items may point at it with e.g. destination_player_ref or inside a roster array; those refs resolve inside the same transaction. Names resolve by exact case-insensitive match only \u2014 ambiguous player names are rejected with every matching card listed.",
+  fields: groupFields,
+  toPayload: (input) => input
+});
+var playerBatch = pair({
+  base: "PlayerBatch",
+  title: "player card batch",
+  kind: "player_batch",
+  description: "Preview a batch of player-card creates/updates. Target each card with player_id (preferred), card_key, or an exact name \u2014 duplicate display names are allowed, so a name that matches more than one card is rejected with all matches. Supported fields: new_name, new_card_key, card_variant, evo_stage, base_card_id, gem_tier/gem_tier_id, team/team_id, collection(_id), sub_collection(_id), position1/2, rating (decimals kept), run_rating, market_value, social_handle, avatar_url, card colours/animation, all stat_* and run_stat_* keys, plus badges and traits. Sending badges or traits REPLACES every assignment on that card and is reported as a destructive replacement with the removed entries.",
+  fields: {
+    players: itemArray("Player card entries. Each needs player_id, card_key, or name.")
+  },
+  toPayload: (input) => ({ players: input.players })
+});
+var teamBatch = pair({
+  base: "TeamBatch",
+  title: "team and roster batch",
+  kind: "team_batch",
+  description: "Preview a batch of team creates/updates, optionally replacing rosters. Target a team with team_id or its exact name. Roster entries may be { player_id }, { card_key } or { player_name } (exact, unique). A supplied roster replaces the WHOLE roster and is only honoured when replace_roster: true (otherwise it is skipped with a ROSTER_IGNORED warning). Slot order follows array order; the preview reports added, removed and reordered cards.",
+  fields: {
+    teams: itemArray("Team entries: team_id or name, plus category, unlock_cost, roster, replace_roster.")
+  },
+  toPayload: (input) => ({ teams: input.teams })
+});
+var dominationRoad = pair({
+  base: "DominationRoad",
+  title: "complete Domination road",
+  kind: "domination_road",
+  description: "Preview an entire Domination road in one operation: every game's order, opponent, difficulty stars (1-5), coin/pack rewards and full opponent roster. Validates unique game_order, difficulty range, reward values, team/player references and complete rosters. With replace_road: true, games on THAT road only that are absent from the payload are deleted (reported under deletes).",
+  fields: {
+    road_name: z16.string().min(1).describe("Road the games belong to, e.g. 'Tortuga'."),
+    replace_road: z16.boolean().optional().describe("DESTRUCTIVE: delete games on this road that are not in `games`."),
+    games: z16.array(
+      z16.object({
+        domination_game_id: z16.string().uuid().optional(),
+        game_order: z16.number().int().min(1),
+        opponent_name: z16.string().optional(),
+        opponent_team_id: z16.string().uuid().optional(),
+        difficulty_stars: z16.number().int().min(1).max(5).optional(),
+        coin_reward: z16.number().int().min(0).optional(),
+        pack_reward: z16.string().nullable().optional(),
+        roster: z16.array(z16.any()).optional().describe("Ordered roster: { player_id } | { card_key } | { player_name } | 'ref:player:...'. DESTRUCTIVE replacement.")
+      })
+    ).min(1)
+  },
+  toPayload: (input) => ({
+    domination_roads: [
+      { road_name: input.road_name, replace_road: input.replace_road, games: input.games }
+    ]
+  })
+});
+var evoPathFields = {
+  evo_path_id: z16.string().uuid().optional().describe("Update an existing path."),
+  source_player_id: z16.string().uuid().optional(),
+  source_card_key: z16.string().optional(),
+  destination_player_id: z16.string().uuid().optional().describe("The upgraded card this path evolves into."),
+  destination_card_key: z16.string().optional(),
+  from_gem_tier_id: z16.string().uuid().optional(),
+  from_gem_tier: z16.string().optional(),
+  to_gem_tier_id: z16.string().uuid().optional(),
+  to_gem_tier: z16.string().optional(),
+  step_order: z16.number().int().min(1).optional(),
+  challenge_description: z16.string().optional(),
+  challenge_type: z16.enum(CHALLENGE_TYPES).optional(),
+  challenge_target: z16.number().int().min(1).optional(),
+  challenge_stat: z16.enum(STAT_KEYS).optional().describe("Required for total_stat and single_game_stat."),
+  stat_boosts: z16.record(z16.string(), z16.number()).optional().describe("Stat key -> boost, e.g. { stat_3pt: 4 }."),
+  new_badges: z16.array(z16.any()).optional(),
+  new_traits: z16.array(z16.any()).optional(),
+  compound_challenges: z16.array(z16.any()).optional().describe("Required for multi_condition.")
+};
+var evoPathDescription = "Validates that the source card exists, that source and destination differ, that the destination chain does not loop back (CIRCULAR_EVO_CHAIN), that any tier change moves upward, that step_order does not collide with another path on the same card, that challenge_stat is present for total_stat / single_game_stat and compound_challenges for multi_condition, and that badge/trait references resolve.";
+var evoPath = pair({
+  base: "EvoPath",
+  title: "single Evo Path",
+  kind: "evo_path",
+  description: `Preview one Evo Path create/update. ${evoPathDescription}`,
+  fields: evoPathFields,
+  toPayload: (input) => ({ evo_paths: [input] })
+});
+var evoPathBatch = pair({
+  base: "EvoPathBatch",
+  title: "Evo Path batch",
+  kind: "evo_path_batch",
+  description: `Preview many Evo Paths at once, e.g. a whole multi-step chain. ${evoPathDescription}`,
+  fields: { evo_paths: itemArray("Evo Path entries, same fields as previewEvoPath.") },
+  toPayload: (input) => ({ evo_paths: input.evo_paths })
+});
+var evoBundle = pair({
+  base: "EvoBundle",
+  title: "Evo bundle (new card + path)",
+  kind: "evo_bundle",
+  description: "Preview a complete evolution bundle in ONE transaction: create the upgraded destination card (with its badges and traits), create the Evo Path from the source card to it, and link source -> destination. If any step fails, the whole bundle rolls back. The destination card gets its own immutable card_key, so it may reuse the source card's display name.",
+  fields: {
+    source_player_id: z16.string().uuid().optional().describe("Source card id (preferred)."),
+    source_card_key: z16.string().optional().describe("Source card_key, if you do not have the id."),
+    destination_player: z16.object({
+      name: z16.string(),
+      card_key: z16.string().describe("Unique immutable key for the new card, e.g. 'dan-hanson-vesper-evo-1'."),
+      card_variant: z16.string().optional(),
+      evo_stage: z16.number().int().optional(),
+      gem_tier: z16.string().optional(),
+      gem_tier_id: z16.string().uuid().optional(),
+      team: z16.string().optional(),
+      team_id: z16.string().uuid().optional(),
+      rating: z16.number().optional(),
+      stats: z16.record(z16.string(), z16.number()).optional().describe("Stat key -> value, e.g. { stat_3pt: 92 }."),
+      badges: z16.array(z16.any()).optional(),
+      traits: z16.array(z16.any()).optional()
+    }).describe("The upgraded card to create."),
+    evo_path: z16.object(evoPathFields).partial().describe("Evo Path fields; source/destination are wired for you.")
+  },
+  toPayload: (input) => {
+    const { stats, ...dest } = input.destination_player ?? {};
+    return {
+      players: [
+        {
+          temp_ref: "ref:player:evo_bundle_destination",
+          action: "create",
+          ...dest,
+          ...stats ?? {},
+          base_card_id: input.source_player_id
+        }
+      ],
+      evo_paths: [
+        {
+          ...input.evo_path ?? {},
+          source_player_id: input.source_player_id,
+          source_card_key: input.source_card_key,
+          destination_player_ref: "ref:player:evo_bundle_destination"
+        }
+      ]
+    };
+  }
+});
+var batchTools = [
+  ...contentBatch,
+  ...playerBatch,
+  ...teamBatch,
+  ...dominationRoad,
+  ...evoPath,
+  ...evoPathBatch,
+  ...evoBundle
+];
+
+// src/lib/mcp/tools/planning-reads.ts
+import { defineTool as defineTool19 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z17 } from "npm:zod@^3.25.76";
+async function resolvePlayer(client, input) {
+  const { data, error } = await client.rpc("admin_resolve_player", {
+    p_target: {
+      player_id: input.player_id ?? null,
+      card_key: input.card_key ?? null,
+      player_name: input.name ?? null
+    }
+  });
+  if (error) return { error: fail(error.message) };
+  return { id: data };
+}
+var targetFields = {
+  player_id: z17.string().uuid().optional(),
+  card_key: z17.string().optional(),
+  name: z17.string().optional().describe("Exact display name. Rejected if several cards share it.")
+};
+var getEvoChain = defineTool19({
+  name: "getEvoChain",
+  title: "Get a card's full evolution chain",
+  description: "Read-only. Returns the complete evolution sequence a card belongs to \u2014 every step in order with its source card, destination card, gem tiers, challenge type/stat/target, stat boosts and new badges \u2014 so you can extend or edit the chain without guessing ids.",
+  inputSchema: targetFields,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  handler: async (input, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    const resolved = await resolvePlayer(client, input);
+    if ("error" in resolved) return resolved.error;
+    const seen = /* @__PURE__ */ new Set();
+    const chain = [];
+    let rootId = resolved.id;
+    for (let i = 0; i < 25; i++) {
+      const { data } = await client.from("evo_paths").select("player_card_id").eq("evolves_to_card_id", rootId).maybeSingle();
+      if (!data?.player_card_id || seen.has(data.player_card_id)) break;
+      seen.add(data.player_card_id);
+      rootId = data.player_card_id;
+    }
+    let cursor = rootId;
+    const visited = /* @__PURE__ */ new Set();
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      const { data: steps } = await client.from("evo_paths").select(
+        "id,step_order,challenge_description,challenge_type,challenge_stat,challenge_target,stat_boosts,new_badges,compound_challenges,from_tier_id,to_tier_id,evolves_to_card_id,player_card_id"
+      ).eq("player_card_id", cursor).order("step_order");
+      if (!steps?.length) break;
+      chain.push(...steps);
+      cursor = steps[steps.length - 1].evolves_to_card_id;
+    }
+    const ids = Array.from(/* @__PURE__ */ new Set([rootId, ...chain.flatMap((s) => [s.player_card_id, s.evolves_to_card_id]).filter(Boolean)]));
+    const { data: cards } = await client.from("player_cards").select("id,name,card_key,card_variant,evo_stage,rating,gem_tier_id,base_card_id").in("id", ids);
+    return ok({ requested_player_id: resolved.id, root_player_id: rootId, steps: chain, cards: cards ?? [] });
+  }
+});
+var getPlayerVersions = defineTool19({
+  name: "getPlayerVersions",
+  title: "List every card sharing a display name",
+  description: "Read-only. Duplicate display names are legal, so use this before targeting a player by name: it returns every card with that name plus its player_id, card_key, card_variant, evo_stage, rating, gem tier and team, letting you pick the exact card to edit.",
+  inputSchema: { name: z17.string().min(1).describe("Display name to look up (case-insensitive, exact).") },
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  handler: async ({ name }, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    const { data, error: dbError } = await client.from("player_cards").select("id,name,card_key,card_variant,evo_stage,base_card_id,rating,gem_tier_id,team_id,position1,position2").ilike("name", name).order("evo_stage");
+    if (dbError) return fail(dbError.message);
+    return ok({ name, count: data?.length ?? 0, versions: data ?? [] });
+  }
+});
+var getTeamRoster = defineTool19({
+  name: "getTeamRoster",
+  title: "Get a team's roster in slot order",
+  description: "Read-only. Returns the team plus its roster in slot order with each card's player_id, card_key, name, rating and gem tier \u2014 the exact input shape previewTeamBatch expects for a roster replacement.",
+  inputSchema: {
+    team_id: z17.string().uuid().optional(),
+    name: z17.string().optional().describe("Exact team name.")
+  },
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  handler: async (input, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    let q = client.from("teams").select("id,name,category,unlock_cost");
+    q = input.team_id ? q.eq("id", input.team_id) : q.ilike("name", input.name ?? "");
+    const { data: teams } = await q;
+    if (!teams?.length) return fail("UNKNOWN_TEAM: no team matched that id or name.");
+    if (teams.length > 1) return fail(`AMBIGUOUS_TEAM: matches=${JSON.stringify(teams)}`);
+    const team = teams[0];
+    const { data: roster } = await client.from("team_players").select("slot,player_card_id,player_cards(id,name,card_key,rating,gem_tier_id,position1,position2)").eq("team_id", team.id).order("slot");
+    return ok({ team, roster: roster ?? [], roster_size: roster?.length ?? 0 });
+  }
+});
+var getDominationRoad = defineTool19({
+  name: "getDominationRoad",
+  title: "Get a Domination road template",
+  description: "Read-only. Returns every game on a Domination road in order with difficulty stars, rewards and full opponent rosters \u2014 the exact structure previewDominationRoad accepts, so you can edit and send it straight back. Omit road_name to list all road names with their game counts.",
+  inputSchema: { road_name: z17.string().optional().describe("Road to fetch. Omit to list all roads.") },
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  handler: async ({ road_name }, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    if (!road_name) {
+      const { data } = await client.from("domination_games").select("road_name");
+      const counts = /* @__PURE__ */ new Map();
+      for (const r of data ?? []) counts.set(r.road_name, (counts.get(r.road_name) ?? 0) + 1);
+      return ok({ roads: Array.from(counts, ([name, games2]) => ({ road_name: name, games: games2 })) });
+    }
+    const { data: games } = await client.from("domination_games").select("id,game_order,opponent_name,difficulty_stars,coin_reward,pack_reward").ilike("road_name", road_name).order("game_order");
+    if (!games?.length) return fail(`UNKNOWN_ROAD: no games found for road "${road_name}".`);
+    const { data: rosters } = await client.from("domination_game_players").select("domination_game_id,slot,player_card_id,player_cards(id,name,card_key,rating)").in("domination_game_id", games.map((g) => g.id)).order("slot");
+    return ok({
+      road_name,
+      games: games.map((g) => ({
+        domination_game_id: g.id,
+        game_order: g.game_order,
+        opponent_name: g.opponent_name,
+        difficulty_stars: g.difficulty_stars,
+        coin_reward: g.coin_reward,
+        pack_reward: g.pack_reward,
+        roster: (rosters ?? []).filter((r) => r.domination_game_id === g.id).map((r) => ({ player_id: r.player_card_id, card_key: r.player_cards?.card_key, name: r.player_cards?.name }))
+      }))
+    });
+  }
+});
+var getBatchReferences = defineTool19({
+  name: "getBatchReferences",
+  title: "Get ids and keys for batch payloads",
+  description: "Read-only. Returns the immutable identifiers batch tools accept: gem tiers, teams, collections, sub-collections, badges, signature traits, packs, runs, roads and (optionally) player cards with player_id + card_key. Call this before building a batch so every reference is an id or card_key rather than a fuzzy name.",
+  inputSchema: {
+    include_players: z17.boolean().default(false).describe("Include player cards (id, card_key, name, rating). Large."),
+    player_search: z17.string().optional().describe("Only players whose name contains this text."),
+    limit: z17.number().int().min(1).max(500).default(200)
+  },
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  handler: async ({ include_players, player_search, limit }, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    const grab = async (table, cols) => (await client.from(table).select(cols).limit(500)).data ?? [];
+    const payload = {
+      gem_tiers: await grab("gem_tiers", "id,name,stars,gem_value"),
+      teams: await grab("teams", "id,name,category"),
+      collections: await grab("collections", "id,name"),
+      sub_collections: await grab("sub_collections", "id,name,collection_id"),
+      badges: await grab("badges", "id,name,abbreviation"),
+      signature_traits: await grab("signature_traits", "id,name,abbreviation"),
+      packs: await grab("packs", "id,name,pack_type"),
+      runs: await grab("runs", "id,name,target_score"),
+      challenge_types: ["points_scored", "games_won", "total_stat", "single_game_stat", "multi_condition"]
+    };
+    if (include_players) {
+      let q = client.from("player_cards").select("id,card_key,name,card_variant,evo_stage,rating").order("name").limit(limit);
+      if (player_search) q = q.ilike("name", `%${player_search}%`);
+      payload.player_cards = (await q).data ?? [];
+    }
+    return ok(payload);
+  }
+});
+var planningReadTools = [getEvoChain, getPlayerVersions, getTeamRoster, getDominationRoad, getBatchReferences];
+
 // src/lib/mcp/index.ts
 var projectRef = "tgcmhmcgxzabimgnzsiu";
 var mcp_default = defineMcp({
   name: "gteam-infinite-hub",
   title: "GTeam Infinite Hub",
-  version: "0.2.0",
-  instructions: "Tools for building and editing GTeam Infinite content. Start with get_system_docs for the data model, get_diagnostics for gaps, and get_references for the exact names every write tool accepts. Use list_rows to inspect any content table. Use the purpose-built upsert tools (upsert_team, upsert_run, upsert_domination_game, upsert_pack, upsert_locker_code, upsert_challenge, upsert_dynamic_duo) and import_storyline_bundle for composite content: they resolve names to ids, validate everything, and write atomically. Every upsert tool takes mode='preview' (validate and show the plan, no writes) or mode='commit' \u2014 always preview first and repeat any destructive replacement back to the user before committing. create_players, create_rows, update_rows and delete_rows remain for low-level edits to players, gem tiers, collections, badges, traits, evo paths, social/media content and rule_config only. All writes require an admin account; per-user and economy data is never exposed.",
+  version: "0.3.0",
+  instructions: "Tools for building and editing GTeam Infinite content. Start with get_system_docs for the data model, get_diagnostics for gaps, and getBatchReferences for the immutable ids and card_keys every write tool accepts. Prefer the batch tools for all real work: previewContentBatch/commitContentBatch (any mix of entities), previewPlayerBatch, previewTeamBatch, previewDominationRoad, previewEvoPath, previewEvoPathBatch and previewEvoBundle. The protocol is always two steps: call preview* (zero writes, returns creates/updates/deletes/replacements/warnings plus a one-time preview_token), show that plan to the user, then call the matching commit* with the byte-identical payload and that token. A commit whose payload differs is rejected with PREVIEW_MISMATCH and writes nothing; every batch is one transaction. Target entities by immutable id whenever possible: duplicate player display names are legal, so a name that matches more than one card is REJECTED with all matches listed \u2014 use getPlayerVersions or card_key to disambiguate. Within one batch, declare temp_ref: 'ref:player:my-card' on a new item and reference it later (destination_player_ref, roster entries) to create a card and everything pointing at it in one shot. Use getEvoChain, getTeamRoster and getDominationRoad to read current structures in the exact shape the batch tools accept. The older single-entity upsert_* tools and list_rows/create_rows/update_rows/delete_rows remain for small one-off edits. All writes require an admin account; per-user and economy data is never exposed.",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated"
@@ -993,6 +1424,8 @@ var mcp_default = defineMcp({
     get_diagnostics_default,
     get_references_default,
     list_rows_default,
+    ...planningReadTools,
+    ...batchTools,
     create_players_default,
     upsert_player_default,
     upsert_team_default,
