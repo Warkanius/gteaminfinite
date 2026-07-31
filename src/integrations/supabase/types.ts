@@ -445,7 +445,9 @@ export type Database = {
           game_order: number
           id: string
           opponent_name: string
+          opponent_team_id: string | null
           pack_reward: string | null
+          pack_reward_id: string | null
           road_name: string
         }
         Insert: {
@@ -455,7 +457,9 @@ export type Database = {
           game_order: number
           id?: string
           opponent_name: string
+          opponent_team_id?: string | null
           pack_reward?: string | null
+          pack_reward_id?: string | null
           road_name: string
         }
         Update: {
@@ -465,10 +469,27 @@ export type Database = {
           game_order?: number
           id?: string
           opponent_name?: string
+          opponent_team_id?: string | null
           pack_reward?: string | null
+          pack_reward_id?: string | null
           road_name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "domination_games_opponent_team_id_fkey"
+            columns: ["opponent_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domination_games_pack_reward_id_fkey"
+            columns: ["pack_reward_id"]
+            isOneToOne: false
+            referencedRelation: "packs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       dynamic_duos: {
         Row: {
@@ -2292,8 +2313,16 @@ export type Database = {
         Args: { p_commit?: boolean; p_kind: string; p_payload: Json }
         Returns: Json
       }
+      admin_apply_extra_legacy: {
+        Args: { p_commit?: boolean; p_kind: string; p_payload: Json }
+        Returns: Json
+      }
       admin_apply_player: {
         Args: { p_commit?: boolean; p_payload: Json }
+        Returns: Json
+      }
+      admin_delete_domination_game: {
+        Args: { p_commit?: boolean; p_payload: Json; p_preview_token?: string }
         Returns: Json
       }
       admin_diff_fields: {
@@ -2301,8 +2330,23 @@ export type Database = {
         Returns: Json
       }
       admin_player_matches: { Args: { p_name: string }; Returns: Json }
+      admin_resolve_pack: {
+        Args: { p_game_order?: number; p_ref: Json }
+        Returns: string
+      }
       admin_resolve_player: { Args: { p_ref: Json }; Returns: string }
       admin_resolve_player_ids: { Args: { p_names: Json }; Returns: string[] }
+      admin_road_raise: {
+        Args: {
+          p_code: string
+          p_extra?: Json
+          p_field?: string
+          p_game_order?: number
+          p_message: string
+          p_value?: string
+        }
+        Returns: undefined
+      }
       admin_slugify: { Args: { p_text: string }; Returns: string }
       admin_substitute_refs: {
         Args: { p_item: Json; p_refs: Json }

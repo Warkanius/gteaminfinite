@@ -108,24 +108,49 @@ const dominationRoad = pair({
   title: "complete Domination road",
   kind: "domination_road",
   description:
-    "Preview an entire Domination road in one operation: every game's order, opponent, difficulty stars (1-5), coin/pack rewards and full opponent roster. Validates unique game_order, difficulty range, reward values, team/player references and complete rosters. With replace_road: true, games on THAT road only that are absent from the payload are deleted (reported under deletes).",
+    "Preview an entire Domination road in one operation, rematch-safe: every game's game_order, opponent, difficulty stars (1-5), coin/pack rewards and full opponent roster. Games are identified by domination_game_id (preferred) or by road_name + game_order — NEVER by opponent name, so the same opponent may legally appear at several game_orders on one road (e.g. Lockport at 1 and 6) and each stays a separate game with its own id and roster. Validates unique game_order, difficulty range, non-negative rewards, opponent_team_id / pack_reward_id / roster references and complete rosters; errors report the offending game_order and field. With replace_road: true, games on THAT road only whose game_order is absent from the payload are deleted (reported under deletes) while games that are present keep their existing ids.",
   fields: {
     road_name: z.string().min(1).describe("Road the games belong to, e.g. 'Tortuga'."),
     replace_road: z
       .boolean()
       .optional()
-      .describe("DESTRUCTIVE: delete games on this road that are not in `games`."),
+      .describe(
+        "DESTRUCTIVE: delete games on this road whose game_order is not in `games`. Scoped to this road only; matched games keep their ids.",
+      ),
     games: z
       .array(
         z.object({
-          domination_game_id: z.string().uuid().optional(),
-          game_order: z.number().int().min(1),
-          opponent_name: z.string().optional(),
-          opponent_team_id: z.string().uuid().optional(),
+          domination_game_id: z
+            .string()
+            .uuid()
+            .optional()
+            .describe("Immutable id of an existing game — the only fully unambiguous target."),
+          game_order: z
+            .number()
+            .int()
+            .min(1)
+            .describe("Position on the road; unique per road and used as the fallback target."),
+          opponent_name: z.string().optional().describe("Display name only; duplicates across game_orders are allowed."),
+          opponent_team_id: z.string().uuid().optional().describe("Optional link to a teams row."),
           difficulty_stars: z.number().int().min(1).max(5).optional(),
           coin_reward: z.number().int().min(0).optional(),
-          pack_reward: z.string().nullable().optional(),
-          roster: z.array(z.any()).optional().describe("Ordered roster: { player_id } | { card_key } | { player_name } | 'ref:player:...'. DESTRUCTIVE replacement."),
+          pack_reward_id: z
+            .string()
+            .uuid()
+            .nullable()
+            .optional()
+            .describe("Preferred pack reward target; pack names are often duplicated. null clears it."),
+          pack_reward: z
+            .string()
+            .nullable()
+            .optional()
+            .describe("Legacy: pack id or exact unique pack name. An ambiguous name is rejected with AMBIGUOUS_PACK."),
+          roster: z
+            .array(z.any())
+            .optional()
+            .describe(
+              "Ordered roster: { player_id } | { card_key } | { player_name } | 'ref:player:...'. DESTRUCTIVE full replacement for THIS game only.",
+            ),
         }),
       )
       .min(1),
@@ -136,6 +161,7 @@ const dominationRoad = pair({
     ],
   }),
 });
+
 
 const evoPathFields: Fields = {
   evo_path_id: z.string().uuid().optional().describe("Update an existing path."),

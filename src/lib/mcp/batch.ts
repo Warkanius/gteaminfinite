@@ -73,12 +73,32 @@ export async function runBatch(
   return ok(data);
 }
 
-/** Turns `CODE: message ... matches=[...]` database errors into structured JSON. */
+/**
+ * Turns database errors into structured JSON.
+ * Recognises `CODE: message detail={"game_order":3,"field":"pack_reward",...}`
+ * emitted by admin_road_raise, and the older `matches=[...]` suffix.
+ */
 export function structuredError(message: string, mode: "preview" | "commit") {
   const codeMatch = message.match(/^([A-Z_]{3,}):\s*([\s\S]*)$/);
   let matches: unknown;
+  let detail: Record<string, unknown> | undefined;
   let text = message;
   if (codeMatch) text = codeMatch[2];
+
+  const d = text.match(/\s*detail=(\{[\s\S]*\})\s*$/);
+  if (d) {
+    try {
+      detail = JSON.parse(d[1]);
+      text = text.slice(0, d.index).trim();
+      if (detail && "matches" in detail) {
+        matches = (detail as { matches: unknown }).matches;
+        delete (detail as Record<string, unknown>).matches;
+      }
+    } catch {
+      /* leave raw */
+    }
+  }
+
   const m = text.match(/matches=(\[[\s\S]*\])\s*$/);
   if (m) {
     try {
@@ -94,12 +114,14 @@ export function structuredError(message: string, mode: "preview" | "commit") {
       message: text,
       mode,
       wrote_anything: false,
+      ...(detail && Object.keys(detail).length ? detail : {}),
       ...(matches ? { matches } : {}),
     },
     null,
     2,
   );
 }
+
 
 const SAFETY =
   " Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.";

@@ -92,8 +92,26 @@ Deno.serve(async (req) => {
 
       if (group === "players") return await rpcResult(supabase.rpc("admin_apply_player", { p_payload: payload, p_commit: commit }));
       if (group === "storyline-bundles") return await bundle(supabase, token, payload, commit);
+      if (group === "domination-games") {
+        const { road_name, ...game } = payload as Record<string, unknown>;
+        if (!road_name) return err("`road_name` is required.", 400);
+        if (game.game_order === undefined && !game.domination_game_id) {
+          return err(
+            "`game_order` (or `domination_game_id`) is required: opponents may repeat on a road, so a rematch cannot be targeted by name.",
+            400,
+          );
+        }
+        return await rpcResult(
+          supabase.rpc("admin_apply_extra", {
+            p_kind: "domination_road",
+            p_payload: { road_name, games: [game] },
+            p_commit: commit,
+          }),
+        );
+      }
       const kind = APPLY_KIND[group];
       if (kind) return await rpcResult(supabase.rpc("admin_apply_content", { p_kind: kind, p_payload: payload, p_commit: commit }));
+
     }
 
     return err(`Unknown operation ${req.method} ${path}`, 404);
