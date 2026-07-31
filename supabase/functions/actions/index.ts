@@ -15,7 +15,7 @@ const err = (message: string, status: number) => json({ error: message }, status
 
 const SEARCH_COLUMN: Record<string, string> = {
   player_cards: "name", teams: "name", runs: "name", run_rank_rewards: "rank_name",
-  domination_games: "opponent_name", challenges: "name", gem_tasks: "title", gem_tiers: "name",
+  domination_roads: "name", domination_games: "opponent_name", challenges: "name", gem_tasks: "title", gem_tiers: "name",
   dynamic_duos: "name", collections: "name", sub_collections: "name", badges: "name",
   signature_traits: "name", packs: "name", locker_codes: "code", storylines: "title",
   social_creators: "name", social_posts: "content", location_accounts: "name",

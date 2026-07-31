@@ -314,7 +314,7 @@ const KINDS: Kind[] = [
 
 export const READ_TABLE_LIST = [
   "player_cards", "teams", "team_players", "runs", "run_players", "run_rank_rewards",
-  "domination_games", "domination_game_players", "challenges", "gem_tasks", "gem_tiers",
+  "domination_roads", "domination_games", "domination_game_players", "challenges", "gem_tasks", "gem_tiers",
   "gem_market_listings", "dynamic_duos", "collections", "sub_collections", "badges",
   "signature_traits", "player_card_badges", "player_card_traits", "packs", "pack_odds",
   "pack_players", "locker_codes", "evo_paths", "storylines", "storyline_entities",
