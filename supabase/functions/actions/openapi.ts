@@ -130,17 +130,21 @@ const RunInput = {
 
 const DominationInput = {
   type: "object",
-  required: ["road_name", "opponent_name"],
+  required: ["road_name", "game_order"],
   properties: {
-    road_name: strProp("Road / path the game belongs to (match key part 1)."),
-    opponent_name: strProp("Opponent name (match key part 2)."),
-    game_order: intProp("Position of the game on the road."),
+    road_name: strProp("Road / path the game belongs to."),
+    game_order: intProp("Position on the road; unique per road and the target key. Required."),
+    domination_game_id: strProp("Immutable id of an existing game — the most precise target."),
+    opponent_name: strProp("Opponent display name. NOT a target: the same opponent may appear at several game_orders (rematches)."),
+    opponent_team_id: strProp("Optional link to a teams row."),
     difficulty_stars: intProp("1-5."),
     coin_reward: intProp("Coins awarded for winning."),
-    pack_reward: strProp("Pack reward identifier, or null to clear."),
-    roster: { type: "array", items: { type: "string" }, description: "DESTRUCTIVE: replaces the opponent roster, in slot order." },
+    pack_reward_id: strProp("Pack reward by immutable id (preferred; pack names repeat). null clears it."),
+    pack_reward: strProp("Legacy: pack id or exact unique pack name. Ambiguous names are rejected."),
+    roster: { type: "array", items: { type: "string" }, description: "DESTRUCTIVE: replaces this game's roster, in slot order." },
   },
 };
+
 
 const PackInput = {
   type: "object",
@@ -300,7 +304,7 @@ const KINDS: Kind[] = [
   { path: "players", id: "Player", label: "player card", schema: PlayerInput, destructive: "Replacing badges or traits deletes every current assignment on that card." },
   { path: "teams", id: "Team", label: "team", schema: TeamInput, destructive: "Sending `roster` replaces the whole team roster." },
   { path: "runs", id: "Run", label: "Run", schema: RunInput, destructive: "Sending `roster` replaces the Run roster; `rank_rewards` replaces the global ladder." },
-  { path: "domination-games", id: "DominationGame", label: "Domination game", schema: DominationInput, destructive: "Sending `roster` replaces the opponent roster." },
+  { path: "domination-games", id: "DominationGame", label: "Domination game", schema: DominationInput, destructive: "Targeted by road_name + game_order (or domination_game_id), never by opponent name, so rematches stay separate. Sending `roster` replaces that game's roster." },
   { path: "packs", id: "Pack", label: "pack", schema: PackInput, destructive: "Sending `players` or `odds` replaces the whole pool / odds table." },
   { path: "locker-codes", id: "LockerCode", label: "locker code", schema: LockerCodeInput, destructive: "Reward payload is replaced." },
   { path: "challenges", id: "Challenge", label: "challenge", schema: ChallengeInput, destructive: "" },

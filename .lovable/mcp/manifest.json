@@ -217,7 +217,7 @@
       {
         "name": "getDominationRoad",
         "title": "Get a Domination road template",
-        "description": "Read-only. Returns every game on a Domination road in order with difficulty stars, rewards and full opponent rosters — the exact structure previewDominationRoad accepts, so you can edit and send it straight back. Omit road_name to list all road names with their game counts.",
+        "description": "Read-only. Returns every game on a Domination road in game_order with its immutable domination_game_id, opponent_team_id, difficulty stars, coin/pack rewards (pack_reward_id plus the resolved pack name) and full ordered opponent roster — the exact structure previewDominationRoad accepts, so you can edit and send it straight back. Rematches are visible as separate games sharing an opponent_name at different game_orders; always target games by domination_game_id or game_order, never by opponent name. Omit road_name to list all road names with their game counts.",
         "annotations": {
           "readOnlyHint": true,
           "openWorldHint": false
@@ -622,7 +622,7 @@
       {
         "name": "previewDominationRoad",
         "title": "Preview: complete Domination road",
-        "description": "Admin only. ZERO WRITES. Preview an entire Domination road in one operation: every game's order, opponent, difficulty stars (1-5), coin/pack rewards and full opponent roster. Validates unique game_order, difficulty range, reward values, team/player references and complete rosters. With replace_road: true, games on THAT road only that are absent from the payload are deleted (reported under deletes). Returns creates, updates, deletes, replacements, warnings, resolved_references, normalized_payload, payload_hash and a one-time preview_token.  Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.",
+        "description": "Admin only. ZERO WRITES. Preview an entire Domination road in one operation, rematch-safe: every game's game_order, opponent, difficulty stars (1-5), coin/pack rewards and full opponent roster. Games are identified by domination_game_id (preferred) or by road_name + game_order — NEVER by opponent name, so the same opponent may legally appear at several game_orders on one road (e.g. Lockport at 1 and 6) and each stays a separate game with its own id and roster. Validates unique game_order, difficulty range, non-negative rewards, opponent_team_id / pack_reward_id / roster references and complete rosters; errors report the offending game_order and field. With replace_road: true, games on THAT road only whose game_order is absent from the payload are deleted (reported under deletes) while games that are present keep their existing ids. Returns creates, updates, deletes, replacements, warnings, resolved_references, normalized_payload, payload_hash and a one-time preview_token.  Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.",
         "annotations": {
           "readOnlyHint": true,
           "destructiveHint": false,
@@ -638,7 +638,7 @@
             },
             "replace_road": {
               "type": "boolean",
-              "description": "DESTRUCTIVE: delete games on this road that are not in `games`."
+              "description": "DESTRUCTIVE: delete games on this road whose game_order is not in `games`. Scoped to this road only; matched games keep their ids."
             },
             "games": {
               "type": "array",
@@ -647,18 +647,22 @@
                 "properties": {
                   "domination_game_id": {
                     "type": "string",
-                    "format": "uuid"
+                    "format": "uuid",
+                    "description": "Immutable id of an existing game — the only fully unambiguous target."
                   },
                   "game_order": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "description": "Position on the road; unique per road and used as the fallback target."
                   },
                   "opponent_name": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Display name only; duplicates across game_orders are allowed."
                   },
                   "opponent_team_id": {
                     "type": "string",
-                    "format": "uuid"
+                    "format": "uuid",
+                    "description": "Optional link to a teams row."
                   },
                   "difficulty_stars": {
                     "type": "integer",
@@ -669,15 +673,28 @@
                     "type": "integer",
                     "minimum": 0
                   },
+                  "pack_reward_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Preferred pack reward target; pack names are often duplicated. null clears it."
+                  },
                   "pack_reward": {
                     "type": [
                       "string",
                       "null"
-                    ]
+                    ],
+                    "description": "Legacy: pack id or exact unique pack name. An ambiguous name is rejected with AMBIGUOUS_PACK."
                   },
                   "roster": {
                     "type": "array",
-                    "description": "Ordered roster: { player_id } | { card_key } | { player_name } | 'ref:player:...'. DESTRUCTIVE replacement."
+                    "description": "Ordered roster: { player_id } | { card_key } | { player_name } | 'ref:player:...'. DESTRUCTIVE full replacement for THIS game only."
                   }
                 },
                 "required": [
@@ -717,7 +734,7 @@
             },
             "replace_road": {
               "type": "boolean",
-              "description": "DESTRUCTIVE: delete games on this road that are not in `games`."
+              "description": "DESTRUCTIVE: delete games on this road whose game_order is not in `games`. Scoped to this road only; matched games keep their ids."
             },
             "games": {
               "type": "array",
@@ -726,18 +743,22 @@
                 "properties": {
                   "domination_game_id": {
                     "type": "string",
-                    "format": "uuid"
+                    "format": "uuid",
+                    "description": "Immutable id of an existing game — the only fully unambiguous target."
                   },
                   "game_order": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "description": "Position on the road; unique per road and used as the fallback target."
                   },
                   "opponent_name": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Display name only; duplicates across game_orders are allowed."
                   },
                   "opponent_team_id": {
                     "type": "string",
-                    "format": "uuid"
+                    "format": "uuid",
+                    "description": "Optional link to a teams row."
                   },
                   "difficulty_stars": {
                     "type": "integer",
@@ -748,15 +769,28 @@
                     "type": "integer",
                     "minimum": 0
                   },
+                  "pack_reward_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Preferred pack reward target; pack names are often duplicated. null clears it."
+                  },
                   "pack_reward": {
                     "type": [
                       "string",
                       "null"
-                    ]
+                    ],
+                    "description": "Legacy: pack id or exact unique pack name. An ambiguous name is rejected with AMBIGUOUS_PACK."
                   },
                   "roster": {
                     "type": "array",
-                    "description": "Ordered roster: { player_id } | { card_key } | { player_name } | 'ref:player:...'. DESTRUCTIVE replacement."
+                    "description": "Ordered roster: { player_id } | { card_key } | { player_name } | 'ref:player:...'. DESTRUCTIVE full replacement for THIS game only."
                   }
                 },
                 "required": [
@@ -1430,6 +1464,78 @@
         "outputSchema": null
       },
       {
+        "name": "previewDeleteDominationGame",
+        "title": "Preview: delete one Domination game",
+        "description": "Admin only. ZERO WRITES. Resolves a single Domination game by domination_game_id (preferred) or by exact road_name + game_order, and returns exactly what deleting it would remove: the game's id, road, game_order, opponent and its ordered roster junction rows, plus a one-time preview_token. Deleting by opponent name alone is rejected, because rematches mean one opponent can appear several times on a road. Nothing is removed until commitDeleteDominationGame is called with the identical target and that token.",
+        "annotations": {
+          "readOnlyHint": true,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "domination_game_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Preferred: the immutable id of the game to delete (see getDominationRoad)."
+            },
+            "road_name": {
+              "type": "string",
+              "description": "Fallback target, together with game_order."
+            },
+            "game_order": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Fallback target, together with road_name. Opponent name alone is never accepted."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "commitDeleteDominationGame",
+        "title": "Commit: delete one Domination game",
+        "description": "Admin only. DESTRUCTIVE. Deletes the previewed Domination game and its roster junction rows in one transaction. Requires the unexpired, unused preview_token from previewDeleteDominationGame for the same game; any mismatch is rejected with PREVIEW_MISMATCH and nothing is deleted.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "domination_game_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Preferred: the immutable id of the game to delete (see getDominationRoad)."
+            },
+            "road_name": {
+              "type": "string",
+              "description": "Fallback target, together with game_order."
+            },
+            "game_order": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Fallback target, together with road_name. Opponent name alone is never accepted."
+            },
+            "preview_token": {
+              "type": "string",
+              "description": "The preview_token from previewDeleteDominationGame. Single use."
+            }
+          },
+          "required": [
+            "preview_token"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
         "name": "create_players",
         "title": "Create players",
         "description": "Admin only. Create player cards. Gem tier and team are resolved by name, so you can say `gem_tier: \"Diamond\"` instead of an id. Ratings accept decimals.",
@@ -1959,8 +2065,8 @@
       },
       {
         "name": "upsert_domination_game",
-        "title": "Create or update a Domination game",
-        "description": "Admin only. Create or update a Domination game, matched on road_name + opponent_name: game order, difficulty stars, coin/pack rewards, and optionally its ordered roster (full replacement). Always call with mode='preview' first.",
+        "title": "Create or update one Domination game",
+        "description": "Admin only. Create or update a SINGLE Domination game, targeted by domination_game_id (preferred) or by road_name + game_order. Opponent name is never a target, so rematches (the same opponent at several game_orders on one road) are fully supported and never overwrite each other. Sets game order, opponent, opponent_team_id, difficulty stars, coin reward, pack_reward_id, and optionally the ordered roster (destructive full replacement for this game only). Always call with mode='preview' first and show the plan. For whole roads use previewDominationRoad instead.",
         "annotations": {
           "readOnlyHint": false,
           "destructiveHint": true,
@@ -1978,20 +2084,29 @@
               "default": "preview",
               "description": "`preview` validates and returns the exact plan without writing. `commit` applies it."
             },
+            "domination_game_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Immutable id of an existing game."
+            },
             "road_name": {
               "type": "string",
               "minLength": 1,
-              "description": "Road / path the game belongs to."
-            },
-            "opponent_name": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Opponent name (match key together with road_name)."
+              "description": "Road the game belongs to."
             },
             "game_order": {
               "type": "integer",
               "minimum": 1,
-              "description": "Position of the game on the road."
+              "description": "Position on the road; required, and used as the target when no id is given."
+            },
+            "opponent_name": {
+              "type": "string",
+              "description": "Opponent display name; duplicates on a road are allowed."
+            },
+            "opponent_team_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Optional link to a teams row."
             },
             "difficulty_stars": {
               "type": "integer",
@@ -2004,24 +2119,33 @@
               "minimum": 0,
               "description": "Coins awarded for winning."
             },
+            "pack_reward_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pack reward by immutable id; null clears it."
+            },
             "pack_reward": {
               "type": [
                 "string",
                 "null"
               ],
-              "description": "Pack reward identifier, or null to clear it."
+              "description": "Legacy: pack id or exact unique pack name. Ambiguous names are rejected with AMBIGUOUS_PACK."
             },
             "roster": {
               "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "DESTRUCTIVE: replaces the opponent roster with these player card names, in slot order."
+              "description": "DESTRUCTIVE: replaces this game's roster, in slot order. Entries may be { player_id } | { card_key } | { player_name }."
             }
           },
           "required": [
             "road_name",
-            "opponent_name"
+            "game_order"
           ],
           "additionalProperties": false,
           "$schema": "http://json-schema.org/draft-07/schema#"

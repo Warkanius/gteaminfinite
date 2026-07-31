@@ -660,46 +660,150 @@ var upsert_run_default = defineTool8({
 
 // src/lib/mcp/tools/upsert-domination-game.ts
 import { defineTool as defineTool9 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z7 } from "npm:zod@^3.25.76";
+
+// src/lib/mcp/batch.ts
 import { z as z6 } from "npm:zod@^3.25.76";
-var mode3 = z6.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var modeField = z6.enum(["preview", "commit"]).default("preview").describe("`preview` validates everything and writes nothing. `commit` applies the approved plan.");
+var previewTokenField = z6.string().optional().describe(
+  "Required for mode='commit': the preview_token returned by the matching preview. The commit is rejected unless the payload hashes identically to that preview, and each token works only once."
+);
+var STAT_KEYS = [
+  "stat_3pt",
+  "stat_mid",
+  "stat_fin",
+  "stat_dnk",
+  "stat_ast",
+  "stat_stl",
+  "stat_reb",
+  "stat_blk",
+  "stat_int"
+];
+var CHALLENGE_TYPES = [
+  "points_scored",
+  "games_won",
+  "total_stat",
+  "single_game_stat",
+  "multi_condition"
+];
+var itemArray = (what) => z6.array(z6.record(z6.string(), z6.any())).min(1).describe(what);
+async function runBatch(ctx, payload, mode8, previewToken, kind) {
+  const { client, error } = await adminClient(ctx);
+  if (error) return error;
+  if (mode8 === "commit" && !previewToken) {
+    return fail(
+      JSON.stringify({
+        error_code: "PREVIEW_REQUIRED",
+        message: "Run the same payload with mode='preview' first, get user approval, then commit with its preview_token."
+      })
+    );
+  }
+  const { data, error: dbError } = await client.rpc("admin_apply_batch", {
+    p_payload: clean(payload),
+    p_commit: mode8 === "commit",
+    p_preview_token: previewToken ?? null,
+    p_kind: kind
+  });
+  if (dbError) return fail(structuredError(dbError.message, mode8));
+  return ok(data);
+}
+function structuredError(message, mode8) {
+  const codeMatch = message.match(/^([A-Z_]{3,}):\s*([\s\S]*)$/);
+  let matches;
+  let detail;
+  let text = message;
+  if (codeMatch) text = codeMatch[2];
+  const d = text.match(/\s*detail=(\{[\s\S]*\})\s*$/);
+  if (d) {
+    try {
+      detail = JSON.parse(d[1]);
+      text = text.slice(0, d.index).trim();
+      if (detail && "matches" in detail) {
+        matches = detail.matches;
+        delete detail.matches;
+      }
+    } catch {
+    }
+  }
+  const m = text.match(/matches=(\[[\s\S]*\])\s*$/);
+  if (m) {
+    try {
+      matches = JSON.parse(m[1]);
+      text = text.slice(0, m.index).trim();
+    } catch {
+    }
+  }
+  return JSON.stringify(
+    {
+      error_code: codeMatch ? codeMatch[1] : "INVALID_PAYLOAD",
+      message: text,
+      mode: mode8,
+      wrote_anything: false,
+      ...detail && Object.keys(detail).length ? detail : {},
+      ...matches ? { matches } : {}
+    },
+    null,
+    2
+  );
+}
+var SAFETY = " Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.";
+var safetyNote = SAFETY;
+
+// src/lib/mcp/tools/upsert-domination-game.ts
+var mode3 = z7.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
 var upsert_domination_game_default = defineTool9({
   name: "upsert_domination_game",
-  title: "Create or update a Domination game",
-  description: "Admin only. Create or update a Domination game, matched on road_name + opponent_name: game order, difficulty stars, coin/pack rewards, and optionally its ordered roster (full replacement). Always call with mode='preview' first.",
+  title: "Create or update one Domination game",
+  description: "Admin only. Create or update a SINGLE Domination game, targeted by domination_game_id (preferred) or by road_name + game_order. Opponent name is never a target, so rematches (the same opponent at several game_orders on one road) are fully supported and never overwrite each other. Sets game order, opponent, opponent_team_id, difficulty stars, coin reward, pack_reward_id, and optionally the ordered roster (destructive full replacement for this game only). Always call with mode='preview' first and show the plan. For whole roads use previewDominationRoad instead.",
   inputSchema: {
     mode: mode3,
-    road_name: z6.string().min(1).describe("Road / path the game belongs to."),
-    opponent_name: z6.string().min(1).describe("Opponent name (match key together with road_name)."),
-    game_order: z6.number().int().min(1).optional().describe("Position of the game on the road."),
-    difficulty_stars: z6.number().int().min(1).max(5).optional().describe("Difficulty in stars."),
-    coin_reward: z6.number().int().min(0).optional().describe("Coins awarded for winning."),
-    pack_reward: z6.string().nullable().optional().describe("Pack reward identifier, or null to clear it."),
-    roster: z6.array(z6.string()).optional().describe("DESTRUCTIVE: replaces the opponent roster with these player card names, in slot order.")
+    domination_game_id: z7.string().uuid().optional().describe("Immutable id of an existing game."),
+    road_name: z7.string().min(1).describe("Road the game belongs to."),
+    game_order: z7.number().int().min(1).describe("Position on the road; required, and used as the target when no id is given."),
+    opponent_name: z7.string().optional().describe("Opponent display name; duplicates on a road are allowed."),
+    opponent_team_id: z7.string().uuid().optional().describe("Optional link to a teams row."),
+    difficulty_stars: z7.number().int().min(1).max(5).optional().describe("Difficulty in stars."),
+    coin_reward: z7.number().int().min(0).optional().describe("Coins awarded for winning."),
+    pack_reward_id: z7.string().uuid().nullable().optional().describe("Pack reward by immutable id; null clears it."),
+    pack_reward: z7.string().nullable().optional().describe("Legacy: pack id or exact unique pack name. Ambiguous names are rejected with AMBIGUOUS_PACK."),
+    roster: z7.array(z7.any()).optional().describe(
+      "DESTRUCTIVE: replaces this game's roster, in slot order. Entries may be { player_id } | { card_key } | { player_name }."
+    )
   },
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-  handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "domination_game", payload, m)
+  handler: async ({ mode: m, road_name, ...game }, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    const { data, error: dbError } = await client.rpc("admin_apply_extra", {
+      p_kind: "domination_road",
+      p_payload: { road_name, games: [clean(game)] },
+      p_commit: m === "commit"
+    });
+    if (dbError) return fail(structuredError(dbError.message, m));
+    return ok(data);
+  }
 });
 
 // src/lib/mcp/tools/upsert-pack.ts
 import { defineTool as defineTool10 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z7 } from "npm:zod@^3.25.76";
-var mode4 = z7.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+import { z as z8 } from "npm:zod@^3.25.76";
+var mode4 = z8.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
 var upsert_pack_default = defineTool10({
   name: "upsert_pack",
   title: "Create or update a pack",
   description: "Admin only. Create or update a pack: cost, ten-box cost, pack type, its player pool (one slot per listed card) and its odds table. Odds are validated the way the pack-opening flow reads them: percentages must total 100, every entry must be above 0, and each result_slot must be `player_choice` or an existing pool slot number. Pool and odds are full replacements. Always call with mode='preview' first.",
   inputSchema: {
     mode: mode4,
-    name: z7.string().min(1).describe("Pack name (match key)."),
-    pack_type: z7.string().optional().describe("Pack type, e.g. standard / premium / promo."),
-    cost: z7.number().int().min(0).optional().describe("Coin cost for a single open."),
-    ten_box_cost: z7.number().int().min(0).nullable().optional().describe("Coin cost for a ten-box, or null."),
-    players: z7.array(z7.string()).optional().describe("DESTRUCTIVE: replaces the pack pool. Player card names; the first name becomes slot 1, the second slot 2, and so on."),
-    odds: z7.array(
-      z7.object({
-        result_slot: z7.string().describe("Pool slot number as a string, or `player_choice`."),
-        percentage: z7.number().positive().describe("Chance for this slot; all entries must sum to 100."),
-        description: z7.string().optional().describe("Label shown in the odds table.")
+    name: z8.string().min(1).describe("Pack name (match key)."),
+    pack_type: z8.string().optional().describe("Pack type, e.g. standard / premium / promo."),
+    cost: z8.number().int().min(0).optional().describe("Coin cost for a single open."),
+    ten_box_cost: z8.number().int().min(0).nullable().optional().describe("Coin cost for a ten-box, or null."),
+    players: z8.array(z8.string()).optional().describe("DESTRUCTIVE: replaces the pack pool. Player card names; the first name becomes slot 1, the second slot 2, and so on."),
+    odds: z8.array(
+      z8.object({
+        result_slot: z8.string().describe("Pool slot number as a string, or `player_choice`."),
+        percentage: z8.number().positive().describe("Chance for this slot; all entries must sum to 100."),
+        description: z8.string().optional().describe("Label shown in the odds table.")
       })
     ).optional().describe("DESTRUCTIVE: replaces the pack's odds rows.")
   },
@@ -709,23 +813,23 @@ var upsert_pack_default = defineTool10({
 
 // src/lib/mcp/tools/upsert-locker-code.ts
 import { defineTool as defineTool11 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z8 } from "npm:zod@^3.25.76";
-var mode5 = z8.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+import { z as z9 } from "npm:zod@^3.25.76";
+var mode5 = z9.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
 var upsert_locker_code_default = defineTool11({
   name: "upsert_locker_code",
   title: "Create or update a locker code",
   description: "Admin only. Create or update a locker code (matched on the code, case-insensitive): reward payload, redemption limit and expiry. Reward payloads are validated and normalised to the shape the redeem flow expects \u2014 pass `pack_name` or `card_name` and they are resolved to ids. Always call with mode='preview' first.",
   inputSchema: {
     mode: mode5,
-    code: z8.string().min(1).describe("The code itself (stored uppercase)."),
-    reward_type: z8.enum(["coins", "gems", "pack", "card"]).describe("What the code grants."),
-    reward_value: z8.object({
-      amount: z8.number().int().positive().optional().describe("For coins / gems."),
-      pack_name: z8.string().optional().describe("For a pack reward; resolved to pack_id."),
-      card_name: z8.string().optional().describe("For a card reward; resolved to player_card_id.")
+    code: z9.string().min(1).describe("The code itself (stored uppercase)."),
+    reward_type: z9.enum(["coins", "gems", "pack", "card"]).describe("What the code grants."),
+    reward_value: z9.object({
+      amount: z9.number().int().positive().optional().describe("For coins / gems."),
+      pack_name: z9.string().optional().describe("For a pack reward; resolved to pack_id."),
+      card_name: z9.string().optional().describe("For a card reward; resolved to player_card_id.")
     }).describe("Reward payload matching reward_type."),
-    max_redemptions: z8.number().int().min(1).nullable().optional().describe("Redemption cap, or null for unlimited."),
-    expires_at: z8.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
+    max_redemptions: z9.number().int().min(1).nullable().optional().describe("Redemption cap, or null for unlimited."),
+    expires_at: z9.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "locker_code", payload, m)
@@ -733,36 +837,36 @@ var upsert_locker_code_default = defineTool11({
 
 // src/lib/mcp/tools/upsert-challenge.ts
 import { defineTool as defineTool12 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z9 } from "npm:zod@^3.25.76";
-var mode6 = z9.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+import { z as z10 } from "npm:zod@^3.25.76";
+var mode6 = z10.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
 var upsert_challenge_default = defineTool12({
   name: "upsert_challenge",
   title: "Create or update a challenge",
   description: "Admin only. Create or update a challenge by name: opponent team, win condition and series setup, stat limits, lineup restrictions, timing, prerequisite, and coin / gem / pack / card rewards. Team, player and prerequisite names are resolved to ids and an unknown name fails without writing. Always call with mode='preview' first.",
   inputSchema: {
     mode: mode6,
-    name: z9.string().min(1).describe("Challenge name (match key)."),
-    description: z9.string().nullable().optional(),
-    challenge_type: z9.string().optional().describe("e.g. single / series / stat_limit / spotlight."),
-    opponent_team: z9.string().optional().describe("Team name to face."),
-    win_condition: z9.string().optional().describe("e.g. win / win_by / stat_limit."),
-    win_by_amount: z9.number().int().nullable().optional(),
-    series_length: z9.number().int().nullable().optional(),
-    series_win_coins: z9.number().int().min(0).optional(),
-    series_loss_coins: z9.number().int().min(0).optional(),
-    stat_limit_player: z9.string().nullable().optional().describe("Player card name the stat limit applies to."),
-    stat_limit_stat: z9.string().nullable().optional().describe("Stat key, e.g. stat_3pt."),
-    stat_limit_value: z9.number().int().nullable().optional(),
-    coin_reward: z9.number().int().min(0).optional(),
-    gem_reward: z9.number().int().min(0).optional(),
-    pack_reward: z9.string().nullable().optional().describe("Pack name (resolved to its id) or an existing literal value."),
-    card_reward: z9.string().nullable().optional().describe("Player card name granted on completion."),
-    prerequisite: z9.string().nullable().optional().describe("Name of the challenge that must be completed first."),
-    spotlight_group: z9.string().nullable().optional(),
-    sort_order: z9.number().int().optional(),
-    lineup_restrictions: z9.record(z9.string(), z9.any()).nullable().optional().describe("Restrictions object as used by the admin UI (positions, badge_ids, trait_ids, gem_tier_ids, team_ids, collection_ids, sub_collection_ids, card_colors)."),
-    is_repeatable: z9.boolean().optional(),
-    expires_at: z9.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
+    name: z10.string().min(1).describe("Challenge name (match key)."),
+    description: z10.string().nullable().optional(),
+    challenge_type: z10.string().optional().describe("e.g. single / series / stat_limit / spotlight."),
+    opponent_team: z10.string().optional().describe("Team name to face."),
+    win_condition: z10.string().optional().describe("e.g. win / win_by / stat_limit."),
+    win_by_amount: z10.number().int().nullable().optional(),
+    series_length: z10.number().int().nullable().optional(),
+    series_win_coins: z10.number().int().min(0).optional(),
+    series_loss_coins: z10.number().int().min(0).optional(),
+    stat_limit_player: z10.string().nullable().optional().describe("Player card name the stat limit applies to."),
+    stat_limit_stat: z10.string().nullable().optional().describe("Stat key, e.g. stat_3pt."),
+    stat_limit_value: z10.number().int().nullable().optional(),
+    coin_reward: z10.number().int().min(0).optional(),
+    gem_reward: z10.number().int().min(0).optional(),
+    pack_reward: z10.string().nullable().optional().describe("Pack name (resolved to its id) or an existing literal value."),
+    card_reward: z10.string().nullable().optional().describe("Player card name granted on completion."),
+    prerequisite: z10.string().nullable().optional().describe("Name of the challenge that must be completed first."),
+    spotlight_group: z10.string().nullable().optional(),
+    sort_order: z10.number().int().optional(),
+    lineup_restrictions: z10.record(z10.string(), z10.any()).nullable().optional().describe("Restrictions object as used by the admin UI (positions, badge_ids, trait_ids, gem_tier_ids, team_ids, collection_ids, sub_collection_ids, card_colors)."),
+    is_repeatable: z10.boolean().optional(),
+    expires_at: z10.string().nullable().optional().describe("ISO timestamp, or null for no expiry.")
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "challenge", payload, m)
@@ -770,22 +874,22 @@ var upsert_challenge_default = defineTool12({
 
 // src/lib/mcp/tools/upsert-dynamic-duo.ts
 import { defineTool as defineTool13 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z10 } from "npm:zod@^3.25.76";
-var mode7 = z10.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
-var boosts = z10.record(z10.string(), z10.number()).describe("Stat boosts keyed by stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int.");
+import { z as z11 } from "npm:zod@^3.25.76";
+var mode7 = z11.enum(["preview", "commit"]).default("preview").describe("`preview` validates and returns the exact plan without writing. `commit` applies it.");
+var boosts = z11.record(z11.string(), z11.number()).describe("Stat boosts keyed by stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int.");
 var upsert_dynamic_duo_default = defineTool13({
   name: "upsert_dynamic_duo",
   title: "Create or update a dynamic duo",
   description: "Admin only. Create or update a dynamic duo by name: the two player cards (resolved by name), the stat boosts each one receives while both are on the floor, and whether the duo is active. Unknown boost keys or player names fail without writing. Always call with mode='preview' first.",
   inputSchema: {
     mode: mode7,
-    name: z10.string().min(1).describe("Duo name (match key)."),
-    description: z10.string().nullable().optional(),
-    player_a: z10.string().optional().describe("First player card name (required when creating)."),
-    player_b: z10.string().optional().describe("Second player card name (required when creating)."),
+    name: z11.string().min(1).describe("Duo name (match key)."),
+    description: z11.string().nullable().optional(),
+    player_a: z11.string().optional().describe("First player card name (required when creating)."),
+    player_b: z11.string().optional().describe("Second player card name (required when creating)."),
     boosts_a: boosts.optional().describe("Boosts applied to player A."),
     boosts_b: boosts.optional().describe("Boosts applied to player B."),
-    is_active: z10.boolean().optional().describe("Whether the duo is live in games.")
+    is_active: z11.boolean().optional().describe("Whether the duo is live in games.")
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async ({ mode: m, ...payload }, ctx) => applyContent(ctx, "dynamic_duo", payload, m)
@@ -793,60 +897,60 @@ var upsert_dynamic_duo_default = defineTool13({
 
 // src/lib/mcp/tools/import-storyline-bundle.ts
 import { defineTool as defineTool14 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z11 } from "npm:zod@^3.25.76";
+import { z as z12 } from "npm:zod@^3.25.76";
 var import_storyline_bundle_default = defineTool14({
   name: "import_storyline_bundle",
   title: "Import a storyline bundle",
   description: "Admin only. Creates a storyline plus its linked new players, locker codes and social posts in one atomic request, reusing the app's existing storyline-bundle importer. mode='preview' validates the bundle (duplicate player names, duplicate codes, unknown media handles) and reports what would be created without writing.",
   inputSchema: {
-    mode: z11.enum(["preview", "commit"]).default("preview").describe("`preview` validates only. `commit` creates the storyline and its entities atomically."),
-    storyline: z11.object({
-      title: z11.string().min(1),
-      summary: z11.string().optional(),
-      arc_image_url: z11.string().optional(),
-      status: z11.string().optional().describe("draft / active / archived."),
-      starts_at: z11.string().optional(),
-      ends_at: z11.string().optional()
+    mode: z12.enum(["preview", "commit"]).default("preview").describe("`preview` validates only. `commit` creates the storyline and its entities atomically."),
+    storyline: z12.object({
+      title: z12.string().min(1),
+      summary: z12.string().optional(),
+      arc_image_url: z12.string().optional(),
+      status: z12.string().optional().describe("draft / active / archived."),
+      starts_at: z12.string().optional(),
+      ends_at: z12.string().optional()
     }).describe("The storyline arc itself."),
-    players: z11.array(
-      z11.object({
-        name: z11.string().min(1),
-        position1: z11.string().optional(),
-        position2: z11.string().optional(),
-        stars: z11.number().min(1).max(5).optional().describe("Star tier; converted to a rating by the importer."),
-        social_handle: z11.string().optional(),
-        stat_3pt: z11.number().optional(),
-        stat_mid: z11.number().optional(),
-        stat_fin: z11.number().optional(),
-        stat_dnk: z11.number().optional(),
-        stat_ast: z11.number().optional(),
-        stat_stl: z11.number().optional(),
-        stat_reb: z11.number().optional(),
-        stat_blk: z11.number().optional(),
-        stat_int: z11.number().optional()
+    players: z12.array(
+      z12.object({
+        name: z12.string().min(1),
+        position1: z12.string().optional(),
+        position2: z12.string().optional(),
+        stars: z12.number().min(1).max(5).optional().describe("Star tier; converted to a rating by the importer."),
+        social_handle: z12.string().optional(),
+        stat_3pt: z12.number().optional(),
+        stat_mid: z12.number().optional(),
+        stat_fin: z12.number().optional(),
+        stat_dnk: z12.number().optional(),
+        stat_ast: z12.number().optional(),
+        stat_stl: z12.number().optional(),
+        stat_reb: z12.number().optional(),
+        stat_blk: z12.number().optional(),
+        stat_int: z12.number().optional()
       })
     ).optional().describe("New player cards created and linked to the storyline."),
-    locker_codes: z11.array(
-      z11.object({
-        code: z11.string().min(1),
-        reward_type: z11.string().optional(),
-        reward_value: z11.record(z11.string(), z11.any()).optional(),
-        max_redemptions: z11.number().int().nullable().optional(),
-        expires_at: z11.string().nullable().optional()
+    locker_codes: z12.array(
+      z12.object({
+        code: z12.string().min(1),
+        reward_type: z12.string().optional(),
+        reward_value: z12.record(z12.string(), z12.any()).optional(),
+        max_redemptions: z12.number().int().nullable().optional(),
+        expires_at: z12.string().nullable().optional()
       })
     ).optional(),
-    posts: z11.array(
-      z11.object({
-        content: z11.string().min(1),
-        post_type: z11.string().optional(),
-        event_type: z11.string().optional(),
-        location_handle: z11.string().optional().describe("Handle of an existing media (location) account."),
-        player_name: z11.string().optional().describe("Name of a player created in this same bundle."),
-        image_url: z11.string().optional(),
-        scheduled_at: z11.string().optional(),
-        is_headline: z11.boolean().optional(),
-        headline_rank: z11.number().int().optional(),
-        headline_image_url: z11.string().optional()
+    posts: z12.array(
+      z12.object({
+        content: z12.string().min(1),
+        post_type: z12.string().optional(),
+        event_type: z12.string().optional(),
+        location_handle: z12.string().optional().describe("Handle of an existing media (location) account."),
+        player_name: z12.string().optional().describe("Name of a player created in this same bundle."),
+        image_url: z12.string().optional(),
+        scheduled_at: z12.string().optional(),
+        is_headline: z12.boolean().optional(),
+        headline_rank: z12.number().int().optional(),
+        headline_image_url: z12.string().optional()
       })
     ).optional()
   },
@@ -900,14 +1004,14 @@ var import_storyline_bundle_default = defineTool14({
 
 // src/lib/mcp/tools/create-rows.ts
 import { defineTool as defineTool15 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z12 } from "npm:zod@^3.25.76";
+import { z as z13 } from "npm:zod@^3.25.76";
 var create_rows_default = defineTool15({
   name: "create_rows",
   title: "Create rows",
   description: "Admin only. Insert new rows into a GTeam Infinite table. Each row is an object of column/value pairs; call list_rows first to learn the shape. Returns the inserted rows.",
   inputSchema: {
-    table: z12.enum(WRITE_TABLES).describe("Table to insert into."),
-    rows: z12.array(z12.record(z12.string(), z12.any())).describe("Rows to insert as column/value objects.")
+    table: z13.enum(WRITE_TABLES).describe("Table to insert into."),
+    rows: z13.array(z13.record(z13.string(), z13.any())).describe("Rows to insert as column/value objects.")
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async ({ table, rows }, ctx) => {
@@ -922,18 +1026,18 @@ var create_rows_default = defineTool15({
 
 // src/lib/mcp/tools/update-rows.ts
 import { defineTool as defineTool16 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z13 } from "npm:zod@^3.25.76";
+import { z as z14 } from "npm:zod@^3.25.76";
 var update_rows_default = defineTool16({
   name: "update_rows",
   title: "Update rows",
   description: "Admin only. Patch existing rows matched by a column value (defaults to `name`, use `title` for gem tasks). Only the fields you send are written; everything else is left untouched.",
   inputSchema: {
-    table: z13.enum(WRITE_TABLES).describe("Table to update."),
-    match_column: z13.string().optional().describe("Column used to find the row. Defaults to `name`."),
-    updates: z13.array(
-      z13.object({
-        match: z13.string().describe("Value of the match column, e.g. the player name."),
-        patch: z13.record(z13.string(), z13.any()).describe("Columns to write.")
+    table: z14.enum(WRITE_TABLES).describe("Table to update."),
+    match_column: z14.string().optional().describe("Column used to find the row. Defaults to `name`."),
+    updates: z14.array(
+      z14.object({
+        match: z14.string().describe("Value of the match column, e.g. the player name."),
+        patch: z14.record(z14.string(), z14.any()).describe("Columns to write.")
       })
     ).describe("One entry per row to patch.")
   },
@@ -957,14 +1061,14 @@ var update_rows_default = defineTool16({
 
 // src/lib/mcp/tools/delete-rows.ts
 import { defineTool as defineTool17 } from "npm:@lovable.dev/mcp-js@0.25.0";
-import { z as z14 } from "npm:zod@^3.25.76";
+import { z as z15 } from "npm:zod@^3.25.76";
 var delete_rows_default = defineTool17({
   name: "delete_rows",
   title: "Delete rows",
   description: "Admin only. Permanently delete rows matched by id. Destructive \u2014 confirm with the user before calling.",
   inputSchema: {
-    table: z14.enum(WRITE_TABLES).describe("Table to delete from."),
-    ids: z14.array(z14.string()).describe("Row ids (uuid) to delete.")
+    table: z15.enum(WRITE_TABLES).describe("Table to delete from."),
+    ids: z15.array(z15.string()).describe("Row ids (uuid) to delete.")
   },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ table, ids }, ctx) => {
@@ -980,81 +1084,6 @@ var delete_rows_default = defineTool17({
 // src/lib/mcp/tools/batch-tools.ts
 import { defineTool as defineTool18 } from "npm:@lovable.dev/mcp-js@0.25.0";
 import { z as z16 } from "npm:zod@^3.25.76";
-
-// src/lib/mcp/batch.ts
-import { z as z15 } from "npm:zod@^3.25.76";
-var modeField = z15.enum(["preview", "commit"]).default("preview").describe("`preview` validates everything and writes nothing. `commit` applies the approved plan.");
-var previewTokenField = z15.string().optional().describe(
-  "Required for mode='commit': the preview_token returned by the matching preview. The commit is rejected unless the payload hashes identically to that preview, and each token works only once."
-);
-var STAT_KEYS = [
-  "stat_3pt",
-  "stat_mid",
-  "stat_fin",
-  "stat_dnk",
-  "stat_ast",
-  "stat_stl",
-  "stat_reb",
-  "stat_blk",
-  "stat_int"
-];
-var CHALLENGE_TYPES = [
-  "points_scored",
-  "games_won",
-  "total_stat",
-  "single_game_stat",
-  "multi_condition"
-];
-var itemArray = (what) => z15.array(z15.record(z15.string(), z15.any())).min(1).describe(what);
-async function runBatch(ctx, payload, mode8, previewToken, kind) {
-  const { client, error } = await adminClient(ctx);
-  if (error) return error;
-  if (mode8 === "commit" && !previewToken) {
-    return fail(
-      JSON.stringify({
-        error_code: "PREVIEW_REQUIRED",
-        message: "Run the same payload with mode='preview' first, get user approval, then commit with its preview_token."
-      })
-    );
-  }
-  const { data, error: dbError } = await client.rpc("admin_apply_batch", {
-    p_payload: clean(payload),
-    p_commit: mode8 === "commit",
-    p_preview_token: previewToken ?? null,
-    p_kind: kind
-  });
-  if (dbError) return fail(structuredError(dbError.message, mode8));
-  return ok(data);
-}
-function structuredError(message, mode8) {
-  const codeMatch = message.match(/^([A-Z_]{3,}):\s*([\s\S]*)$/);
-  let matches;
-  let text = message;
-  if (codeMatch) text = codeMatch[2];
-  const m = text.match(/matches=(\[[\s\S]*\])\s*$/);
-  if (m) {
-    try {
-      matches = JSON.parse(m[1]);
-      text = text.slice(0, m.index).trim();
-    } catch {
-    }
-  }
-  return JSON.stringify(
-    {
-      error_code: codeMatch ? codeMatch[1] : "INVALID_PAYLOAD",
-      message: text,
-      mode: mode8,
-      wrote_anything: false,
-      ...matches ? { matches } : {}
-    },
-    null,
-    2
-  );
-}
-var SAFETY = " Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.";
-var safetyNote = SAFETY;
-
-// src/lib/mcp/tools/batch-tools.ts
 function pair(opts) {
   const previewTool = defineTool18({
     name: `preview${opts.base}`,
@@ -1133,20 +1162,25 @@ var dominationRoad = pair({
   base: "DominationRoad",
   title: "complete Domination road",
   kind: "domination_road",
-  description: "Preview an entire Domination road in one operation: every game's order, opponent, difficulty stars (1-5), coin/pack rewards and full opponent roster. Validates unique game_order, difficulty range, reward values, team/player references and complete rosters. With replace_road: true, games on THAT road only that are absent from the payload are deleted (reported under deletes).",
+  description: "Preview an entire Domination road in one operation, rematch-safe: every game's game_order, opponent, difficulty stars (1-5), coin/pack rewards and full opponent roster. Games are identified by domination_game_id (preferred) or by road_name + game_order \u2014 NEVER by opponent name, so the same opponent may legally appear at several game_orders on one road (e.g. Lockport at 1 and 6) and each stays a separate game with its own id and roster. Validates unique game_order, difficulty range, non-negative rewards, opponent_team_id / pack_reward_id / roster references and complete rosters; errors report the offending game_order and field. With replace_road: true, games on THAT road only whose game_order is absent from the payload are deleted (reported under deletes) while games that are present keep their existing ids.",
   fields: {
     road_name: z16.string().min(1).describe("Road the games belong to, e.g. 'Tortuga'."),
-    replace_road: z16.boolean().optional().describe("DESTRUCTIVE: delete games on this road that are not in `games`."),
+    replace_road: z16.boolean().optional().describe(
+      "DESTRUCTIVE: delete games on this road whose game_order is not in `games`. Scoped to this road only; matched games keep their ids."
+    ),
     games: z16.array(
       z16.object({
-        domination_game_id: z16.string().uuid().optional(),
-        game_order: z16.number().int().min(1),
-        opponent_name: z16.string().optional(),
-        opponent_team_id: z16.string().uuid().optional(),
+        domination_game_id: z16.string().uuid().optional().describe("Immutable id of an existing game \u2014 the only fully unambiguous target."),
+        game_order: z16.number().int().min(1).describe("Position on the road; unique per road and used as the fallback target."),
+        opponent_name: z16.string().optional().describe("Display name only; duplicates across game_orders are allowed."),
+        opponent_team_id: z16.string().uuid().optional().describe("Optional link to a teams row."),
         difficulty_stars: z16.number().int().min(1).max(5).optional(),
         coin_reward: z16.number().int().min(0).optional(),
-        pack_reward: z16.string().nullable().optional(),
-        roster: z16.array(z16.any()).optional().describe("Ordered roster: { player_id } | { card_key } | { player_name } | 'ref:player:...'. DESTRUCTIVE replacement.")
+        pack_reward_id: z16.string().uuid().nullable().optional().describe("Preferred pack reward target; pack names are often duplicated. null clears it."),
+        pack_reward: z16.string().nullable().optional().describe("Legacy: pack id or exact unique pack name. An ambiguous name is rejected with AMBIGUOUS_PACK."),
+        roster: z16.array(z16.any()).optional().describe(
+          "Ordered roster: { player_id } | { card_key } | { player_name } | 'ref:player:...'. DESTRUCTIVE full replacement for THIS game only."
+        )
       })
     ).min(1)
   },
@@ -1250,9 +1284,60 @@ var batchTools = [
   ...evoBundle
 ];
 
-// src/lib/mcp/tools/planning-reads.ts
+// src/lib/mcp/tools/domination-delete.ts
 import { defineTool as defineTool19 } from "npm:@lovable.dev/mcp-js@0.25.0";
 import { z as z17 } from "npm:zod@^3.25.76";
+var targetFields = {
+  domination_game_id: z17.string().uuid().optional().describe("Preferred: the immutable id of the game to delete (see getDominationRoad)."),
+  road_name: z17.string().optional().describe("Fallback target, together with game_order."),
+  game_order: z17.number().int().min(1).optional().describe("Fallback target, together with road_name. Opponent name alone is never accepted.")
+};
+async function run(ctx, input, commit, previewToken) {
+  const { client, error } = await adminClient(ctx);
+  if (error) return error;
+  if (commit && !previewToken) {
+    return fail(
+      JSON.stringify({
+        error_code: "PREVIEW_REQUIRED",
+        message: "Call previewDeleteDominationGame first, get user approval, then commit with its preview_token."
+      })
+    );
+  }
+  const { data, error: dbError } = await client.rpc("admin_delete_domination_game", {
+    p_payload: clean(input),
+    p_commit: commit,
+    p_preview_token: previewToken ?? null
+  });
+  if (dbError) return fail(structuredError(dbError.message, commit ? "commit" : "preview"));
+  return ok(data);
+}
+var previewDeleteDominationGame = defineTool19({
+  name: "previewDeleteDominationGame",
+  title: "Preview: delete one Domination game",
+  description: "Admin only. ZERO WRITES. Resolves a single Domination game by domination_game_id (preferred) or by exact road_name + game_order, and returns exactly what deleting it would remove: the game's id, road, game_order, opponent and its ordered roster junction rows, plus a one-time preview_token. Deleting by opponent name alone is rejected, because rematches mean one opponent can appear several times on a road. Nothing is removed until commitDeleteDominationGame is called with the identical target and that token.",
+  inputSchema: targetFields,
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  handler: async (input, ctx) => run(ctx, input, false)
+});
+var commitDeleteDominationGame = defineTool19({
+  name: "commitDeleteDominationGame",
+  title: "Commit: delete one Domination game",
+  description: "Admin only. DESTRUCTIVE. Deletes the previewed Domination game and its roster junction rows in one transaction. Requires the unexpired, unused preview_token from previewDeleteDominationGame for the same game; any mismatch is rejected with PREVIEW_MISMATCH and nothing is deleted.",
+  inputSchema: {
+    ...targetFields,
+    preview_token: z17.string().describe("The preview_token from previewDeleteDominationGame. Single use.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  handler: async (input, ctx) => {
+    const { preview_token, ...rest } = input;
+    return run(ctx, rest, true, preview_token);
+  }
+});
+var dominationDeleteTools = [previewDeleteDominationGame, commitDeleteDominationGame];
+
+// src/lib/mcp/tools/planning-reads.ts
+import { defineTool as defineTool20 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z18 } from "npm:zod@^3.25.76";
 async function resolvePlayer(client, input) {
   const { data, error } = await client.rpc("admin_resolve_player", {
     p_target: {
@@ -1264,16 +1349,16 @@ async function resolvePlayer(client, input) {
   if (error) return { error: fail(error.message) };
   return { id: data };
 }
-var targetFields = {
-  player_id: z17.string().uuid().optional(),
-  card_key: z17.string().optional(),
-  name: z17.string().optional().describe("Exact display name. Rejected if several cards share it.")
+var targetFields2 = {
+  player_id: z18.string().uuid().optional(),
+  card_key: z18.string().optional(),
+  name: z18.string().optional().describe("Exact display name. Rejected if several cards share it.")
 };
-var getEvoChain = defineTool19({
+var getEvoChain = defineTool20({
   name: "getEvoChain",
   title: "Get a card's full evolution chain",
   description: "Read-only. Returns the complete evolution sequence a card belongs to \u2014 every step in order with its source card, destination card, gem tiers, challenge type/stat/target, stat boosts and new badges \u2014 so you can extend or edit the chain without guessing ids.",
-  inputSchema: targetFields,
+  inputSchema: targetFields2,
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async (input, ctx) => {
     const { client, error } = await userClient(ctx);
@@ -1305,11 +1390,11 @@ var getEvoChain = defineTool19({
     return ok({ requested_player_id: resolved.id, root_player_id: rootId, steps: chain, cards: cards ?? [] });
   }
 });
-var getPlayerVersions = defineTool19({
+var getPlayerVersions = defineTool20({
   name: "getPlayerVersions",
   title: "List every card sharing a display name",
   description: "Read-only. Duplicate display names are legal, so use this before targeting a player by name: it returns every card with that name plus its player_id, card_key, card_variant, evo_stage, rating, gem tier and team, letting you pick the exact card to edit.",
-  inputSchema: { name: z17.string().min(1).describe("Display name to look up (case-insensitive, exact).") },
+  inputSchema: { name: z18.string().min(1).describe("Display name to look up (case-insensitive, exact).") },
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ name }, ctx) => {
     const { client, error } = await userClient(ctx);
@@ -1319,13 +1404,13 @@ var getPlayerVersions = defineTool19({
     return ok({ name, count: data?.length ?? 0, versions: data ?? [] });
   }
 });
-var getTeamRoster = defineTool19({
+var getTeamRoster = defineTool20({
   name: "getTeamRoster",
   title: "Get a team's roster in slot order",
   description: "Read-only. Returns the team plus its roster in slot order with each card's player_id, card_key, name, rating and gem tier \u2014 the exact input shape previewTeamBatch expects for a roster replacement.",
   inputSchema: {
-    team_id: z17.string().uuid().optional(),
-    name: z17.string().optional().describe("Exact team name.")
+    team_id: z18.string().uuid().optional(),
+    name: z18.string().optional().describe("Exact team name.")
   },
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async (input, ctx) => {
@@ -1341,11 +1426,11 @@ var getTeamRoster = defineTool19({
     return ok({ team, roster: roster ?? [], roster_size: roster?.length ?? 0 });
   }
 });
-var getDominationRoad = defineTool19({
+var getDominationRoad = defineTool20({
   name: "getDominationRoad",
   title: "Get a Domination road template",
-  description: "Read-only. Returns every game on a Domination road in order with difficulty stars, rewards and full opponent rosters \u2014 the exact structure previewDominationRoad accepts, so you can edit and send it straight back. Omit road_name to list all road names with their game counts.",
-  inputSchema: { road_name: z17.string().optional().describe("Road to fetch. Omit to list all roads.") },
+  description: "Read-only. Returns every game on a Domination road in game_order with its immutable domination_game_id, opponent_team_id, difficulty stars, coin/pack rewards (pack_reward_id plus the resolved pack name) and full ordered opponent roster \u2014 the exact structure previewDominationRoad accepts, so you can edit and send it straight back. Rematches are visible as separate games sharing an opponent_name at different game_orders; always target games by domination_game_id or game_order, never by opponent name. Omit road_name to list all road names with their game counts.",
+  inputSchema: { road_name: z18.string().optional().describe("Road to fetch. Omit to list all roads.") },
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ road_name }, ctx) => {
     const { client, error } = await userClient(ctx);
@@ -1356,31 +1441,50 @@ var getDominationRoad = defineTool19({
       for (const r of data ?? []) counts.set(r.road_name, (counts.get(r.road_name) ?? 0) + 1);
       return ok({ roads: Array.from(counts, ([name, games2]) => ({ road_name: name, games: games2 })) });
     }
-    const { data: games } = await client.from("domination_games").select("id,game_order,opponent_name,difficulty_stars,coin_reward,pack_reward").ilike("road_name", road_name).order("game_order");
+    const { data: games } = await client.from("domination_games").select(
+      "id,game_order,opponent_name,opponent_team_id,difficulty_stars,coin_reward,pack_reward,pack_reward_id,teams:opponent_team_id(name),packs:pack_reward_id(name)"
+    ).ilike("road_name", road_name).order("game_order");
     if (!games?.length) return fail(`UNKNOWN_ROAD: no games found for road "${road_name}".`);
     const { data: rosters } = await client.from("domination_game_players").select("domination_game_id,slot,player_card_id,player_cards(id,name,card_key,rating)").in("domination_game_id", games.map((g) => g.id)).order("slot");
+    const nameCounts = /* @__PURE__ */ new Map();
+    for (const g of games) nameCounts.set(g.opponent_name, (nameCounts.get(g.opponent_name) ?? 0) + 1);
     return ok({
       road_name,
+      target_by: "domination_game_id (preferred) or game_order \u2014 opponent_name is not unique on a road",
+      rematches: Array.from(nameCounts).filter(([, n]) => n > 1).map(([opponent_name, appearances]) => ({
+        opponent_name,
+        appearances,
+        game_orders: games.filter((g) => g.opponent_name === opponent_name).map((g) => g.game_order)
+      })),
       games: games.map((g) => ({
         domination_game_id: g.id,
         game_order: g.game_order,
         opponent_name: g.opponent_name,
+        opponent_team_id: g.opponent_team_id,
+        opponent_team_name: g.teams?.name ?? null,
         difficulty_stars: g.difficulty_stars,
         coin_reward: g.coin_reward,
-        pack_reward: g.pack_reward,
-        roster: (rosters ?? []).filter((r) => r.domination_game_id === g.id).map((r) => ({ player_id: r.player_card_id, card_key: r.player_cards?.card_key, name: r.player_cards?.name }))
+        pack_reward_id: g.pack_reward_id,
+        pack_reward_name: g.packs?.name ?? null,
+        pack_reward_legacy: g.pack_reward,
+        roster: (rosters ?? []).filter((r) => r.domination_game_id === g.id).map((r) => ({
+          slot: r.slot,
+          player_id: r.player_card_id,
+          card_key: r.player_cards?.card_key,
+          name: r.player_cards?.name
+        }))
       }))
     });
   }
 });
-var getBatchReferences = defineTool19({
+var getBatchReferences = defineTool20({
   name: "getBatchReferences",
   title: "Get ids and keys for batch payloads",
   description: "Read-only. Returns the immutable identifiers batch tools accept: gem tiers, teams, collections, sub-collections, badges, signature traits, packs, runs, roads and (optionally) player cards with player_id + card_key. Call this before building a batch so every reference is an id or card_key rather than a fuzzy name.",
   inputSchema: {
-    include_players: z17.boolean().default(false).describe("Include player cards (id, card_key, name, rating). Large."),
-    player_search: z17.string().optional().describe("Only players whose name contains this text."),
-    limit: z17.number().int().min(1).max(500).default(200)
+    include_players: z18.boolean().default(false).describe("Include player cards (id, card_key, name, rating). Large."),
+    player_search: z18.string().optional().describe("Only players whose name contains this text."),
+    limit: z18.number().int().min(1).max(500).default(200)
   },
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ include_players, player_search, limit }, ctx) => {
@@ -1414,7 +1518,7 @@ var mcp_default = defineMcp({
   name: "gteam-infinite-hub",
   title: "GTeam Infinite Hub",
   version: "0.3.0",
-  instructions: "Tools for building and editing GTeam Infinite content. Start with get_system_docs for the data model, get_diagnostics for gaps, and getBatchReferences for the immutable ids and card_keys every write tool accepts. Prefer the batch tools for all real work: previewContentBatch/commitContentBatch (any mix of entities), previewPlayerBatch, previewTeamBatch, previewDominationRoad, previewEvoPath, previewEvoPathBatch and previewEvoBundle. The protocol is always two steps: call preview* (zero writes, returns creates/updates/deletes/replacements/warnings plus a one-time preview_token), show that plan to the user, then call the matching commit* with the byte-identical payload and that token. A commit whose payload differs is rejected with PREVIEW_MISMATCH and writes nothing; every batch is one transaction. Target entities by immutable id whenever possible: duplicate player display names are legal, so a name that matches more than one card is REJECTED with all matches listed \u2014 use getPlayerVersions or card_key to disambiguate. Within one batch, declare temp_ref: 'ref:player:my-card' on a new item and reference it later (destination_player_ref, roster entries) to create a card and everything pointing at it in one shot. Use getEvoChain, getTeamRoster and getDominationRoad to read current structures in the exact shape the batch tools accept. The older single-entity upsert_* tools and list_rows/create_rows/update_rows/delete_rows remain for small one-off edits. All writes require an admin account; per-user and economy data is never exposed.",
+  instructions: "Tools for building and editing GTeam Infinite content. Start with get_system_docs for the data model, get_diagnostics for gaps, and getBatchReferences for the immutable ids and card_keys every write tool accepts. Prefer the batch tools for all real work: previewContentBatch/commitContentBatch (any mix of entities), previewPlayerBatch, previewTeamBatch, previewDominationRoad, previewEvoPath, previewEvoPathBatch and previewEvoBundle. The protocol is always two steps: call preview* (zero writes, returns creates/updates/deletes/replacements/warnings plus a one-time preview_token), show that plan to the user, then call the matching commit* with the byte-identical payload and that token. A commit whose payload differs is rejected with PREVIEW_MISMATCH and writes nothing; every batch is one transaction. Target entities by immutable id whenever possible: duplicate player display names are legal, so a name that matches more than one card is REJECTED with all matches listed \u2014 use getPlayerVersions or card_key to disambiguate. Domination games are ALWAYS targeted by domination_game_id or road_name + game_order, never by opponent name: rematches are legal and expected (the same opponent may appear at several game_orders on one road, e.g. an 11-game road where Lockport is games 1 and 6) and each is a separate game with its own roster and rewards. Use previewDominationRoad with replace_road to make a road exactly match a payload (missing game_orders are deleted, matched ones keep their ids), and previewDeleteDominationGame / commitDeleteDominationGame to remove a single game. Prefer pack_reward_id over pack names, which are often duplicated. Within one batch, declare temp_ref: 'ref:player:my-card' on a new item and reference it later (destination_player_ref, roster entries) to create a card and everything pointing at it in one shot. Use getEvoChain, getTeamRoster and getDominationRoad to read current structures in the exact shape the batch tools accept. The older single-entity upsert_* tools and list_rows/create_rows/update_rows/delete_rows remain for small one-off edits. All writes require an admin account; per-user and economy data is never exposed.",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated"
@@ -1426,6 +1530,7 @@ var mcp_default = defineMcp({
     list_rows_default,
     ...planningReadTools,
     ...batchTools,
+    ...dominationDeleteTools,
     create_players_default,
     upsert_player_default,
     upsert_team_default,

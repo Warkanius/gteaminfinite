@@ -121,7 +121,7 @@ const getDominationRoad = defineTool({
   name: "getDominationRoad",
   title: "Get a Domination road template",
   description:
-    "Read-only. Returns every game on a Domination road in order with difficulty stars, rewards and full opponent rosters — the exact structure previewDominationRoad accepts, so you can edit and send it straight back. Omit road_name to list all road names with their game counts.",
+    "Read-only. Returns every game on a Domination road in game_order with its immutable domination_game_id, opponent_team_id, difficulty stars, coin/pack rewards (pack_reward_id plus the resolved pack name) and full ordered opponent roster — the exact structure previewDominationRoad accepts, so you can edit and send it straight back. Rematches are visible as separate games sharing an opponent_name at different game_orders; always target games by domination_game_id or game_order, never by opponent name. Omit road_name to list all road names with their game counts.",
   inputSchema: { road_name: z.string().optional().describe("Road to fetch. Omit to list all roads.") },
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ road_name }, ctx) => {
@@ -135,7 +135,9 @@ const getDominationRoad = defineTool({
     }
     const { data: games } = await client
       .from("domination_games")
-      .select("id,game_order,opponent_name,difficulty_stars,coin_reward,pack_reward")
+      .select(
+        "id,game_order,opponent_name,opponent_team_id,difficulty_stars,coin_reward,pack_reward,pack_reward_id,teams:opponent_team_id(name),packs:pack_reward_id(name)",
+      )
       .ilike("road_name", road_name)
       .order("game_order");
     if (!games?.length) return fail(`UNKNOWN_ROAD: no games found for road "${road_name}".`);
@@ -144,21 +146,41 @@ const getDominationRoad = defineTool({
       .select("domination_game_id,slot,player_card_id,player_cards(id,name,card_key,rating)")
       .in("domination_game_id", games.map((g) => g.id))
       .order("slot");
+    const nameCounts = new Map<string, number>();
+    for (const g of games) nameCounts.set(g.opponent_name, (nameCounts.get(g.opponent_name) ?? 0) + 1);
     return ok({
       road_name,
+      target_by: "domination_game_id (preferred) or game_order — opponent_name is not unique on a road",
+      rematches: Array.from(nameCounts)
+        .filter(([, n]) => n > 1)
+        .map(([opponent_name, appearances]) => ({
+          opponent_name,
+          appearances,
+          game_orders: games.filter((g) => g.opponent_name === opponent_name).map((g) => g.game_order),
+        })),
       games: games.map((g) => ({
         domination_game_id: g.id,
         game_order: g.game_order,
         opponent_name: g.opponent_name,
+        opponent_team_id: g.opponent_team_id,
+        opponent_team_name: (g as any).teams?.name ?? null,
         difficulty_stars: g.difficulty_stars,
         coin_reward: g.coin_reward,
-        pack_reward: g.pack_reward,
+        pack_reward_id: g.pack_reward_id,
+        pack_reward_name: (g as any).packs?.name ?? null,
+        pack_reward_legacy: g.pack_reward,
         roster: (rosters ?? [])
           .filter((r) => r.domination_game_id === g.id)
-          .map((r) => ({ player_id: r.player_card_id, card_key: (r as any).player_cards?.card_key, name: (r as any).player_cards?.name })),
+          .map((r) => ({
+            slot: r.slot,
+            player_id: r.player_card_id,
+            card_key: (r as any).player_cards?.card_key,
+            name: (r as any).player_cards?.name,
+          })),
       })),
     });
   },
+
 });
 
 const getBatchReferences = defineTool({
