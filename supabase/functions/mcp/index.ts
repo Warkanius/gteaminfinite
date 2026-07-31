@@ -303,14 +303,15 @@ var get_diagnostics_default = defineTool2({
       client.from("team_players").select("team_id"),
       client.from("runs").select("id, name"),
       client.from("run_players").select("run_id"),
-      client.from("domination_games").select("id, road_name, opponent_name"),
+      client.from("domination_games").select("id, road_id, road_name, opponent_name, game_order, pack_reward_id"),
       client.from("domination_game_players").select("domination_game_id"),
       client.from("packs").select("id, name, pack_type"),
       client.from("pack_players").select("pack_id, slot_number"),
       client.from("pack_odds").select("pack_id, pack_type, result_slot, percentage"),
       client.from("locker_codes").select("id, code, reward_type, reward_value"),
       client.from("storylines").select("id, title"),
-      client.from("storyline_entities").select("storyline_id, entity_type, entity_id")
+      client.from("storyline_entities").select("storyline_id, entity_type, entity_id"),
+      client.from("domination_roads").select("id, name, is_active, sort_order")
     ]);
     const countBy = (rows, key) => {
       const map = /* @__PURE__ */ new Map();
