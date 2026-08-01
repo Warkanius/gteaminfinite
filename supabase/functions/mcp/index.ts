@@ -1388,9 +1388,13 @@ var bulkFields = {
   mode: z18.enum(["merge", "replace"]).default("merge").describe(
     "'merge' only touches the game_orders present in `games`. 'replace' DESTRUCTIVELY makes the road match the payload exactly: games on this road whose game_order is absent are deleted, matched games keep their ids."
   ),
+  expected_game_count: z18.number().int().min(1).optional().describe(
+    "Safety check for mode='replace': the number of games the road must end up with. The preview is rejected if the payload carries a different count, and the commit is rolled back if the road does not verify to exactly this many games."
+  ),
+  restored_from: z18.string().uuid().optional().describe("Set when replaying a payload from getContentOperations/getRoadRestorePayload, so history records the rollback."),
   games: z18.array(gameSchema).default([]).describe("Every game to create or update, in any order.")
 };
-var bulkSafety = " Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction. Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.";
+var bulkSafety = " Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction, protected by an advisory lock, a stale-scope check (CONCURRENT_MODIFICATION) and post-commit verification (game count, contiguous orders, duplicate orders, roster sizes, total coin reward, and proof no other road changed). Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.";
 async function runBulk(ctx, input, commit, previewToken) {
   const { client, error } = await adminClient(ctx);
   if (error) return error;
@@ -1514,13 +1518,52 @@ var commitDeleteDominationRoad = defineTool20({
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
   handler: ({ preview_token, ...rest }, ctx) => runDelete(ctx, rest, true, preview_token)
 });
+var getContentOperations = defineTool20({
+  name: "getContentOperations",
+  title: "Read the content operation history",
+  description: "Read-only. Every committed content operation in reverse order: operation id, content type, operation type (merge / replace / delete / restore), scope, who ran it, payload hash, created / updated / deleted ids, warnings and the post-commit verification block. Use the returned id with getRoadRestorePayload to roll a Domination road back to how it looked before that operation.",
+  inputSchema: {
+    content_type: z18.string().optional().describe("Filter, e.g. 'domination_road'."),
+    scope_id: z18.string().uuid().optional().describe("Filter to one road / entity id."),
+    limit: z18.number().int().min(1).max(100).default(20)
+  },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async ({ content_type, scope_id, limit }, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    let q = client.from("content_audit_log").select(
+      "id,content_type,operation_type,scope_id,scope_label,payload_hash,created_ids,updated_ids,deleted_ids,warnings,verification,restored_from,created_at"
+    ).order("created_at", { ascending: false }).limit(limit ?? 20);
+    if (content_type) q = q.eq("content_type", content_type);
+    if (scope_id) q = q.eq("scope_id", scope_id);
+    const { data, error: dbError } = await q;
+    if (dbError) return fail(dbError.message);
+    return ok({ operations: data ?? [] });
+  }
+});
+var getRoadRestorePayload = defineTool20({
+  name: "getRoadRestorePayload",
+  title: "Build a rollback payload for a Domination road",
+  description: "Read-only. Returns the road exactly as it looked BEFORE the given operation (from getContentOperations), already shaped as a mode='replace' payload with expected_game_count and restored_from set. Feed it straight to previewDominationRoadImport / commitDominationRoadImport to roll the road back. Fails with NO_SNAPSHOT when the operation created the road (delete it instead).",
+  inputSchema: { operation_id: z18.string().uuid().describe("id from getContentOperations.") },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async ({ operation_id }, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    const { data, error: dbError } = await client.rpc("admin_content_restore_payload", { p_audit_id: operation_id });
+    if (dbError) return fail(structuredError(dbError.message, "preview"));
+    return ok(data);
+  }
+});
 var dominationRoadTools = [
   listDominationRoads,
   exportDominationRoad,
   previewDominationRoadImport,
   commitDominationRoadImport,
   previewDeleteDominationRoad,
-  commitDeleteDominationRoad
+  commitDeleteDominationRoad,
+  getContentOperations,
+  getRoadRestorePayload
 ];
 
 // src/lib/mcp/tools/planning-reads.ts
@@ -1706,7 +1749,7 @@ var mcp_default = defineMcp({
   name: "gteam-infinite-hub",
   title: "GTeam Infinite Hub",
   version: "0.3.0",
-  instructions: "Tools for building and editing GTeam Infinite content. Start with get_system_docs for the data model, get_diagnostics for gaps, and getBatchReferences for the immutable ids and card_keys every write tool accepts. Prefer the batch tools for all real work: previewContentBatch/commitContentBatch (any mix of entities), previewPlayerBatch, previewTeamBatch, previewDominationRoadImport, previewEvoPath, previewEvoPathBatch and previewEvoBundle. The protocol is always two steps: call preview* (zero writes, returns creates/updates/deletes/replacements/warnings plus a one-time preview_token), show that plan to the user, then call the matching commit* with the byte-identical payload and that token. A commit whose payload differs is rejected with PREVIEW_MISMATCH and writes nothing; every batch is one transaction. Target entities by immutable id whenever possible: duplicate player display names are legal, so a name that matches more than one card is REJECTED with all matches listed \u2014 use getPlayerVersions or card_key to disambiguate. Domination roads are real records: use listDominationRoads for road_ids and game counts and exportDominationRoad to get a whole road in the exact shape the import tools accept. Bulk road work goes through previewDominationRoadImport / commitDominationRoadImport, which create or rename a road, set its description / sort_order / is_active and create, update, reorder or delete its games and rosters in one transaction \u2014 mode='merge' touches only the game_orders you send, mode='replace' makes the road match the payload exactly (omitted game_orders on that road are deleted, matched games keep their ids). previewDeleteDominationRoad / commitDeleteDominationRoad remove an entire road with its games and rosters; previewDeleteDominationGame / commitDeleteDominationGame remove a single game. Domination games are ALWAYS targeted by domination_game_id or road (road_id / road_name) + game_order, never by opponent name: rematches are legal and expected (the same opponent may appear at several game_orders on one road, e.g. an 11-game road where Lockport is games 1 and 6) and each is a separate game with its own roster and rewards. Prefer pack_reward_id over pack names, which are often duplicated. Within one batch, declare temp_ref: 'ref:player:my-card' on a new item and reference it later (destination_player_ref, roster entries) to create a card and everything pointing at it in one shot. Use getEvoChain, getTeamRoster and getDominationRoad to read current structures in the exact shape the batch tools accept. The older single-entity upsert_* tools and list_rows/create_rows/update_rows/delete_rows remain for small one-off edits. All writes require an admin account; per-user and economy data is never exposed.",
+  instructions: "Tools for building and editing GTeam Infinite content. Start with get_system_docs for the data model, get_diagnostics for gaps, and getBatchReferences for the immutable ids and card_keys every write tool accepts. Prefer the batch tools for all real work: previewContentBatch/commitContentBatch (any mix of entities), previewPlayerBatch, previewTeamBatch, previewDominationRoadImport, previewEvoPath, previewEvoPathBatch and previewEvoBundle. The protocol is always two steps: call preview* (zero writes, returns creates/updates/deletes/replacements/warnings plus a one-time preview_token), show that plan to the user, then call the matching commit* with the byte-identical payload and that token. A commit whose payload differs is rejected with PREVIEW_PAYLOAD_MISMATCH, a reused token with PREVIEW_ALREADY_COMMITTED, an expired one with PREVIEW_TOKEN_EXPIRED, and a scope somebody else edited since the preview with CONCURRENT_MODIFICATION \u2014 in every case nothing is written; every batch is one transaction. Domination road imports also accept expected_game_count with mode='replace' as a hard safety check and return a post-commit verification block (game count, contiguous orders, duplicate orders, roster sizes, total coin reward, proof no other road changed); the commit is rolled back if verification fails. Every committed operation is recorded: use getContentOperations for the history and getRoadRestorePayload to turn any entry into a ready-made rollback payload for previewDominationRoadImport. Target entities by immutable id whenever possible: duplicate player display names are legal, so a name that matches more than one card is REJECTED with all matches listed \u2014 use getPlayerVersions or card_key to disambiguate. Domination roads are real records: use listDominationRoads for road_ids and game counts and exportDominationRoad to get a whole road in the exact shape the import tools accept. Bulk road work goes through previewDominationRoadImport / commitDominationRoadImport, which create or rename a road, set its description / sort_order / is_active and create, update, reorder or delete its games and rosters in one transaction \u2014 mode='merge' touches only the game_orders you send, mode='replace' makes the road match the payload exactly (omitted game_orders on that road are deleted, matched games keep their ids). previewDeleteDominationRoad / commitDeleteDominationRoad remove an entire road with its games and rosters; previewDeleteDominationGame / commitDeleteDominationGame remove a single game. Domination games are ALWAYS targeted by domination_game_id or road (road_id / road_name) + game_order, never by opponent name: rematches are legal and expected (the same opponent may appear at several game_orders on one road, e.g. an 11-game road where Lockport is games 1 and 6) and each is a separate game with its own roster and rewards. Prefer pack_reward_id over pack names, which are often duplicated. Within one batch, declare temp_ref: 'ref:player:my-card' on a new item and reference it later (destination_player_ref, roster entries) to create a card and everything pointing at it in one shot. Use getEvoChain, getTeamRoster and getDominationRoad to read current structures in the exact shape the batch tools accept. The older single-entity upsert_* tools and list_rows/create_rows/update_rows/delete_rows remain for small one-off edits. All writes require an admin account; per-user and economy data is never exposed.",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated"

@@ -1509,7 +1509,7 @@
       {
         "name": "previewDominationRoadImport",
         "title": "Preview a bulk Domination road import",
-        "description": "Bulk-import or replace an entire Domination road in one atomic operation: create or rename the road, set its description/sort order/active flag, and create, update, reorder or delete its games and opponent rosters. Rematch-safe: games are targeted by domination_game_id or game_order only, never by opponent name, so one opponent may legally appear at several game_orders. Validates unique game_order, difficulty range 1-5, non-negative rewards and every opponent_team_id / pack_reward_id / roster reference, reporting the offending game_order and field. With mode='replace' the road ends up matching the payload exactly (omitted game_orders on THAT road are deleted). Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction. Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.",
+        "description": "Bulk-import or replace an entire Domination road in one atomic operation: create or rename the road, set its description/sort order/active flag, and create, update, reorder or delete its games and opponent rosters. Rematch-safe: games are targeted by domination_game_id or game_order only, never by opponent name, so one opponent may legally appear at several game_orders. Validates unique game_order, difficulty range 1-5, non-negative rewards and every opponent_team_id / pack_reward_id / roster reference, reporting the offending game_order and field. With mode='replace' the road ends up matching the payload exactly (omitted game_orders on THAT road are deleted). Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction, protected by an advisory lock, a stale-scope check (CONCURRENT_MODIFICATION) and post-commit verification (game count, contiguous orders, duplicate orders, roster sizes, total coin reward, and proof no other road changed). Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.",
         "annotations": {
           "readOnlyHint": true,
           "destructiveHint": false,
@@ -1552,6 +1552,16 @@
               ],
               "default": "merge",
               "description": "'merge' only touches the game_orders present in `games`. 'replace' DESTRUCTIVELY makes the road match the payload exactly: games on this road whose game_order is absent are deleted, matched games keep their ids."
+            },
+            "expected_game_count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Safety check for mode='replace': the number of games the road must end up with. The preview is rejected if the payload carries a different count, and the commit is rolled back if the road does not verify to exactly this many games."
+            },
+            "restored_from": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Set when replaying a payload from getContentOperations/getRoadRestorePayload, so history records the rollback."
             },
             "games": {
               "type": "array",
@@ -1670,6 +1680,16 @@
               ],
               "default": "merge",
               "description": "'merge' only touches the game_orders present in `games`. 'replace' DESTRUCTIVELY makes the road match the payload exactly: games on this road whose game_order is absent are deleted, matched games keep their ids."
+            },
+            "expected_game_count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Safety check for mode='replace': the number of games the road must end up with. The preview is rejected if the payload carries a different count, and the commit is rolled back if the road does not verify to exactly this many games."
+            },
+            "restored_from": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Set when replaying a payload from getContentOperations/getRoadRestorePayload, so history records the rollback."
             },
             "games": {
               "type": "array",
@@ -1803,6 +1823,65 @@
           },
           "required": [
             "preview_token"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "getContentOperations",
+        "title": "Read the content operation history",
+        "description": "Read-only. Every committed content operation in reverse order: operation id, content type, operation type (merge / replace / delete / restore), scope, who ran it, payload hash, created / updated / deleted ids, warnings and the post-commit verification block. Use the returned id with getRoadRestorePayload to roll a Domination road back to how it looked before that operation.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "content_type": {
+              "type": "string",
+              "description": "Filter, e.g. 'domination_road'."
+            },
+            "scope_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Filter to one road / entity id."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "getRoadRestorePayload",
+        "title": "Build a rollback payload for a Domination road",
+        "description": "Read-only. Returns the road exactly as it looked BEFORE the given operation (from getContentOperations), already shaped as a mode='replace' payload with expected_game_count and restored_from set. Feed it straight to previewDominationRoadImport / commitDominationRoadImport to roll the road back. Fails with NO_SNAPSHOT when the operation created the road (delete it instead).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "id from getContentOperations."
+            }
+          },
+          "required": [
+            "operation_id"
           ],
           "additionalProperties": false,
           "$schema": "http://json-schema.org/draft-07/schema#"

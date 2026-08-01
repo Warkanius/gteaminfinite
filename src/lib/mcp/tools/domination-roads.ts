@@ -48,11 +48,25 @@ const bulkFields = {
     .describe(
       "'merge' only touches the game_orders present in `games`. 'replace' DESTRUCTIVELY makes the road match the payload exactly: games on this road whose game_order is absent are deleted, matched games keep their ids.",
     ),
+  expected_game_count: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(
+      "Safety check for mode='replace': the number of games the road must end up with. The preview is rejected if the payload carries a different count, and the commit is rolled back if the road does not verify to exactly this many games.",
+    ),
+  restored_from: z
+    .string()
+    .uuid()
+    .optional()
+    .describe("Set when replaying a payload from getContentOperations/getRoadRestorePayload, so history records the rollback."),
   games: z.array(gameSchema).default([]).describe("Every game to create or update, in any order."),
 };
 
 const bulkSafety =
-  " Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction. Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.";
+  " Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction, protected by an advisory lock, a stale-scope check (CONCURRENT_MODIFICATION) and post-commit verification (game count, contiguous orders, duplicate orders, roster sizes, total coin reward, and proof no other road changed). Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.";
+
 
 async function runBulk(
   ctx: Parameters<typeof adminClient>[0],
@@ -206,6 +220,52 @@ const commitDeleteDominationRoad = defineTool({
   handler: ({ preview_token, ...rest }, ctx) => runDelete(ctx, rest, true, preview_token),
 });
 
+
+const getContentOperations = defineTool({
+  name: "getContentOperations",
+  title: "Read the content operation history",
+  description:
+    "Read-only. Every committed content operation in reverse order: operation id, content type, operation type (merge / replace / delete / restore), scope, who ran it, payload hash, created / updated / deleted ids, warnings and the post-commit verification block. Use the returned id with getRoadRestorePayload to roll a Domination road back to how it looked before that operation.",
+  inputSchema: {
+    content_type: z.string().optional().describe("Filter, e.g. 'domination_road'."),
+    scope_id: z.string().uuid().optional().describe("Filter to one road / entity id."),
+    limit: z.number().int().min(1).max(100).default(20),
+  },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async ({ content_type, scope_id, limit }, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    let q = client
+      .from("content_audit_log")
+      .select(
+        "id,content_type,operation_type,scope_id,scope_label,payload_hash,created_ids,updated_ids,deleted_ids,warnings,verification,restored_from,created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(limit ?? 20);
+    if (content_type) q = q.eq("content_type", content_type);
+    if (scope_id) q = q.eq("scope_id", scope_id);
+    const { data, error: dbError } = await q;
+    if (dbError) return fail(dbError.message);
+    return ok({ operations: data ?? [] });
+  },
+});
+
+const getRoadRestorePayload = defineTool({
+  name: "getRoadRestorePayload",
+  title: "Build a rollback payload for a Domination road",
+  description:
+    "Read-only. Returns the road exactly as it looked BEFORE the given operation (from getContentOperations), already shaped as a mode='replace' payload with expected_game_count and restored_from set. Feed it straight to previewDominationRoadImport / commitDominationRoadImport to roll the road back. Fails with NO_SNAPSHOT when the operation created the road (delete it instead).",
+  inputSchema: { operation_id: z.string().uuid().describe("id from getContentOperations.") },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async ({ operation_id }, ctx) => {
+    const { client, error } = await userClient(ctx);
+    if (error) return error;
+    const { data, error: dbError } = await client.rpc("admin_content_restore_payload", { p_audit_id: operation_id });
+    if (dbError) return fail(structuredError(dbError.message, "preview"));
+    return ok(data);
+  },
+});
+
 export const dominationRoadTools = [
   listDominationRoads,
   exportDominationRoad,
@@ -213,4 +273,7 @@ export const dominationRoadTools = [
   commitDominationRoadImport,
   previewDeleteDominationRoad,
   commitDeleteDominationRoad,
+  getContentOperations,
+  getRoadRestorePayload,
 ];
+

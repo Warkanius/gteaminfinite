@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Download, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, HistoryIcon, Loader2, Undo2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 export interface RoadOption {
@@ -27,7 +27,18 @@ type Plan = {
   game_operations?: unknown[];
   destructive_operations?: unknown[];
   warnings?: unknown[];
+  verification?: Record<string, unknown> | null;
+  operation_id?: string | null;
   preview_token?: string;
+};
+
+type AuditRow = {
+  id: string;
+  operation_type: string;
+  scope_label: string | null;
+  created_at: string;
+  before_snapshot: unknown;
+  verification: Record<string, unknown> | null;
 };
 
 const NEW_ROAD = "__new";
@@ -36,17 +47,23 @@ const NEW_ROAD = "__new";
  * Road-level bulk import / export.
  * Export produces the exact payload `admin_road_bulk` accepts; the dialog then
  * runs the two-step preview -> commit protocol so nothing is written until the
- * admin approves the plan.
+ * admin approves the plan. Committed operations are recorded in
+ * `content_audit_log`, and any of them can be rolled back by loading the
+ * pre-operation snapshot back into the editor as a replace payload.
  */
 export function RoadBulkImport({ roads, onCommitted }: Props) {
   const [open, setOpen] = useState(false);
   const [roadKey, setRoadKey] = useState<string>(NEW_ROAD);
   const [mode, setMode] = useState<"merge" | "replace">("merge");
   const [newRoadName, setNewRoadName] = useState("");
+  const [expectedCount, setExpectedCount] = useState("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [result, setResult] = useState<Plan | null>(null);
+  const [history, setHistory] = useState<AuditRow[]>([]);
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
+  const [restoredFrom, setRestoredFrom] = useState<string | null>(null);
 
   const selectedRoad = useMemo(() => roads.find((r) => r.id === roadKey) ?? null, [roads, roadKey]);
 
@@ -54,6 +71,19 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
     setPlan(null);
     setPayload(null);
   };
+
+  const loadHistory = async (roadId: string | null) => {
+    if (!roadId) return setHistory([]);
+    const { data } = await supabase
+      .from("content_audit_log")
+      .select("id,operation_type,scope_label,created_at,before_snapshot,verification")
+      .eq("content_type", "domination_road")
+      .eq("scope_id", roadId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    setHistory((data ?? []) as AuditRow[]);
+  };
+
 
   const loadExport = async () => {
     if (!selectedRoad) return;
@@ -112,6 +142,20 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
       }
       delete body.new_road_name;
     }
+    // Safety net: with replace mode the admin can pin the exact number of games
+    // the road must end up with. The server rejects the plan and rolls back the
+    // commit if the road does not verify to that count.
+    delete body.expected_game_count;
+    if (mode === "replace" && expectedCount.trim()) {
+      const n = Number(expectedCount);
+      if (!Number.isInteger(n) || n < 1) {
+        toast.error("Expected game count must be a positive whole number.");
+        return null;
+      }
+      body.expected_game_count = n;
+    }
+    if (restoredFrom) body.restored_from = restoredFrom;
+    else delete body.restored_from;
     return body;
   };
 
@@ -119,6 +163,7 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
     const body = buildPayload();
     if (!body) return;
     setBusy(true);
+    setResult(null);
     const { data, error } = await supabase.rpc("admin_road_bulk", {
       p_payload: body as never,
       p_commit: false,
@@ -143,13 +188,35 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
     });
     setBusy(false);
     if (error) return toast.error(error.message);
-    toast.success(`Road "${(data as Plan)?.road?.road_name ?? ""}" imported`);
+    const committed = data as Plan;
+    toast.success(`Road "${committed?.road?.road_name ?? ""}" imported`);
     reset();
-    setOpen(false);
+    setRestoredFrom(null);
+    setResult(committed);
+    await loadHistory(committed?.road?.road_id ?? selectedRoad?.id ?? null);
     onCommitted();
   };
 
+  // Loads the pre-operation snapshot back into the editor as a replace payload.
+  // Nothing is written until the admin previews and applies it again.
+  const loadRollback = async (row: AuditRow) => {
+    setBusy(true);
+    const { data, error } = await supabase.rpc("admin_content_restore_payload", { p_audit_id: row.id });
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    const p = data as any;
+    setMode("replace");
+    setExpectedCount(String(p.expected_game_count ?? (p.games ?? []).length));
+    setRestoredFrom(row.id);
+    setText(JSON.stringify({ road_id: p.road_id, road_name: p.road_name, games: p.games }, null, 2));
+    reset();
+    setResult(null);
+    toast.info("Rollback payload loaded — preview it, then apply.");
+  };
+
   const destructive = (plan?.destructive_operations ?? []) as unknown[];
+  const verification = (result?.verification ?? null) as Record<string, unknown> | null;
+
 
   return (
     <>
@@ -164,7 +231,7 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
           if (!o) reset();
         }}
       >
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Domination Road · Bulk Import / Export</DialogTitle>
             <DialogDescription>
@@ -174,7 +241,7 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <div className="space-y-2">
               <Label>Road</Label>
               <Select
@@ -182,8 +249,11 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
                 onValueChange={(v) => {
                   setRoadKey(v);
                   reset();
+                  setResult(null);
+                  setRestoredFrom(null);
                   const r = roads.find((x) => x.id === v);
                   setNewRoadName(r?.name ?? "");
+                  void loadHistory(r?.id ?? null);
                 }}
               >
                 <SelectTrigger>
@@ -221,7 +291,22 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Expected games</Label>
+              <Input
+                value={expectedCount}
+                onChange={(e) => {
+                  setExpectedCount(e.target.value);
+                  reset();
+                }}
+                inputMode="numeric"
+                placeholder="11"
+                disabled={mode !== "replace"}
+              />
+              <p className="text-[10px] text-muted-foreground">Replace only — rolls back if the count differs.</p>
+            </div>
           </div>
+
 
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={loadExport} disabled={!selectedRoad || busy}>
@@ -284,6 +369,61 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
               </pre>
             </div>
           )}
+
+          {verification && (
+            <div className="rounded-md border border-primary/40 p-3 space-y-2">
+              <p className="text-xs font-semibold flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Applied &amp; verified
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">{String(verification.game_count)} games</Badge>
+                <Badge variant="secondary">{String(verification.total_coin_reward)} coins total</Badge>
+                <Badge variant={verification.contiguous_orders ? "secondary" : "destructive"}>
+                  {verification.contiguous_orders ? "orders contiguous" : "order gaps"}
+                </Badge>
+                <Badge variant={Number(verification.games_with_empty_roster) ? "destructive" : "secondary"}>
+                  {String(verification.games_with_empty_roster)} empty rosters
+                </Badge>
+                <Badge variant="secondary">other roads untouched</Badge>
+              </div>
+              <p className="text-[10px] text-muted-foreground font-mono">
+                orders: {JSON.stringify(verification.game_orders)}
+              </p>
+            </div>
+          )}
+
+          {history.length > 0 && (
+            <div className="rounded-md border p-3 space-y-2">
+              <p className="text-xs font-semibold flex items-center gap-1">
+                <HistoryIcon className="h-3.5 w-3.5" /> Operation history
+              </p>
+              <div className="space-y-1">
+                {history.map((h) => (
+                  <div key={h.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate">
+                      <span className="uppercase font-mono">{h.operation_type}</span> ·{" "}
+                      {new Date(h.created_at).toLocaleString()} ·{" "}
+                      {String((h.verification as any)?.game_count ?? "?")} games
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy || !h.before_snapshot}
+                      onClick={() => loadRollback(h)}
+                    >
+                      <Undo2 className="h-3 w-3 mr-1" /> Roll back to before
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {restoredFrom && (
+                <p className="text-[10px] text-muted-foreground">
+                  Rollback payload loaded from operation {restoredFrom.slice(0, 8)} — preview, then apply.
+                </p>
+              )}
+            </div>
+          )}
+
 
           <DialogFooter>
             <Button variant="outline" onClick={runPreview} disabled={busy || !text.trim()}>
