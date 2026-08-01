@@ -231,7 +231,7 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
           if (!o) reset();
         }}
       >
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Domination Road · Bulk Import / Export</DialogTitle>
             <DialogDescription>
@@ -241,7 +241,7 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <div className="space-y-2">
               <Label>Road</Label>
               <Select
@@ -249,8 +249,11 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
                 onValueChange={(v) => {
                   setRoadKey(v);
                   reset();
+                  setResult(null);
+                  setRestoredFrom(null);
                   const r = roads.find((x) => x.id === v);
                   setNewRoadName(r?.name ?? "");
+                  void loadHistory(r?.id ?? null);
                 }}
               >
                 <SelectTrigger>
@@ -288,7 +291,22 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Expected games</Label>
+              <Input
+                value={expectedCount}
+                onChange={(e) => {
+                  setExpectedCount(e.target.value);
+                  reset();
+                }}
+                inputMode="numeric"
+                placeholder="11"
+                disabled={mode !== "replace"}
+              />
+              <p className="text-[10px] text-muted-foreground">Replace only — rolls back if the count differs.</p>
+            </div>
           </div>
+
 
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={loadExport} disabled={!selectedRoad || busy}>
