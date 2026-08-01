@@ -1830,6 +1830,65 @@
         "outputSchema": null
       },
       {
+        "name": "getContentOperations",
+        "title": "Read the content operation history",
+        "description": "Read-only. Every committed content operation in reverse order: operation id, content type, operation type (merge / replace / delete / restore), scope, who ran it, payload hash, created / updated / deleted ids, warnings and the post-commit verification block. Use the returned id with getRoadRestorePayload to roll a Domination road back to how it looked before that operation.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "content_type": {
+              "type": "string",
+              "description": "Filter, e.g. 'domination_road'."
+            },
+            "scope_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Filter to one road / entity id."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "getRoadRestorePayload",
+        "title": "Build a rollback payload for a Domination road",
+        "description": "Read-only. Returns the road exactly as it looked BEFORE the given operation (from getContentOperations), already shaped as a mode='replace' payload with expected_game_count and restored_from set. Feed it straight to previewDominationRoadImport / commitDominationRoadImport to roll the road back. Fails with NO_SNAPSHOT when the operation created the road (delete it instead).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "id from getContentOperations."
+            }
+          },
+          "required": [
+            "operation_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
         "name": "previewDeleteDominationGame",
         "title": "Preview: delete one Domination game",
         "description": "Admin only. ZERO WRITES. Resolves a single Domination game by domination_game_id (preferred) or by exact road_name + game_order, and returns exactly what deleting it would remove: the game's id, road, game_order, opponent and its ordered roster junction rows, plus a one-time preview_token. Deleting by opponent name alone is rejected, because rematches mean one opponent can appear several times on a road. Nothing is removed until commitDeleteDominationGame is called with the identical target and that token.",
