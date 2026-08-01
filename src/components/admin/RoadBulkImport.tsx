@@ -370,6 +370,61 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
             </div>
           )}
 
+          {verification && (
+            <div className="rounded-md border border-primary/40 p-3 space-y-2">
+              <p className="text-xs font-semibold flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Applied &amp; verified
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">{String(verification.game_count)} games</Badge>
+                <Badge variant="secondary">{String(verification.total_coin_reward)} coins total</Badge>
+                <Badge variant={verification.contiguous_orders ? "secondary" : "destructive"}>
+                  {verification.contiguous_orders ? "orders contiguous" : "order gaps"}
+                </Badge>
+                <Badge variant={Number(verification.games_with_empty_roster) ? "destructive" : "secondary"}>
+                  {String(verification.games_with_empty_roster)} empty rosters
+                </Badge>
+                <Badge variant="secondary">other roads untouched</Badge>
+              </div>
+              <p className="text-[10px] text-muted-foreground font-mono">
+                orders: {JSON.stringify(verification.game_orders)}
+              </p>
+            </div>
+          )}
+
+          {history.length > 0 && (
+            <div className="rounded-md border p-3 space-y-2">
+              <p className="text-xs font-semibold flex items-center gap-1">
+                <History className="h-3.5 w-3.5" /> Operation history
+              </p>
+              <div className="space-y-1">
+                {history.map((h) => (
+                  <div key={h.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate">
+                      <span className="uppercase font-mono">{h.operation_type}</span> ·{" "}
+                      {new Date(h.created_at).toLocaleString()} ·{" "}
+                      {String((h.verification as any)?.game_count ?? "?")} games
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy || !h.before_snapshot}
+                      onClick={() => loadRollback(h)}
+                    >
+                      <Undo2 className="h-3 w-3 mr-1" /> Roll back to before
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {restoredFrom && (
+                <p className="text-[10px] text-muted-foreground">
+                  Rollback payload loaded from operation {restoredFrom.slice(0, 8)} — preview, then apply.
+                </p>
+              )}
+            </div>
+          )}
+
+
           <DialogFooter>
             <Button variant="outline" onClick={runPreview} disabled={busy || !text.trim()}>
               {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Preview
