@@ -142,6 +142,20 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
       }
       delete body.new_road_name;
     }
+    // Safety net: with replace mode the admin can pin the exact number of games
+    // the road must end up with. The server rejects the plan and rolls back the
+    // commit if the road does not verify to that count.
+    delete body.expected_game_count;
+    if (mode === "replace" && expectedCount.trim()) {
+      const n = Number(expectedCount);
+      if (!Number.isInteger(n) || n < 1) {
+        toast.error("Expected game count must be a positive whole number.");
+        return null;
+      }
+      body.expected_game_count = n;
+    }
+    if (restoredFrom) body.restored_from = restoredFrom;
+    else delete body.restored_from;
     return body;
   };
 
@@ -149,6 +163,7 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
     const body = buildPayload();
     if (!body) return;
     setBusy(true);
+    setResult(null);
     const { data, error } = await supabase.rpc("admin_road_bulk", {
       p_payload: body as never,
       p_commit: false,
@@ -173,13 +188,35 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
     });
     setBusy(false);
     if (error) return toast.error(error.message);
-    toast.success(`Road "${(data as Plan)?.road?.road_name ?? ""}" imported`);
+    const committed = data as Plan;
+    toast.success(`Road "${committed?.road?.road_name ?? ""}" imported`);
     reset();
-    setOpen(false);
+    setRestoredFrom(null);
+    setResult(committed);
+    await loadHistory(committed?.road?.road_id ?? selectedRoad?.id ?? null);
     onCommitted();
   };
 
+  // Loads the pre-operation snapshot back into the editor as a replace payload.
+  // Nothing is written until the admin previews and applies it again.
+  const loadRollback = async (row: AuditRow) => {
+    setBusy(true);
+    const { data, error } = await supabase.rpc("admin_content_restore_payload", { p_audit_id: row.id });
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    const p = data as any;
+    setMode("replace");
+    setExpectedCount(String(p.expected_game_count ?? (p.games ?? []).length));
+    setRestoredFrom(row.id);
+    setText(JSON.stringify({ road_id: p.road_id, road_name: p.road_name, games: p.games }, null, 2));
+    reset();
+    setResult(null);
+    toast.info("Rollback payload loaded — preview it, then apply.");
+  };
+
   const destructive = (plan?.destructive_operations ?? []) as unknown[];
+  const verification = (result?.verification ?? null) as Record<string, unknown> | null;
+
 
   return (
     <>
