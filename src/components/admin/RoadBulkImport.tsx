@@ -395,7 +395,7 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
           {history.length > 0 && (
             <div className="rounded-md border p-3 space-y-2">
               <p className="text-xs font-semibold flex items-center gap-1">
-                <History className="h-3.5 w-3.5" /> Operation history
+                <HistoryIcon className="h-3.5 w-3.5" /> Operation history
               </p>
               <div className="space-y-1">
                 {history.map((h) => (
