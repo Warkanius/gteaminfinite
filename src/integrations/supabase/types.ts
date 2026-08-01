@@ -401,6 +401,80 @@ export type Database = {
           },
         ]
       }
+      content_audit_log: {
+        Row: {
+          after_snapshot: Json | null
+          before_snapshot: Json | null
+          content_type: string
+          created_at: string
+          created_ids: Json
+          deleted_ids: Json
+          id: string
+          operation_id: string
+          operation_type: string
+          payload: Json
+          payload_hash: string
+          preview_token: string | null
+          restored_from: string | null
+          scope_id: string | null
+          scope_label: string | null
+          updated_ids: Json
+          user_id: string
+          verification: Json | null
+          warnings: Json
+        }
+        Insert: {
+          after_snapshot?: Json | null
+          before_snapshot?: Json | null
+          content_type: string
+          created_at?: string
+          created_ids?: Json
+          deleted_ids?: Json
+          id?: string
+          operation_id?: string
+          operation_type: string
+          payload?: Json
+          payload_hash: string
+          preview_token?: string | null
+          restored_from?: string | null
+          scope_id?: string | null
+          scope_label?: string | null
+          updated_ids?: Json
+          user_id: string
+          verification?: Json | null
+          warnings?: Json
+        }
+        Update: {
+          after_snapshot?: Json | null
+          before_snapshot?: Json | null
+          content_type?: string
+          created_at?: string
+          created_ids?: Json
+          deleted_ids?: Json
+          id?: string
+          operation_id?: string
+          operation_type?: string
+          payload?: Json
+          payload_hash?: string
+          preview_token?: string | null
+          restored_from?: string | null
+          scope_id?: string | null
+          scope_label?: string | null
+          updated_ids?: Json
+          user_id?: string
+          verification?: Json | null
+          warnings?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_audit_log_restored_from_fkey"
+            columns: ["restored_from"]
+            isOneToOne: false
+            referencedRelation: "content_audit_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       domination_game_players: {
         Row: {
           domination_game_id: string
@@ -2364,6 +2438,40 @@ export type Database = {
         Args: { p_commit?: boolean; p_payload: Json }
         Returns: Json
       }
+      admin_audit_write: {
+        Args: {
+          p_after: Json
+          p_before: Json
+          p_content_type: string
+          p_created: Json
+          p_deleted: Json
+          p_operation_type: string
+          p_payload: Json
+          p_restored_from?: string
+          p_scope_id: string
+          p_scope_label: string
+          p_token: string
+          p_updated: Json
+          p_verification: Json
+          p_warnings: Json
+        }
+        Returns: string
+      }
+      admin_canonical_hash: { Args: { p: Json }; Returns: string }
+      admin_canonical_json: { Args: { p: Json }; Returns: Json }
+      admin_consume_preview_token: {
+        Args: {
+          p_fingerprint: string
+          p_kind: string
+          p_payload: Json
+          p_token: string
+        }
+        Returns: Json
+      }
+      admin_content_restore_payload: {
+        Args: { p_audit_id: string }
+        Returns: Json
+      }
       admin_delete_domination_game: {
         Args: { p_commit?: boolean; p_payload: Json; p_preview_token?: string }
         Returns: Json
@@ -2371,6 +2479,14 @@ export type Database = {
       admin_diff_fields: {
         Args: { p_fields: Json; p_id: string; p_table: string }
         Returns: Json
+      }
+      admin_error: {
+        Args: { p_code: string; p_extra?: Json; p_message: string }
+        Returns: undefined
+      }
+      admin_issue_preview_token: {
+        Args: { p_fingerprint: string; p_kind: string; p_payload: Json }
+        Returns: string
       }
       admin_player_matches: { Args: { p_name: string }; Returns: Json }
       admin_resolve_pack: {
@@ -2388,6 +2504,11 @@ export type Database = {
         Returns: Json
       }
       admin_road_export: { Args: { p_ref: Json }; Returns: Json }
+      admin_road_fingerprint: { Args: { p_road_id: string }; Returns: string }
+      admin_road_outside_fingerprint: {
+        Args: { p_road_id: string }
+        Returns: string
+      }
       admin_road_raise: {
         Args: {
           p_code: string
