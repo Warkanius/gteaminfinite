@@ -1388,9 +1388,13 @@ var bulkFields = {
   mode: z18.enum(["merge", "replace"]).default("merge").describe(
     "'merge' only touches the game_orders present in `games`. 'replace' DESTRUCTIVELY makes the road match the payload exactly: games on this road whose game_order is absent are deleted, matched games keep their ids."
   ),
+  expected_game_count: z18.number().int().min(1).optional().describe(
+    "Safety check for mode='replace': the number of games the road must end up with. The preview is rejected if the payload carries a different count, and the commit is rolled back if the road does not verify to exactly this many games."
+  ),
+  restored_from: z18.string().uuid().optional().describe("Set when replaying a payload from getContentOperations/getRoadRestorePayload, so history records the rollback."),
   games: z18.array(gameSchema).default([]).describe("Every game to create or update, in any order.")
 };
-var bulkSafety = " Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction. Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.";
+var bulkSafety = " Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction, protected by an advisory lock, a stale-scope check (CONCURRENT_MODIFICATION) and post-commit verification (game count, contiguous orders, duplicate orders, roster sizes, total coin reward, and proof no other road changed). Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.";
 async function runBulk(ctx, input, commit, previewToken) {
   const { client, error } = await adminClient(ctx);
   if (error) return error;

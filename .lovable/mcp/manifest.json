@@ -1509,7 +1509,7 @@
       {
         "name": "previewDominationRoadImport",
         "title": "Preview a bulk Domination road import",
-        "description": "Bulk-import or replace an entire Domination road in one atomic operation: create or rename the road, set its description/sort order/active flag, and create, update, reorder or delete its games and opponent rosters. Rematch-safe: games are targeted by domination_game_id or game_order only, never by opponent name, so one opponent may legally appear at several game_orders. Validates unique game_order, difficulty range 1-5, non-negative rewards and every opponent_team_id / pack_reward_id / roster reference, reporting the offending game_order and field. With mode='replace' the road ends up matching the payload exactly (omitted game_orders on THAT road are deleted). Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction. Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.",
+        "description": "Bulk-import or replace an entire Domination road in one atomic operation: create or rename the road, set its description/sort order/active flag, and create, update, reorder or delete its games and opponent rosters. Rematch-safe: games are targeted by domination_game_id or game_order only, never by opponent name, so one opponent may legally appear at several game_orders. Validates unique game_order, difficulty range 1-5, non-negative rewards and every opponent_team_id / pack_reward_id / roster reference, reporting the offending game_order and field. With mode='replace' the road ends up matching the payload exactly (omitted game_orders on THAT road are deleted). Nothing is written until the byte-identical payload is re-sent with mode='commit' plus the preview_token; the whole road import is one transaction, protected by an advisory lock, a stale-scope check (CONCURRENT_MODIFICATION) and post-commit verification (game count, contiguous orders, duplicate orders, roster sizes, total coin reward, and proof no other road changed). Show road_creates / road_updates / game_operations / destructive_operations / warnings to the user and get explicit approval before committing.",
         "annotations": {
           "readOnlyHint": true,
           "destructiveHint": false,
@@ -1552,6 +1552,16 @@
               ],
               "default": "merge",
               "description": "'merge' only touches the game_orders present in `games`. 'replace' DESTRUCTIVELY makes the road match the payload exactly: games on this road whose game_order is absent are deleted, matched games keep their ids."
+            },
+            "expected_game_count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Safety check for mode='replace': the number of games the road must end up with. The preview is rejected if the payload carries a different count, and the commit is rolled back if the road does not verify to exactly this many games."
+            },
+            "restored_from": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Set when replaying a payload from getContentOperations/getRoadRestorePayload, so history records the rollback."
             },
             "games": {
               "type": "array",
@@ -1670,6 +1680,16 @@
               ],
               "default": "merge",
               "description": "'merge' only touches the game_orders present in `games`. 'replace' DESTRUCTIVELY makes the road match the payload exactly: games on this road whose game_order is absent are deleted, matched games keep their ids."
+            },
+            "expected_game_count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Safety check for mode='replace': the number of games the road must end up with. The preview is rejected if the payload carries a different count, and the commit is rolled back if the road does not verify to exactly this many games."
+            },
+            "restored_from": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Set when replaying a payload from getContentOperations/getRoadRestorePayload, so history records the rollback."
             },
             "games": {
               "type": "array",
