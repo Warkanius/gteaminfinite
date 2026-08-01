@@ -27,7 +27,18 @@ type Plan = {
   game_operations?: unknown[];
   destructive_operations?: unknown[];
   warnings?: unknown[];
+  verification?: Record<string, unknown> | null;
+  operation_id?: string | null;
   preview_token?: string;
+};
+
+type AuditRow = {
+  id: string;
+  operation_type: string;
+  scope_label: string | null;
+  created_at: string;
+  before_snapshot: unknown;
+  verification: Record<string, unknown> | null;
 };
 
 const NEW_ROAD = "__new";
@@ -36,17 +47,23 @@ const NEW_ROAD = "__new";
  * Road-level bulk import / export.
  * Export produces the exact payload `admin_road_bulk` accepts; the dialog then
  * runs the two-step preview -> commit protocol so nothing is written until the
- * admin approves the plan.
+ * admin approves the plan. Committed operations are recorded in
+ * `content_audit_log`, and any of them can be rolled back by loading the
+ * pre-operation snapshot back into the editor as a replace payload.
  */
 export function RoadBulkImport({ roads, onCommitted }: Props) {
   const [open, setOpen] = useState(false);
   const [roadKey, setRoadKey] = useState<string>(NEW_ROAD);
   const [mode, setMode] = useState<"merge" | "replace">("merge");
   const [newRoadName, setNewRoadName] = useState("");
+  const [expectedCount, setExpectedCount] = useState("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [result, setResult] = useState<Plan | null>(null);
+  const [history, setHistory] = useState<AuditRow[]>([]);
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
+  const [restoredFrom, setRestoredFrom] = useState<string | null>(null);
 
   const selectedRoad = useMemo(() => roads.find((r) => r.id === roadKey) ?? null, [roads, roadKey]);
 
@@ -54,6 +71,19 @@ export function RoadBulkImport({ roads, onCommitted }: Props) {
     setPlan(null);
     setPayload(null);
   };
+
+  const loadHistory = async (roadId: string | null) => {
+    if (!roadId) return setHistory([]);
+    const { data } = await supabase
+      .from("content_audit_log")
+      .select("id,operation_type,scope_label,created_at,before_snapshot,verification")
+      .eq("content_type", "domination_road")
+      .eq("scope_id", roadId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    setHistory((data ?? []) as AuditRow[]);
+  };
+
 
   const loadExport = async () => {
     if (!selectedRoad) return;
