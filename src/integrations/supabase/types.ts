@@ -3517,6 +3517,10 @@ export type Database = {
         Returns: Json
       }
       admin_duplicate_player_names: { Args: never; Returns: Json }
+      admin_entity_lookup: {
+        Args: { p_name: string; p_name_column: string; p_table: string }
+        Returns: Json
+      }
       admin_entity_meta: { Args: { p_type: string }; Returns: Json }
       admin_error: {
         Args: { p_code: string; p_extra?: Json; p_message: string }
