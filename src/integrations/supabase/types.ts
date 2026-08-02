@@ -3491,26 +3491,75 @@ export type Database = {
         Args: { p_commit?: boolean; p_payload: Json; p_preview_token?: string }
         Returns: Json
       }
+      admin_delete_entity: {
+        Args: {
+          p_commit?: boolean
+          p_entity_id: string
+          p_entity_type: string
+          p_force?: boolean
+        }
+        Returns: Json
+      }
       admin_diff_fields: {
         Args: { p_fields: Json; p_id: string; p_table: string }
         Returns: Json
       }
+      admin_duplicate_player_names: { Args: never; Returns: Json }
+      admin_entity_meta: { Args: { p_type: string }; Returns: Json }
       admin_error: {
         Args: { p_code: string; p_extra?: Json; p_message: string }
         Returns: undefined
+      }
+      admin_has_column: {
+        Args: { p_column: string; p_table: string }
+        Returns: boolean
       }
       admin_install_lifecycle: { Args: { p_table: string }; Returns: undefined }
       admin_issue_preview_token: {
         Args: { p_fingerprint: string; p_kind: string; p_payload: Json }
         Returns: string
       }
+      admin_lifecycle_apply: {
+        Args: {
+          p_commit?: boolean
+          p_dates?: Json
+          p_entity_id: string
+          p_entity_type: string
+          p_override?: boolean
+          p_status: string
+        }
+        Returns: Json
+      }
       admin_player_matches: { Args: { p_name: string }; Returns: Json }
+      admin_player_usage: { Args: { p_card_id: string }; Returns: Json }
+      admin_rename_apply: {
+        Args: {
+          p_commit?: boolean
+          p_entity_id: string
+          p_entity_type: string
+          p_new_key?: string
+          p_new_name: string
+        }
+        Returns: Json
+      }
+      admin_rename_domination_opponent: {
+        Args: {
+          p_commit?: boolean
+          p_game_id: string
+          p_game_order: number
+          p_new_name: string
+          p_road_id: string
+        }
+        Returns: Json
+      }
+      admin_require_admin: { Args: never; Returns: undefined }
       admin_resolve_pack: {
         Args: { p_game_order?: number; p_ref: Json }
         Returns: string
       }
       admin_resolve_player: { Args: { p_ref: Json }; Returns: string }
       admin_resolve_player_ids: { Args: { p_names: Json }; Returns: string[] }
+      admin_reward_validate: { Args: { p_payload: Json }; Returns: Json }
       admin_road_bulk: {
         Args: { p_commit?: boolean; p_payload: Json; p_preview_token?: string }
         Returns: Json
@@ -3539,6 +3588,11 @@ export type Database = {
       admin_slugify: { Args: { p_text: string }; Returns: string }
       admin_substitute_refs: {
         Args: { p_item: Json; p_refs: Json }
+        Returns: Json
+      }
+      admin_unused_players: { Args: { p_by_name?: boolean }; Returns: Json }
+      admin_usage: {
+        Args: { p_entity_id: string; p_entity_type: string }
         Returns: Json
       }
       has_role: {
