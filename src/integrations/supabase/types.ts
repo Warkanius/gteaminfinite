@@ -3441,6 +3441,10 @@ export type Database = {
         Args: { p_commit?: boolean; p_kind: string; p_payload: Json }
         Returns: Json
       }
+      admin_apply_entity: {
+        Args: { p_commit?: boolean; p_item: Json; p_kind: string }
+        Returns: Json
+      }
       admin_apply_extra: {
         Args: { p_commit?: boolean; p_kind: string; p_payload: Json }
         Returns: Json
@@ -3474,6 +3478,10 @@ export type Database = {
       }
       admin_canonical_hash: { Args: { p: Json }; Returns: string }
       admin_canonical_json: { Args: { p: Json }; Returns: Json }
+      admin_col_type: {
+        Args: { p_column: string; p_table: string }
+        Returns: string
+      }
       admin_consume_preview_token: {
         Args: {
           p_fingerprint: string
@@ -3553,6 +3561,7 @@ export type Database = {
         Returns: Json
       }
       admin_require_admin: { Args: never; Returns: undefined }
+      admin_resolve_card: { Args: { p_ref: Json }; Returns: string }
       admin_resolve_pack: {
         Args: { p_game_order?: number; p_ref: Json }
         Returns: string
@@ -3586,11 +3595,23 @@ export type Database = {
         Returns: undefined
       }
       admin_slugify: { Args: { p_text: string }; Returns: string }
+      admin_stat_keys: { Args: never; Returns: string[] }
       admin_substitute_refs: {
         Args: { p_item: Json; p_refs: Json }
         Returns: Json
       }
       admin_unused_players: { Args: { p_by_name?: boolean }; Returns: Json }
+      admin_upsert_row: {
+        Args: {
+          p_action?: string
+          p_commit: boolean
+          p_fields: Json
+          p_id: string
+          p_match: string
+          p_table: string
+        }
+        Returns: Json
+      }
       admin_usage: {
         Args: { p_entity_id: string; p_entity_type: string }
         Returns: Json
