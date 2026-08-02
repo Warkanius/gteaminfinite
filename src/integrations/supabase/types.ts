@@ -98,41 +98,68 @@ export type Database = {
         Row: {
           abbreviation: string
           affected_stat: string | null
+          archived_at: string | null
+          category: string | null
           created_at: string
           description_actolytrene: string | null
           description_base: string | null
           description_diamond: string | null
           description_gold: string | null
           description_hof: string | null
+          disabled_at: string | null
           effect_type: string
+          ends_at: string | null
           id: string
+          metadata: Json | null
           name: string
+          publish_at: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
+          supported_tiers: string[] | null
         }
         Insert: {
           abbreviation: string
           affected_stat?: string | null
+          archived_at?: string | null
+          category?: string | null
           created_at?: string
           description_actolytrene?: string | null
           description_base?: string | null
           description_diamond?: string | null
           description_gold?: string | null
           description_hof?: string | null
+          disabled_at?: string | null
           effect_type?: string
+          ends_at?: string | null
           id?: string
+          metadata?: Json | null
           name: string
+          publish_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          supported_tiers?: string[] | null
         }
         Update: {
           abbreviation?: string
           affected_stat?: string | null
+          archived_at?: string | null
+          category?: string | null
           created_at?: string
           description_actolytrene?: string | null
           description_base?: string | null
           description_diamond?: string | null
           description_gold?: string | null
           description_hof?: string | null
+          disabled_at?: string | null
           effect_type?: string
+          ends_at?: string | null
           id?: string
+          metadata?: Json | null
           name?: string
+          publish_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          supported_tiers?: string[] | null
         }
         Relationships: []
       }
@@ -239,12 +266,15 @@ export type Database = {
       }
       challenges: {
         Row: {
+          archived_at: string | null
           card_reward_id: string | null
           challenge_type: string
           coin_reward: number
           conditions: Json | null
           created_at: string
           description: string | null
+          disabled_at: string | null
+          ends_at: string | null
           expires_at: string | null
           gem_reward: number
           id: string
@@ -254,24 +284,31 @@ export type Database = {
           opponent_team_id: string | null
           pack_reward: string | null
           prerequisite_id: string | null
+          publish_at: string | null
+          reward_payload: Json | null
           series_length: number | null
           series_loss_coins: number
           series_win_coins: number
           sort_order: number
           spotlight_group: string | null
+          starts_at: string | null
           stat_limit_player_id: string | null
           stat_limit_stat: string | null
           stat_limit_value: number | null
+          status: Database["public"]["Enums"]["content_status"]
           win_by_amount: number | null
           win_condition: string
         }
         Insert: {
+          archived_at?: string | null
           card_reward_id?: string | null
           challenge_type?: string
           coin_reward?: number
           conditions?: Json | null
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           expires_at?: string | null
           gem_reward?: number
           id?: string
@@ -281,24 +318,31 @@ export type Database = {
           opponent_team_id?: string | null
           pack_reward?: string | null
           prerequisite_id?: string | null
+          publish_at?: string | null
+          reward_payload?: Json | null
           series_length?: number | null
           series_loss_coins?: number
           series_win_coins?: number
           sort_order?: number
           spotlight_group?: string | null
+          starts_at?: string | null
           stat_limit_player_id?: string | null
           stat_limit_stat?: string | null
           stat_limit_value?: number | null
+          status?: Database["public"]["Enums"]["content_status"]
           win_by_amount?: number | null
           win_condition?: string
         }
         Update: {
+          archived_at?: string | null
           card_reward_id?: string | null
           challenge_type?: string
           coin_reward?: number
           conditions?: Json | null
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           expires_at?: string | null
           gem_reward?: number
           id?: string
@@ -308,14 +352,18 @@ export type Database = {
           opponent_team_id?: string | null
           pack_reward?: string | null
           prerequisite_id?: string | null
+          publish_at?: string | null
+          reward_payload?: Json | null
           series_length?: number | null
           series_loss_coins?: number
           series_win_coins?: number
           sort_order?: number
           spotlight_group?: string | null
+          starts_at?: string | null
           stat_limit_player_id?: string | null
           stat_limit_stat?: string | null
           stat_limit_value?: number | null
+          status?: Database["public"]["Enums"]["content_status"]
           win_by_amount?: number | null
           win_condition?: string
         }
@@ -350,39 +398,147 @@ export type Database = {
           },
         ]
       }
+      collection_requirements: {
+        Row: {
+          allowed_evo_stages: number[] | null
+          any_evo_stage: boolean
+          collection_id: string
+          created_at: string
+          evolved_counts: boolean
+          id: string
+          is_reward_card: boolean
+          player_card_id: string
+          sort_order: number
+        }
+        Insert: {
+          allowed_evo_stages?: number[] | null
+          any_evo_stage?: boolean
+          collection_id: string
+          created_at?: string
+          evolved_counts?: boolean
+          id?: string
+          is_reward_card?: boolean
+          player_card_id: string
+          sort_order?: number
+        }
+        Update: {
+          allowed_evo_stages?: number[] | null
+          any_evo_stage?: boolean
+          collection_id?: string
+          created_at?: string
+          evolved_counts?: boolean
+          id?: string
+          is_reward_card?: boolean
+          player_card_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_requirements_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_requirements_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collections: {
         Row: {
+          allow_multiple_reward_cards: boolean
+          archived_at: string | null
+          color_primary: string | null
+          color_secondary: string | null
           created_at: string
           description: string | null
+          disabled_at: string | null
+          ends_at: string | null
+          evolved_counts: boolean
           gem_tier_id: string | null
+          glow_color: string | null
           id: string
+          image_url: string | null
+          is_repeatable: boolean
           name: string
+          prerequisite_collection_id: string | null
+          publish_at: string | null
+          release_bundle_id: string | null
+          reward_card_id: string | null
           reward_coins: number
           reward_gems: number
           reward_pack_id: string | null
+          reward_payload: Json | null
           reward_type: string
+          sort_order: number
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
+          updated_at: string
         }
         Insert: {
+          allow_multiple_reward_cards?: boolean
+          archived_at?: string | null
+          color_primary?: string | null
+          color_secondary?: string | null
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
+          evolved_counts?: boolean
           gem_tier_id?: string | null
+          glow_color?: string | null
           id?: string
+          image_url?: string | null
+          is_repeatable?: boolean
           name: string
+          prerequisite_collection_id?: string | null
+          publish_at?: string | null
+          release_bundle_id?: string | null
+          reward_card_id?: string | null
           reward_coins?: number
           reward_gems?: number
           reward_pack_id?: string | null
+          reward_payload?: Json | null
           reward_type?: string
+          sort_order?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          updated_at?: string
         }
         Update: {
+          allow_multiple_reward_cards?: boolean
+          archived_at?: string | null
+          color_primary?: string | null
+          color_secondary?: string | null
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
+          evolved_counts?: boolean
           gem_tier_id?: string | null
+          glow_color?: string | null
           id?: string
+          image_url?: string | null
+          is_repeatable?: boolean
           name?: string
+          prerequisite_collection_id?: string | null
+          publish_at?: string | null
+          release_bundle_id?: string | null
+          reward_card_id?: string | null
           reward_coins?: number
           reward_gems?: number
           reward_pack_id?: string | null
+          reward_payload?: Json | null
           reward_type?: string
+          sort_order?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          updated_at?: string
         }
         Relationships: [
           {
@@ -390,6 +546,27 @@ export type Database = {
             columns: ["gem_tier_id"]
             isOneToOne: false
             referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_prerequisite_collection_id_fkey"
+            columns: ["prerequisite_collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_release_bundle_id_fkey"
+            columns: ["release_bundle_id"]
+            isOneToOne: false
+            referencedRelation: "release_bundles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_reward_card_id_fkey"
+            columns: ["reward_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
             referencedColumns: ["id"]
           },
           {
@@ -475,6 +652,48 @@ export type Database = {
           },
         ]
       }
+      content_reference_registry: {
+        Row: {
+          column_kind: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_protected: boolean
+          label_column: string | null
+          parent_column: string | null
+          reference_type: string
+          source_column: string
+          source_table: string
+          target_entity_type: string
+        }
+        Insert: {
+          column_kind?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_protected?: boolean
+          label_column?: string | null
+          parent_column?: string | null
+          reference_type: string
+          source_column: string
+          source_table: string
+          target_entity_type: string
+        }
+        Update: {
+          column_kind?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_protected?: boolean
+          label_column?: string | null
+          parent_column?: string | null
+          reference_type?: string
+          source_column?: string
+          source_table?: string
+          target_entity_type?: string
+        }
+        Relationships: []
+      }
       domination_game_players: {
         Row: {
           domination_game_id: string
@@ -513,43 +732,61 @@ export type Database = {
       }
       domination_games: {
         Row: {
+          archived_at: string | null
           coin_reward: number
           created_at: string
           difficulty_stars: number
+          disabled_at: string | null
+          ends_at: string | null
           game_order: number
           id: string
           opponent_name: string
           opponent_team_id: string | null
           pack_reward: string | null
           pack_reward_id: string | null
+          publish_at: string | null
           road_id: string
           road_name: string
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
         }
         Insert: {
+          archived_at?: string | null
           coin_reward?: number
           created_at?: string
           difficulty_stars?: number
+          disabled_at?: string | null
+          ends_at?: string | null
           game_order: number
           id?: string
           opponent_name: string
           opponent_team_id?: string | null
           pack_reward?: string | null
           pack_reward_id?: string | null
+          publish_at?: string | null
           road_id: string
           road_name: string
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
         }
         Update: {
+          archived_at?: string | null
           coin_reward?: number
           created_at?: string
           difficulty_stars?: number
+          disabled_at?: string | null
+          ends_at?: string | null
           game_order?: number
           id?: string
           opponent_name?: string
           opponent_team_id?: string | null
           pack_reward?: string | null
           pack_reward_id?: string | null
+          publish_at?: string | null
           road_id?: string
           road_name?: string
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
         }
         Relationships: [
           {
@@ -577,127 +814,276 @@ export type Database = {
       }
       domination_roads: {
         Row: {
+          archived_at: string | null
           created_at: string
           description: string | null
+          disabled_at: string | null
+          ends_at: string | null
           id: string
           is_active: boolean
           name: string
+          publish_at: string | null
           slug: string
           sort_order: number
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
           is_active?: boolean
           name: string
+          publish_at?: string | null
           slug: string
           sort_order?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
           is_active?: boolean
           name?: string
+          publish_at?: string | null
           slug?: string
           sort_order?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           updated_at?: string
         }
         Relationships: []
       }
       dynamic_duos: {
         Row: {
+          archived_at: string | null
           boosts_a: Json
           boosts_b: Json
           created_at: string
           description: string | null
+          disabled_at: string | null
+          ends_at: string | null
           id: string
           is_active: boolean
           name: string
           player_card_id_a: string
           player_card_id_b: string
+          publish_at: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           boosts_a?: Json
           boosts_b?: Json
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
           is_active?: boolean
           name: string
           player_card_id_a: string
           player_card_id_b: string
+          publish_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           boosts_a?: Json
           boosts_b?: Json
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
           is_active?: boolean
           name?: string
           player_card_id_a?: string
           player_card_id_b?: string
+          publish_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           updated_at?: string
         }
         Relationships: []
       }
+      evo_objectives: {
+        Row: {
+          created_at: string
+          description: string | null
+          evo_path_id: string
+          group_key: string
+          id: string
+          objective_type: string
+          scope: string
+          sort_order: number
+          stat_key: string | null
+          target: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          evo_path_id: string
+          group_key?: string
+          id?: string
+          objective_type: string
+          scope?: string
+          sort_order?: number
+          stat_key?: string | null
+          target: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          evo_path_id?: string
+          group_key?: string
+          id?: string
+          objective_type?: string
+          scope?: string
+          sort_order?: number
+          stat_key?: string | null
+          target?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evo_objectives_evo_path_id_fkey"
+            columns: ["evo_path_id"]
+            isOneToOne: false
+            referencedRelation: "evo_paths"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       evo_paths: {
         Row: {
+          archived_at: string | null
+          avatar_url: string | null
+          badge_upgrades: Json
+          card_animation: string | null
+          card_color_primary: string | null
+          card_color_secondary: string | null
+          card_glow_color: string | null
           challenge_description: string
           challenge_stat: string | null
           challenge_target: number
           challenge_type: string
           compound_challenges: Json
           created_at: string
+          disabled_at: string | null
+          ends_at: string | null
           evolves_to_card_id: string | null
+          final_rating: number | null
+          final_stats: Json | null
           from_tier_id: string | null
           id: string
+          is_repeatable: boolean
+          market_value: number | null
           new_badges: Json
           new_traits: Json
+          objective_mode: string
+          objectives: Json
           player_card_id: string
+          publish_at: string | null
+          sort_order: number
+          starts_at: string | null
           stat_boosts: Json
+          status: Database["public"]["Enums"]["content_status"]
           step_order: number
+          tier_progression_override: boolean
           to_tier_id: string | null
+          trait_upgrades: Json
+          updated_at: string
         }
         Insert: {
+          archived_at?: string | null
+          avatar_url?: string | null
+          badge_upgrades?: Json
+          card_animation?: string | null
+          card_color_primary?: string | null
+          card_color_secondary?: string | null
+          card_glow_color?: string | null
           challenge_description?: string
           challenge_stat?: string | null
           challenge_target?: number
           challenge_type?: string
           compound_challenges?: Json
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           evolves_to_card_id?: string | null
+          final_rating?: number | null
+          final_stats?: Json | null
           from_tier_id?: string | null
           id?: string
+          is_repeatable?: boolean
+          market_value?: number | null
           new_badges?: Json
           new_traits?: Json
+          objective_mode?: string
+          objectives?: Json
           player_card_id: string
+          publish_at?: string | null
+          sort_order?: number
+          starts_at?: string | null
           stat_boosts?: Json
+          status?: Database["public"]["Enums"]["content_status"]
           step_order?: number
+          tier_progression_override?: boolean
           to_tier_id?: string | null
+          trait_upgrades?: Json
+          updated_at?: string
         }
         Update: {
+          archived_at?: string | null
+          avatar_url?: string | null
+          badge_upgrades?: Json
+          card_animation?: string | null
+          card_color_primary?: string | null
+          card_color_secondary?: string | null
+          card_glow_color?: string | null
           challenge_description?: string
           challenge_stat?: string | null
           challenge_target?: number
           challenge_type?: string
           compound_challenges?: Json
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           evolves_to_card_id?: string | null
+          final_rating?: number | null
+          final_stats?: Json | null
           from_tier_id?: string | null
           id?: string
+          is_repeatable?: boolean
+          market_value?: number | null
           new_badges?: Json
           new_traits?: Json
+          objective_mode?: string
+          objectives?: Json
           player_card_id?: string
+          publish_at?: string | null
+          sort_order?: number
+          starts_at?: string | null
           stat_boosts?: Json
+          status?: Database["public"]["Enums"]["content_status"]
           step_order?: number
+          tier_progression_override?: boolean
           to_tier_id?: string | null
+          trait_upgrades?: Json
+          updated_at?: string
         }
         Relationships: [
           {
@@ -779,28 +1165,46 @@ export type Database = {
       }
       gem_market_listings: {
         Row: {
+          archived_at: string | null
           created_at: string
+          disabled_at: string | null
+          ends_at: string | null
           gem_tier_id: string
           gem_value: number
           id: string
           player_card_id: string
+          publish_at: string | null
           sort_order: number
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           gem_tier_id: string
           gem_value?: number
           id?: string
           player_card_id: string
+          publish_at?: string | null
           sort_order?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           gem_tier_id?: string
           gem_value?: number
           id?: string
           player_card_id?: string
+          publish_at?: string | null
           sort_order?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
         }
         Relationships: [
           {
@@ -850,67 +1254,199 @@ export type Database = {
       }
       gem_tasks: {
         Row: {
+          archived_at: string | null
           category: string
           cooldown_hours: number
           created_at: string
           description: string | null
+          disabled_at: string | null
+          ends_at: string | null
           gem_reward: number
+          gem_tier_id: string | null
+          group_key: string | null
           id: string
           is_active: boolean
+          prerequisite_task_id: string | null
+          publish_at: string | null
+          requirement_amount: number | null
+          requirement_type: string | null
+          reward_payload: Json | null
+          sort_order: number
+          starts_at: string | null
+          stat_key: string | null
+          status: Database["public"]["Enums"]["content_status"]
           title: string
+          updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           category?: string
           cooldown_hours?: number
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           gem_reward?: number
+          gem_tier_id?: string | null
+          group_key?: string | null
           id?: string
           is_active?: boolean
+          prerequisite_task_id?: string | null
+          publish_at?: string | null
+          requirement_amount?: number | null
+          requirement_type?: string | null
+          reward_payload?: Json | null
+          sort_order?: number
+          starts_at?: string | null
+          stat_key?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           title: string
+          updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           category?: string
           cooldown_hours?: number
           created_at?: string
           description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           gem_reward?: number
+          gem_tier_id?: string | null
+          group_key?: string | null
           id?: string
           is_active?: boolean
+          prerequisite_task_id?: string | null
+          publish_at?: string | null
+          requirement_amount?: number | null
+          requirement_type?: string | null
+          reward_payload?: Json | null
+          sort_order?: number
+          starts_at?: string | null
+          stat_key?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           title?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gem_tasks_gem_tier_id_fkey"
+            columns: ["gem_tier_id"]
+            isOneToOne: false
+            referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gem_tasks_prerequisite_task_id_fkey"
+            columns: ["prerequisite_task_id"]
+            isOneToOne: false
+            referencedRelation: "gem_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gem_tiers: {
         Row: {
+          abbreviation: string | null
+          archived_at: string | null
           color: string
+          disabled_at: string | null
           doubles_modifier: number | null
+          ends_at: string | null
           gem_value: number
+          glow_color: string | null
           id: string
+          market_rules: Json | null
+          max_badges: number | null
+          max_traits: number | null
           name: string
+          publish_at: string | null
+          rating_max: number | null
+          rating_min: number | null
           roll_modifier: number
           sort_order: number
           stars: number
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
         }
         Insert: {
+          abbreviation?: string | null
+          archived_at?: string | null
           color: string
+          disabled_at?: string | null
           doubles_modifier?: number | null
+          ends_at?: string | null
           gem_value?: number
+          glow_color?: string | null
           id?: string
+          market_rules?: Json | null
+          max_badges?: number | null
+          max_traits?: number | null
           name: string
+          publish_at?: string | null
+          rating_max?: number | null
+          rating_min?: number | null
           roll_modifier?: number
           sort_order?: number
           stars?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
         }
         Update: {
+          abbreviation?: string | null
+          archived_at?: string | null
           color?: string
+          disabled_at?: string | null
           doubles_modifier?: number | null
+          ends_at?: string | null
           gem_value?: number
+          glow_color?: string | null
           id?: string
+          market_rules?: Json | null
+          max_badges?: number | null
+          max_traits?: number | null
           name?: string
+          publish_at?: string | null
+          rating_max?: number | null
+          rating_min?: number | null
           roll_modifier?: number
           sort_order?: number
           stars?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+        }
+        Relationships: []
+      }
+      lifecycle_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          entity_id: string
+          entity_type: string
+          from_status: string | null
+          id: string
+          operation_id: string | null
+          to_status: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          from_status?: string | null
+          id?: string
+          operation_id?: string | null
+          to_status: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          from_status?: string | null
+          id?: string
+          operation_id?: string | null
+          to_status?: string
         }
         Relationships: []
       }
@@ -1087,31 +1623,52 @@ export type Database = {
       }
       locker_codes: {
         Row: {
+          archived_at: string | null
           code: string
           created_at: string
+          disabled_at: string | null
+          ends_at: string | null
           expires_at: string | null
           id: string
           max_redemptions: number | null
+          publish_at: string | null
+          reward_payload: Json | null
           reward_type: string
           reward_value: Json
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
         }
         Insert: {
+          archived_at?: string | null
           code: string
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           expires_at?: string | null
           id?: string
           max_redemptions?: number | null
+          publish_at?: string | null
+          reward_payload?: Json | null
           reward_type?: string
           reward_value?: Json
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
         }
         Update: {
+          archived_at?: string | null
           code?: string
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           expires_at?: string | null
           id?: string
           max_redemptions?: number | null
+          publish_at?: string | null
+          reward_payload?: Json | null
           reward_type?: string
           reward_value?: Json
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
         }
         Relationships: []
       }
@@ -1174,33 +1731,49 @@ export type Database = {
       }
       pack_odds: {
         Row: {
+          conditional_rules: Json | null
           description: string | null
           dice_roll: string | null
+          gem_tier_id: string | null
           id: string
           pack_id: string | null
           pack_type: string
           percentage: number
           result_slot: string
+          slot_number: number | null
         }
         Insert: {
+          conditional_rules?: Json | null
           description?: string | null
           dice_roll?: string | null
+          gem_tier_id?: string | null
           id?: string
           pack_id?: string | null
           pack_type: string
           percentage?: number
           result_slot: string
+          slot_number?: number | null
         }
         Update: {
+          conditional_rules?: Json | null
           description?: string | null
           dice_roll?: string | null
+          gem_tier_id?: string | null
           id?: string
           pack_id?: string | null
           pack_type?: string
           percentage?: number
           result_slot?: string
+          slot_number?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "pack_odds_gem_tier_id_fkey"
+            columns: ["gem_tier_id"]
+            isOneToOne: false
+            referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pack_odds_pack_id_fkey"
             columns: ["pack_id"]
@@ -1286,30 +1859,111 @@ export type Database = {
       }
       packs: {
         Row: {
+          archived_at: string | null
+          box_topper: Json | null
+          collection_id: string | null
           cost: number
           created_at: string
+          description: string | null
+          disabled_at: string | null
+          duplicate_protection: boolean
+          ends_at: string | null
+          featured_card_ids: string[] | null
+          guaranteed_tier_ids: string[] | null
           id: string
+          image_url: string | null
+          is_choice_pack: boolean
           name: string
+          open_animation: string | null
+          pack_size: number | null
           pack_type: string
+          per_user_limit: number | null
+          pity_reward: Json | null
+          pity_threshold: number | null
+          publish_at: string | null
+          purchase_limit: number | null
+          release_bundle_id: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
           ten_box_cost: number | null
+          updated_at: string
         }
         Insert: {
+          archived_at?: string | null
+          box_topper?: Json | null
+          collection_id?: string | null
           cost?: number
           created_at?: string
+          description?: string | null
+          disabled_at?: string | null
+          duplicate_protection?: boolean
+          ends_at?: string | null
+          featured_card_ids?: string[] | null
+          guaranteed_tier_ids?: string[] | null
           id?: string
+          image_url?: string | null
+          is_choice_pack?: boolean
           name: string
+          open_animation?: string | null
+          pack_size?: number | null
           pack_type?: string
+          per_user_limit?: number | null
+          pity_reward?: Json | null
+          pity_threshold?: number | null
+          publish_at?: string | null
+          purchase_limit?: number | null
+          release_bundle_id?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           ten_box_cost?: number | null
+          updated_at?: string
         }
         Update: {
+          archived_at?: string | null
+          box_topper?: Json | null
+          collection_id?: string | null
           cost?: number
           created_at?: string
+          description?: string | null
+          disabled_at?: string | null
+          duplicate_protection?: boolean
+          ends_at?: string | null
+          featured_card_ids?: string[] | null
+          guaranteed_tier_ids?: string[] | null
           id?: string
+          image_url?: string | null
+          is_choice_pack?: boolean
           name?: string
+          open_animation?: string | null
+          pack_size?: number | null
           pack_type?: string
+          per_user_limit?: number | null
+          pity_reward?: Json | null
+          pity_threshold?: number | null
+          publish_at?: string | null
+          purchase_limit?: number | null
+          release_bundle_id?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           ten_box_cost?: number | null
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "packs_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packs_release_bundle_id_fkey"
+            columns: ["release_bundle_id"]
+            isOneToOne: false
+            referencedRelation: "release_bundles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       player_card_badges: {
         Row: {
@@ -1388,6 +2042,7 @@ export type Database = {
       }
       player_cards: {
         Row: {
+          archived_at: string | null
           avatar_url: string | null
           base_card_id: string | null
           card_animation: string | null
@@ -1398,6 +2053,8 @@ export type Database = {
           card_variant: string | null
           collection_id: string | null
           created_at: string
+          disabled_at: string | null
+          ends_at: string | null
           evo_stage: number
           gem_name: string | null
           gem_tier_id: string | null
@@ -1407,7 +2064,9 @@ export type Database = {
           name: string
           position1: string | null
           position2: string | null
+          publish_at: string | null
           rating: number
+          release_bundle_id: string | null
           run_rating: number | null
           run_stat_3pt: number | null
           run_stat_ast: number | null
@@ -1419,6 +2078,7 @@ export type Database = {
           run_stat_reb: number | null
           run_stat_stl: number | null
           social_handle: string | null
+          starts_at: string | null
           stat_3pt: number
           stat_ast: number
           stat_blk: number
@@ -1428,11 +2088,13 @@ export type Database = {
           stat_mid: number
           stat_reb: number
           stat_stl: number
+          status: Database["public"]["Enums"]["content_status"]
           sub_collection_id: string | null
           team_id: string | null
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           avatar_url?: string | null
           base_card_id?: string | null
           card_animation?: string | null
@@ -1443,6 +2105,8 @@ export type Database = {
           card_variant?: string | null
           collection_id?: string | null
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           evo_stage?: number
           gem_name?: string | null
           gem_tier_id?: string | null
@@ -1452,7 +2116,9 @@ export type Database = {
           name: string
           position1?: string | null
           position2?: string | null
+          publish_at?: string | null
           rating?: number
+          release_bundle_id?: string | null
           run_rating?: number | null
           run_stat_3pt?: number | null
           run_stat_ast?: number | null
@@ -1464,6 +2130,7 @@ export type Database = {
           run_stat_reb?: number | null
           run_stat_stl?: number | null
           social_handle?: string | null
+          starts_at?: string | null
           stat_3pt?: number
           stat_ast?: number
           stat_blk?: number
@@ -1473,11 +2140,13 @@ export type Database = {
           stat_mid?: number
           stat_reb?: number
           stat_stl?: number
+          status?: Database["public"]["Enums"]["content_status"]
           sub_collection_id?: string | null
           team_id?: string | null
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           avatar_url?: string | null
           base_card_id?: string | null
           card_animation?: string | null
@@ -1488,6 +2157,8 @@ export type Database = {
           card_variant?: string | null
           collection_id?: string | null
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           evo_stage?: number
           gem_name?: string | null
           gem_tier_id?: string | null
@@ -1497,7 +2168,9 @@ export type Database = {
           name?: string
           position1?: string | null
           position2?: string | null
+          publish_at?: string | null
           rating?: number
+          release_bundle_id?: string | null
           run_rating?: number | null
           run_stat_3pt?: number | null
           run_stat_ast?: number | null
@@ -1509,6 +2182,7 @@ export type Database = {
           run_stat_reb?: number | null
           run_stat_stl?: number | null
           social_handle?: string | null
+          starts_at?: string | null
           stat_3pt?: number
           stat_ast?: number
           stat_blk?: number
@@ -1518,6 +2192,7 @@ export type Database = {
           stat_mid?: number
           stat_reb?: number
           stat_stl?: number
+          status?: Database["public"]["Enums"]["content_status"]
           sub_collection_id?: string | null
           team_id?: string | null
           updated_at?: string
@@ -1542,6 +2217,13 @@ export type Database = {
             columns: ["gem_tier_id"]
             isOneToOne: false
             referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_cards_release_bundle_id_fkey"
+            columns: ["release_bundle_id"]
+            isOneToOne: false
+            referencedRelation: "release_bundles"
             referencedColumns: ["id"]
           },
           {
@@ -1623,6 +2305,95 @@ export type Database = {
         }
         Relationships: []
       }
+      release_bundle_entities: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          release_bundle_id: string
+          role: string | null
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          release_bundle_id: string
+          role?: string | null
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          release_bundle_id?: string
+          role?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "release_bundle_entities_release_bundle_id_fkey"
+            columns: ["release_bundle_id"]
+            isOneToOne: false
+            referencedRelation: "release_bundles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      release_bundles: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          disabled_at: string | null
+          ends_at: string | null
+          id: string
+          name: string
+          notes: string | null
+          publish_at: string | null
+          slug: string
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          publish_at?: string | null
+          slug: string
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          publish_at?: string | null
+          slug?: string
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       reward_grants: {
         Row: {
           coins: number
@@ -1671,6 +2442,48 @@ export type Database = {
           key?: string
           updated_at?: string
           value?: Json
+        }
+        Relationships: []
+      }
+      rule_config_versions: {
+        Row: {
+          activate_at: string | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          environment: string
+          id: string
+          is_active: boolean
+          key: string
+          value: Json
+          version: number
+        }
+        Insert: {
+          activate_at?: string | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          environment?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          value: Json
+          version?: number
+        }
+        Update: {
+          activate_at?: string | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          environment?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          value?: Json
+          version?: number
         }
         Relationships: []
       }
@@ -1772,26 +2585,44 @@ export type Database = {
       }
       runs: {
         Row: {
+          archived_at: string | null
           created_at: string
+          disabled_at: string | null
+          ends_at: string | null
           id: string
           milestones: Json
           name: string
+          publish_at: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
           target_score: number
           team_id: string | null
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
           milestones?: Json
           name: string
+          publish_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           target_score?: number
           team_id?: string | null
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
           milestones?: Json
           name?: string
+          publish_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           target_score?: number
           team_id?: string | null
         }
@@ -1808,6 +2639,8 @@ export type Database = {
       signature_traits: {
         Row: {
           abbreviation: string
+          archived_at: string | null
+          category: string | null
           condition_type: string | null
           created_at: string
           description_actolytrene: string | null
@@ -1815,11 +2648,22 @@ export type Database = {
           description_diamond: string | null
           description_gold: string | null
           description_hof: string | null
+          disabled_at: string | null
+          ends_at: string | null
           id: string
+          metadata: Json | null
           name: string
+          publish_at: string | null
+          requires_target_stat: boolean
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
+          supported_target_stats: string[] | null
+          supported_tiers: string[] | null
         }
         Insert: {
           abbreviation: string
+          archived_at?: string | null
+          category?: string | null
           condition_type?: string | null
           created_at?: string
           description_actolytrene?: string | null
@@ -1827,11 +2671,22 @@ export type Database = {
           description_diamond?: string | null
           description_gold?: string | null
           description_hof?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
+          metadata?: Json | null
           name: string
+          publish_at?: string | null
+          requires_target_stat?: boolean
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          supported_target_stats?: string[] | null
+          supported_tiers?: string[] | null
         }
         Update: {
           abbreviation?: string
+          archived_at?: string | null
+          category?: string | null
           condition_type?: string | null
           created_at?: string
           description_actolytrene?: string | null
@@ -1839,8 +2694,17 @@ export type Database = {
           description_diamond?: string | null
           description_gold?: string | null
           description_hof?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
+          metadata?: Json | null
           name?: string
+          publish_at?: string | null
+          requires_target_stat?: boolean
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          supported_target_stats?: string[] | null
+          supported_tiers?: string[] | null
         }
         Relationships: []
       }
@@ -1873,10 +2737,13 @@ export type Database = {
       }
       social_posts: {
         Row: {
+          archived_at: string | null
           comments_count: number
           content: string
           created_at: string
           creator_id: string | null
+          disabled_at: string | null
+          ends_at: string | null
           event_type: string | null
           headline_image_url: string | null
           headline_rank: number | null
@@ -1889,13 +2756,19 @@ export type Database = {
           player_card_id: string | null
           post_type: string
           posted_at: string
+          publish_at: string | null
           scheduled_at: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
         }
         Insert: {
+          archived_at?: string | null
           comments_count?: number
           content: string
           created_at?: string
           creator_id?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           event_type?: string | null
           headline_image_url?: string | null
           headline_rank?: number | null
@@ -1908,13 +2781,19 @@ export type Database = {
           player_card_id?: string | null
           post_type?: string
           posted_at?: string
+          publish_at?: string | null
           scheduled_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
         }
         Update: {
+          archived_at?: string | null
           comments_count?: number
           content?: string
           created_at?: string
           creator_id?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
           event_type?: string | null
           headline_image_url?: string | null
           headline_rank?: number | null
@@ -1927,7 +2806,10 @@ export type Database = {
           player_card_id?: string | null
           post_type?: string
           posted_at?: string
+          publish_at?: string | null
           scheduled_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
         }
         Relationships: [
           {
@@ -1991,9 +2873,12 @@ export type Database = {
       storylines: {
         Row: {
           arc_image_url: string | null
+          archived_at: string | null
           created_at: string
+          disabled_at: string | null
           ends_at: string | null
           id: string
+          publish_at: string | null
           starts_at: string | null
           status: string
           summary: string | null
@@ -2002,9 +2887,12 @@ export type Database = {
         }
         Insert: {
           arc_image_url?: string | null
+          archived_at?: string | null
           created_at?: string
+          disabled_at?: string | null
           ends_at?: string | null
           id?: string
+          publish_at?: string | null
           starts_at?: string | null
           status?: string
           summary?: string | null
@@ -2013,9 +2901,12 @@ export type Database = {
         }
         Update: {
           arc_image_url?: string | null
+          archived_at?: string | null
           created_at?: string
+          disabled_at?: string | null
           ends_at?: string | null
           id?: string
+          publish_at?: string | null
           starts_at?: string | null
           status?: string
           summary?: string | null
@@ -2024,36 +2915,135 @@ export type Database = {
         }
         Relationships: []
       }
+      sub_collection_requirements: {
+        Row: {
+          allowed_evo_stages: number[] | null
+          any_evo_stage: boolean
+          created_at: string
+          evolved_counts: boolean
+          id: string
+          is_reward_card: boolean
+          player_card_id: string
+          sort_order: number
+          sub_collection_id: string
+        }
+        Insert: {
+          allowed_evo_stages?: number[] | null
+          any_evo_stage?: boolean
+          created_at?: string
+          evolved_counts?: boolean
+          id?: string
+          is_reward_card?: boolean
+          player_card_id: string
+          sort_order?: number
+          sub_collection_id: string
+        }
+        Update: {
+          allowed_evo_stages?: number[] | null
+          any_evo_stage?: boolean
+          created_at?: string
+          evolved_counts?: boolean
+          id?: string
+          is_reward_card?: boolean
+          player_card_id?: string
+          sort_order?: number
+          sub_collection_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_collection_requirements_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sub_collection_requirements_sub_collection_id_fkey"
+            columns: ["sub_collection_id"]
+            isOneToOne: false
+            referencedRelation: "sub_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sub_collections: {
         Row: {
+          archived_at: string | null
           collection_id: string
+          color_primary: string | null
+          color_secondary: string | null
           created_at: string
+          description: string | null
+          disabled_at: string | null
+          ends_at: string | null
+          glow_color: string | null
           id: string
+          image_url: string | null
+          is_repeatable: boolean
           name: string
+          publish_at: string | null
+          reward_card_id: string | null
           reward_coins: number
           reward_gems: number
           reward_pack_id: string | null
+          reward_payload: Json | null
           reward_type: string
+          sort_order: number
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
+          updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           collection_id: string
+          color_primary?: string | null
+          color_secondary?: string | null
           created_at?: string
+          description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
+          glow_color?: string | null
           id?: string
+          image_url?: string | null
+          is_repeatable?: boolean
           name: string
+          publish_at?: string | null
+          reward_card_id?: string | null
           reward_coins?: number
           reward_gems?: number
           reward_pack_id?: string | null
+          reward_payload?: Json | null
           reward_type?: string
+          sort_order?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           collection_id?: string
+          color_primary?: string | null
+          color_secondary?: string | null
           created_at?: string
+          description?: string | null
+          disabled_at?: string | null
+          ends_at?: string | null
+          glow_color?: string | null
           id?: string
+          image_url?: string | null
+          is_repeatable?: boolean
           name?: string
+          publish_at?: string | null
+          reward_card_id?: string | null
           reward_coins?: number
           reward_gems?: number
           reward_pack_id?: string | null
+          reward_payload?: Json | null
           reward_type?: string
+          sort_order?: number
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          updated_at?: string
         }
         Relationships: [
           {
@@ -2061,6 +3051,13 @@ export type Database = {
             columns: ["collection_id"]
             isOneToOne: false
             referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sub_collections_reward_card_id_fkey"
+            columns: ["reward_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
             referencedColumns: ["id"]
           },
           {
@@ -2113,24 +3110,42 @@ export type Database = {
       }
       teams: {
         Row: {
+          archived_at: string | null
           category: string
           created_at: string
+          disabled_at: string | null
+          ends_at: string | null
           id: string
           name: string
+          publish_at: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
           unlock_cost: number
         }
         Insert: {
+          archived_at?: string | null
           category?: string
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
           name: string
+          publish_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           unlock_cost?: number
         }
         Update: {
+          archived_at?: string | null
           category?: string
           created_at?: string
+          disabled_at?: string | null
+          ends_at?: string | null
           id?: string
           name?: string
+          publish_at?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
           unlock_cost?: number
         }
         Relationships: []
@@ -2484,6 +3499,7 @@ export type Database = {
         Args: { p_code: string; p_extra?: Json; p_message: string }
         Returns: undefined
       }
+      admin_install_lifecycle: { Args: { p_table: string }; Returns: undefined }
       admin_issue_preview_token: {
         Args: { p_fingerprint: string; p_kind: string; p_payload: Json }
         Returns: string
@@ -2536,6 +3552,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "player"
+      content_status: "draft" | "scheduled" | "active" | "disabled" | "archived"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2664,6 +3681,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "player"],
+      content_status: ["draft", "scheduled", "active", "disabled", "archived"],
     },
   },
 } as const
