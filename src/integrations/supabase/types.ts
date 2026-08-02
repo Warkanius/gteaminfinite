@@ -3445,6 +3445,10 @@ export type Database = {
         Args: { p_commit?: boolean; p_item: Json; p_kind: string }
         Returns: Json
       }
+      admin_apply_evo: {
+        Args: { p_commit?: boolean; p_item: Json }
+        Returns: Json
+      }
       admin_apply_extra: {
         Args: { p_commit?: boolean; p_kind: string; p_payload: Json }
         Returns: Json
