@@ -2354,11 +2354,15 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          parent_release_id: string | null
           publish_at: string | null
+          published_at: string | null
           slug: string
           starts_at: string | null
           status: Database["public"]["Enums"]["content_status"]
           updated_at: string
+          version_label: string | null
+          version_number: number
         }
         Insert: {
           archived_at?: string | null
@@ -2370,11 +2374,15 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          parent_release_id?: string | null
           publish_at?: string | null
+          published_at?: string | null
           slug: string
           starts_at?: string | null
           status?: Database["public"]["Enums"]["content_status"]
           updated_at?: string
+          version_label?: string | null
+          version_number?: number
         }
         Update: {
           archived_at?: string | null
@@ -2386,13 +2394,25 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          parent_release_id?: string | null
           publish_at?: string | null
+          published_at?: string | null
           slug?: string
           starts_at?: string | null
           status?: Database["public"]["Enums"]["content_status"]
           updated_at?: string
+          version_label?: string | null
+          version_number?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "release_bundles_parent_release_id_fkey"
+            columns: ["parent_release_id"]
+            isOneToOne: false
+            referencedRelation: "release_bundles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reward_grants: {
         Row: {
