@@ -20,6 +20,7 @@ import {
   Download,
   FolderOpen,
   Target,
+  Rocket,
 
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";

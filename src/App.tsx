@@ -135,6 +135,8 @@ const App = () => (
             <Route path="/admin/storylines" element={<AdminRoute><LazyLoad><AdminStorylines /></LazyLoad></AdminRoute>} />
             <Route path="/league" element={<ProtectedRoute><LazyLoad><LeagueHistory /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/global-export" element={<AdminRoute><LazyLoad><AdminGlobalExport /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/releases" element={<AdminRoute><LazyLoad><AdminReleases /></LazyLoad></AdminRoute>} />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
