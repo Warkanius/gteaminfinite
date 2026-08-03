@@ -20,6 +20,7 @@ import { batchTools } from "./tools/batch-tools";
 import { dominationDeleteTools } from "./tools/domination-delete";
 import { dominationRoadTools } from "./tools/domination-roads";
 import { planningReadTools } from "./tools/planning-reads";
+import { releaseBundleTools } from "./tools/release-bundles";
 
 
 
@@ -41,6 +42,7 @@ export default defineMcp({
     getReferences,
     listRows,
     ...planningReadTools,
+    ...releaseBundleTools,
     ...batchTools,
     ...dominationRoadTools,
     ...dominationDeleteTools,
