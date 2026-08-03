@@ -74,6 +74,7 @@ const adminItems = [
   { title: "Collection Sets", url: "/admin/collection-sets", icon: FolderOpen },
   { title: "Dynamic Duos", url: "/admin/dynamic-duos", icon: Sparkles },
   { title: "Storylines (AI)", url: "/admin/storylines", icon: BookOpen },
+  { title: "Releases", url: "/admin/releases", icon: Rocket },
   { title: "Global Export (AI)", url: "/admin/global-export", icon: Download },
 ];
 
