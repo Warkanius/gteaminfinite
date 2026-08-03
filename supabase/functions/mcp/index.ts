@@ -1743,6 +1743,135 @@ var getBatchReferences = defineTool21({
 });
 var planningReadTools = [getEvoChain, getPlayerVersions, getTeamRoster, getDominationRoad, getBatchReferences];
 
+// src/lib/mcp/tools/release-bundles.ts
+import { defineTool as defineTool22 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z20 } from "npm:zod@^3.25.76";
+var bundleFields = {
+  release: z20.record(z20.string(), z20.any()).optional().describe("Release record: name, version_label, version_number, parent_release_id, notes, status."),
+  players: z20.array(z20.record(z20.string(), z20.any())).optional().describe("Player cards to create/update."),
+  collections: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  sub_collections: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  collection_requirements: z20.array(z20.record(z20.string(), z20.any())).optional().describe("Collection membership. action:'replace' replaces the whole membership list (destructive)."),
+  packs: z20.array(z20.record(z20.string(), z20.any())).optional().describe("Packs with ordered pool + odds. replace_pool / replace_odds are destructive replacements."),
+  evo_paths: z20.array(z20.record(z20.string(), z20.any())).optional().describe("Evo steps; one row per step_order."),
+  badges: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  signature_traits: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  gem_tiers: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  teams: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  runs: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  domination_roads: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  domination_games: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  challenges: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  locker_codes: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  dynamic_duos: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  storylines: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  social_posts: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  release_bundles: z20.array(z20.record(z20.string(), z20.any())).optional(),
+  notes: z20.string().optional()
+};
+var KIND = "content_bundle";
+var previewContentBundle = defineTool22({
+  name: "preview_content_bundle",
+  title: "Preview: complete content release bundle",
+  description: "Admin only. ZERO WRITES. Validates one complete content release (release record, collection + membership + reward, bulk player cards with badge/trait replacements, pack with ordered pool and odds totalling 100%, multi-step evo paths with objectives, and optional teams/runs/domination/challenges/locker codes/duos/storylines/social posts). Resolves every name to an exact id and REJECTS ambiguous player/badge/trait/collection/pack/tier/team matches with all candidates listed. Returns the ordered creates, updates, replacements, deletes and links, flags destructive replacements, and returns payload_hash plus a single-use preview_token." + safetyNote,
+  inputSchema: bundleFields,
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  handler: async (input, ctx) => runBatch(ctx, input, "preview", void 0, KIND)
+});
+var commitContentBundle = defineTool22({
+  name: "commit_content_bundle",
+  title: "Commit: complete content release bundle",
+  description: "Admin only. Applies a previewed and user-approved content bundle in ONE Postgres transaction \u2014 every operation succeeds or the whole release rolls back, so a release is never partially published. The payload must hash identically to the preview it came from, otherwise the commit is rejected (PREVIEW_MISMATCH / PREVIEW_ALREADY_COMMITTED / PREVIEW_EXPIRED) and nothing is written. Returns created and updated ids plus a post-commit verification summary.",
+  inputSchema: {
+    ...bundleFields,
+    preview_token: z20.string().describe("The preview_token from the matching preview. Single use.")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  handler: async (input, ctx) => {
+    const { preview_token, ...rest } = input;
+    return runBatch(ctx, rest, "commit", preview_token, KIND);
+  }
+});
+var setContentStatus = defineTool22({
+  name: "setContentStatus",
+  title: "Publish / archive / restore content",
+  description: "Admin only. Moves one content entity through its lifecycle (draft, scheduled, active, disabled, archived) with dependency validation. mode='preview' reports the intended change and any blocking dependants without writing.",
+  inputSchema: {
+    entity_type: z20.string().describe("e.g. player_cards, packs, collections, evo_paths, release_bundles."),
+    entity_id: z20.string().uuid(),
+    status: z20.enum(["draft", "scheduled", "active", "disabled", "archived"]),
+    publish_at: z20.string().optional(),
+    starts_at: z20.string().optional(),
+    ends_at: z20.string().optional(),
+    override: z20.boolean().optional().describe("Bypass soft dependency warnings."),
+    mode: z20.enum(["preview", "commit"]).default("preview")
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  handler: async (input, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    const i = input;
+    const { data, error: dbError } = await client.rpc("admin_lifecycle_apply", {
+      p_entity_type: i.entity_type,
+      p_entity_id: i.entity_id,
+      p_status: i.status,
+      p_dates: {
+        publish_at: i.publish_at ?? null,
+        starts_at: i.starts_at ?? null,
+        ends_at: i.ends_at ?? null
+      },
+      p_commit: i.mode === "commit",
+      p_override: !!i.override
+    });
+    if (dbError) return fail(dbError.message);
+    return ok(data);
+  }
+});
+var getContentUsage = defineTool22({
+  name: "getContentUsage",
+  title: "Where is this content used?",
+  description: "Admin only. Read-only. Lists every reference to a content entity (packs, collections, evo paths, rosters, rewards) so you can tell what a rename, archive or delete would affect.",
+  inputSchema: {
+    entity_type: z20.string().describe("e.g. player_cards, packs, collections, teams."),
+    entity_id: z20.string().uuid()
+  },
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  handler: async (input, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    const i = input;
+    const { data, error: dbError } = await client.rpc("admin_usage", {
+      p_entity_type: i.entity_type,
+      p_entity_id: i.entity_id
+    });
+    if (dbError) return fail(dbError.message);
+    return ok(data);
+  }
+});
+var getUnusedPlayers = defineTool22({
+  name: "getUnusedPlayers",
+  title: "Cards not used anywhere",
+  description: "Admin only. Read-only. Lists player cards that no pack, collection, roster, evo path or reward references \u2014 useful before archiving or cleaning up a release.",
+  inputSchema: { by_name: z20.boolean().optional().describe("Group duplicates by display name.") },
+  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  handler: async (input, ctx) => {
+    const { client, error } = await adminClient(ctx);
+    if (error) return error;
+    const { data, error: dbError } = await client.rpc("admin_unused_players", {
+      p_by_name: !!input.by_name
+    });
+    if (dbError) return fail(dbError.message);
+    return ok(data);
+  }
+});
+var releaseBundleTools = [
+  previewContentBundle,
+  commitContentBundle,
+  setContentStatus,
+  getContentUsage,
+  getUnusedPlayers
+];
+
 // src/lib/mcp/index.ts
 var projectRef = "tgcmhmcgxzabimgnzsiu";
 var mcp_default = defineMcp({
@@ -1760,6 +1889,7 @@ var mcp_default = defineMcp({
     get_references_default,
     list_rows_default,
     ...planningReadTools,
+    ...releaseBundleTools,
     ...batchTools,
     ...dominationRoadTools,
     ...dominationDeleteTools,

@@ -269,6 +269,454 @@
         "outputSchema": null
       },
       {
+        "name": "preview_content_bundle",
+        "title": "Preview: complete content release bundle",
+        "description": "Admin only. ZERO WRITES. Validates one complete content release (release record, collection + membership + reward, bulk player cards with badge/trait replacements, pack with ordered pool and odds totalling 100%, multi-step evo paths with objectives, and optional teams/runs/domination/challenges/locker codes/duos/storylines/social posts). Resolves every name to an exact id and REJECTS ambiguous player/badge/trait/collection/pack/tier/team matches with all candidates listed. Returns the ordered creates, updates, replacements, deletes and links, flags destructive replacements, and returns payload_hash plus a single-use preview_token. Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.",
+        "annotations": {
+          "readOnlyHint": true,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "release": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Release record: name, version_label, version_number, parent_release_id, notes, status."
+            },
+            "players": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Player cards to create/update."
+            },
+            "collections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "sub_collections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "collection_requirements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Collection membership. action:'replace' replaces the whole membership list (destructive)."
+            },
+            "packs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Packs with ordered pool + odds. replace_pool / replace_odds are destructive replacements."
+            },
+            "evo_paths": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Evo steps; one row per step_order."
+            },
+            "badges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "signature_traits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "gem_tiers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "teams": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "runs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "domination_roads": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "domination_games": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "challenges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "locker_codes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "dynamic_duos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "storylines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "social_posts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "release_bundles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "commit_content_bundle",
+        "title": "Commit: complete content release bundle",
+        "description": "Admin only. Applies a previewed and user-approved content bundle in ONE Postgres transaction — every operation succeeds or the whole release rolls back, so a release is never partially published. The payload must hash identically to the preview it came from, otherwise the commit is rejected (PREVIEW_MISMATCH / PREVIEW_ALREADY_COMMITTED / PREVIEW_EXPIRED) and nothing is written. Returns created and updated ids plus a post-commit verification summary.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "release": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Release record: name, version_label, version_number, parent_release_id, notes, status."
+            },
+            "players": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Player cards to create/update."
+            },
+            "collections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "sub_collections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "collection_requirements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Collection membership. action:'replace' replaces the whole membership list (destructive)."
+            },
+            "packs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Packs with ordered pool + odds. replace_pool / replace_odds are destructive replacements."
+            },
+            "evo_paths": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Evo steps; one row per step_order."
+            },
+            "badges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "signature_traits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "gem_tiers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "teams": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "runs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "domination_roads": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "domination_games": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "challenges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "locker_codes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "dynamic_duos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "storylines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "social_posts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "release_bundles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "notes": {
+              "type": "string"
+            },
+            "preview_token": {
+              "type": "string",
+              "description": "The preview_token from the matching preview. Single use."
+            }
+          },
+          "required": [
+            "preview_token"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "setContentStatus",
+        "title": "Publish / archive / restore content",
+        "description": "Admin only. Moves one content entity through its lifecycle (draft, scheduled, active, disabled, archived) with dependency validation. mode='preview' reports the intended change and any blocking dependants without writing.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "entity_type": {
+              "type": "string",
+              "description": "e.g. player_cards, packs, collections, evo_paths, release_bundles."
+            },
+            "entity_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "scheduled",
+                "active",
+                "disabled",
+                "archived"
+              ]
+            },
+            "publish_at": {
+              "type": "string"
+            },
+            "starts_at": {
+              "type": "string"
+            },
+            "ends_at": {
+              "type": "string"
+            },
+            "override": {
+              "type": "boolean",
+              "description": "Bypass soft dependency warnings."
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "preview",
+                "commit"
+              ],
+              "default": "preview"
+            }
+          },
+          "required": [
+            "entity_type",
+            "entity_id",
+            "status"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "getContentUsage",
+        "title": "Where is this content used?",
+        "description": "Admin only. Read-only. Lists every reference to a content entity (packs, collections, evo paths, rosters, rewards) so you can tell what a rename, archive or delete would affect.",
+        "annotations": {
+          "readOnlyHint": true,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "entity_type": {
+              "type": "string",
+              "description": "e.g. player_cards, packs, collections, teams."
+            },
+            "entity_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "entity_type",
+            "entity_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "getUnusedPlayers",
+        "title": "Cards not used anywhere",
+        "description": "Admin only. Read-only. Lists player cards that no pack, collection, roster, evo path or reward references — useful before archiving or cleaning up a release.",
+        "annotations": {
+          "readOnlyHint": true,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "by_name": {
+              "type": "boolean",
+              "description": "Group duplicates by display name."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
         "name": "previewContentBatch",
         "title": "Preview: mixed content batch",
         "description": "Admin only. ZERO WRITES. Preview one batch spanning any mix of players, teams, runs, domination roads, domination games, packs, locker codes, challenges, dynamic duos, evo paths and storylines. Groups execute in dependency order (players first, then teams/runs/roads, then evo paths and storylines). Items may declare temp_ref: 'ref:player:my-new-card' and later items may point at it with e.g. destination_player_ref or inside a roster array; those refs resolve inside the same transaction. Names resolve by exact case-insensitive match only — ambiguous player names are rejected with every matching card listed. Returns creates, updates, deletes, replacements, warnings, resolved_references, normalized_payload, payload_hash and a one-time preview_token.  Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.",

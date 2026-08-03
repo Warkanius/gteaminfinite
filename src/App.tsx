@@ -46,6 +46,7 @@ const AdminDynamicDuos = lazy(() => import("@/pages/admin/AdminDynamicDuos"));
 const AdminStorylines = lazy(() => import("@/pages/admin/AdminStorylines"));
 const LeagueHistory = lazy(() => import("@/pages/LeagueHistory"));
 const AdminGlobalExport = lazy(() => import("@/pages/admin/AdminGlobalExport"));
+const AdminReleases = lazy(() => import("@/pages/admin/AdminReleases"));
 
 const LazyLoad = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
@@ -134,6 +135,8 @@ const App = () => (
             <Route path="/admin/storylines" element={<AdminRoute><LazyLoad><AdminStorylines /></LazyLoad></AdminRoute>} />
             <Route path="/league" element={<ProtectedRoute><LazyLoad><LeagueHistory /></LazyLoad></ProtectedRoute>} />
             <Route path="/admin/global-export" element={<AdminRoute><LazyLoad><AdminGlobalExport /></LazyLoad></AdminRoute>} />
+            <Route path="/admin/releases" element={<AdminRoute><LazyLoad><AdminReleases /></LazyLoad></AdminRoute>} />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
