@@ -738,13 +738,87 @@ export function buildOpenApi(baseUrl: string) {
   paths["/admin-api/v1/diagnostics"] = {
     get: {
       operationId: "getAdminApiDiagnostics",
-      summary: "Full content health audit (v1)",
+      summary: "Filtered content health audit (v1)",
       description:
-        "Invalid OVR, OVR/tier mismatches, ambiguous names, broken collection links, reward contamination, packs missing pools or odds off 100.00, empty rosters, duplicate game orders, broken evo sources, skipped tiers, missing evo versions, stale jobs — with remediation.",
+        "Invalid OVR, OVR/tier mismatches, ambiguous names, broken collection links, reward contamination, odds off 100.00, empty rosters, broken evo sources, skipped tiers, missing evo versions. Filter by scope, player_card_ids, codes, release_slug; page with limit and cursor.",
       "x-openai-isConsequential": false,
+      parameters: [
+        { name: "scope", in: "query", required: false, schema: { type: "string" }, description: "Entity type, e.g. player_card, pack, collection, team, evo_path." },
+        { name: "player_card_ids", in: "query", required: false, schema: { type: "string" }, description: "Comma-separated immutable card ids to audit." },
+        { name: "codes", in: "query", required: false, schema: { type: "string" }, description: "Comma-separated finding codes." },
+        { name: "entity_types", in: "query", required: false, schema: { type: "string" }, description: "Comma-separated entity types." },
+        { name: "release_slug", in: "query", required: false, schema: { type: "string" } },
+        { name: "label", in: "query", required: false, schema: { type: "string" }, description: "Substring match on the entity label/name." },
+        { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 200 } },
+        { name: "cursor", in: "query", required: false, schema: { type: "string" } },
+      ],
       responses: okJson("Diagnostics"),
     },
   };
+
+  paths["/admin-api/v1/bulk-players/preview"] = {
+    post: {
+      operationId: "previewBulkPlayers",
+      summary: "Preview bulk player-card changes (zero writes)",
+      description:
+        "Validates multiple player-card creates or updates with zero writes. Supports immutable player-card IDs, all nine base stats, Runs stats, decimal ratings, gem tiers, positions, collection-reward flags, and complete badge and trait replacement. Always call before commit.",
+      "x-openai-isConsequential": false,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: anyObj,
+            example: {
+              players: [
+                {
+                  name: "Player Name",
+                  player_card_id: "immutable-uuid",
+                  gem_tier: "Diamond",
+                  rating: 3.7777777778,
+                  run_rating: 4,
+                  position1: "SG",
+                  position2: "SF",
+                  stat_3pt: 6,
+                  stat_mid: 4,
+                  stat_fin: 5,
+                  stat_dnk: 4,
+                  stat_ast: 3,
+                  stat_stl: 6,
+                  stat_reb: 1,
+                  stat_blk: 1,
+                  stat_int: 4,
+                  badges: [{ badge: "Walking Bucket", tier: "diamond" }],
+                  traits: [{ trait: "Prime Time", tier: "gold", target_stat: "stat_3pt" }],
+                },
+              ],
+            },
+          },
+        },
+      },
+      responses: okJson("Bulk player preview plan"),
+    },
+  };
+
+  paths["/admin-api/v1/bulk-players/commit"] = {
+    post: {
+      operationId: "commitBulkPlayers",
+      summary: "Commit an approved bulk player preview atomically",
+      description:
+        "Atomically applies the exact previously previewed bulk-player payload. Requires the matching single-use preview token and an identical canonical payload. All player updates succeed or roll back together. No other entity is touched.",
+      "x-openai-isConsequential": true,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: anyObj,
+            example: { preview_token: "single-use-token", players: [{ player_card_id: "immutable-uuid", rating: 3.7777777778 }] },
+          },
+        },
+      },
+      responses: okJson("Bulk player commit report"),
+    },
+  };
+
 
   paths["/admin-api/v1/bulk/preview"] = {
     post: {
