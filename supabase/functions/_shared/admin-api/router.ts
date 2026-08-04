@@ -183,13 +183,14 @@ function prepare(entity: string, body: Record<string, unknown>) {
     preview_id?: string;
     idempotency_key?: string;
   };
-  const document = entity === "bulk" ? doc : documentForEntity(entity, doc as Record<string, unknown>) ?? {};
+  const passthrough = entity === "bulk" || entity === "bulk-players";
+  const document = passthrough ? doc : documentForEntity(entity, doc as Record<string, unknown>) ?? {};
   const normalized = normalizeDocument(document);
   return { normalized, preview_token, preview_id, idempotency_key, schedule };
 }
 
 async function runPipeline(mode: "preview" | "commit", entity: string, body: Record<string, unknown>, ctx: Ctx): Promise<Response> {
-  const operation = entity === "bulk" ? "bulk" : `entity:${entity}`;
+  const operation = entity === "bulk" ? "bulk" : entity === "bulk-players" ? "bulk_players" : `entity:${entity}`;
   if (byteSize(body) > LIMITS.max_request_bytes) {
     return send(
       failure("validation", [
