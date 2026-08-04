@@ -226,6 +226,37 @@ export function normalizeDocument(input: Record<string, unknown>): NormalizeResu
   };
 }
 
+/**
+ * Two entries may never target the same card, whether through the same
+ * identifier or through different ones (id, card_key, name, temp_ref).
+ */
+function detectDuplicateTargets(items: Array<Record<string, unknown>>, errors: AdminApiError[]) {
+  const seen = new Map<string, number>();
+  items.forEach((item, index) => {
+    const keys = [
+      item.player_card_id ? `id:${String(item.player_card_id).toLowerCase()}` : null,
+      item.card_key ? `key:${String(item.card_key).toLowerCase()}` : null,
+      item.temp_ref ? `ref:${String(item.temp_ref).toLowerCase()}` : null,
+      !item.player_card_id && !item.card_key && item.name ? `name:${String(item.name).trim().toLowerCase()}` : null,
+    ].filter(Boolean) as string[];
+    for (const key of keys) {
+      const first = seen.get(key);
+      if (first !== undefined) {
+        errors.push(
+          apiError("DUPLICATE_TARGET", `players[${index}] targets the same card as players[${first}].`, {
+            path: `players[${index}]`,
+            entity_type: "player_card",
+            received: key.split(":").slice(1).join(":"),
+            remediation: "Merge the two entries; one card may appear only once per payload.",
+          }),
+        );
+      } else {
+        seen.set(key, index);
+      }
+    }
+  });
+}
+
 function normalizeItem(
   group: Group,
   item: Record<string, unknown>,
