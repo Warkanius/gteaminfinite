@@ -269,6 +269,902 @@
         "outputSchema": null
       },
       {
+        "name": "preview_content_release",
+        "title": "Preview: atomic content release",
+        "description": "Admin only. ZERO WRITES. Validates one complete content release — release record, collection with ordered membership and exactly one completion reward, bulk player cards with badge/trait assignments, an optional release team roster, a pack with an ordered pool whose odds total exactly 100.00% in fixed precision, and multi-step evo paths where EVERY step carries a resulting_version that materializes the playable card (tier, rating, stats, badges, traits). Normalizes imported spellings ('Hall of Fame' -> hof, '3PT' -> stat_3pt), enforces tier progression with no skipped tiers, keeps the collection reward out of the pack, rejects ambiguous player names with every candidate listed, and returns the ordered creates/updates/replacements plus a payload_hash and single-use preview_token. Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.",
+        "annotations": {
+          "readOnlyHint": true,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "release": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "draft",
+                    "published"
+                  ]
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            "collection": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": {
+                  "type": "string"
+                },
+                "player_cards": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "player_name": {
+                        "type": "string"
+                      },
+                      "player_card_id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "slot": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "is_reward": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "description": "Ordered membership. Exactly one entry may set is_reward."
+                },
+                "reward_player_name": {
+                  "type": "string"
+                },
+                "reward_player_card_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            "players": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "player_card_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Immutable target for edits; required when the name is duplicated."
+                  },
+                  "new_name": {
+                    "type": "string"
+                  },
+                  "gem_tier": {
+                    "type": "string"
+                  },
+                  "rating": {
+                    "type": "number"
+                  },
+                  "run_rating": {
+                    "type": "number"
+                  },
+                  "position1": {
+                    "type": "string"
+                  },
+                  "position2": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "collection": {
+                    "type": "string"
+                  },
+                  "sub_collection": {
+                    "type": "string"
+                  },
+                  "team": {
+                    "type": "string"
+                  },
+                  "is_collection_reward": {
+                    "type": "boolean"
+                  },
+                  "stats": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number"
+                    },
+                    "description": "stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (0-99)."
+                  },
+                  "badges": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "badge": {
+                              "type": "string"
+                            },
+                            "badge_id": {
+                              "type": "string"
+                            },
+                            "trait": {
+                              "type": "string"
+                            },
+                            "trait_id": {
+                              "type": "string"
+                            },
+                            "tier": {
+                              "type": "string",
+                              "description": "base | gold | hof | diamond | actolytrene. 'Hall of Fame' is accepted."
+                            },
+                            "target_stat": {
+                              "type": "string",
+                              "description": "Trait target stat, e.g. stat_3pt. '3PT' is accepted."
+                            }
+                          },
+                          "additionalProperties": true
+                        }
+                      ]
+                    }
+                  },
+                  "traits": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/properties/players/items/properties/badges/items"
+                    }
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "team": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "category": {
+                  "type": "string"
+                },
+                "unlock_cost": {
+                  "type": "number"
+                },
+                "roster": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "player_name": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/player_name"
+                      },
+                      "player_card_id": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/player_card_id"
+                      },
+                      "slot": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "is_reward": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/is_reward"
+                      }
+                    },
+                    "required": [
+                      "slot"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "roster"
+              ],
+              "additionalProperties": false
+            },
+            "pack": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "pack_type": {
+                  "type": "string",
+                  "enum": [
+                    "standard",
+                    "premium",
+                    "promo"
+                  ]
+                },
+                "cost": {
+                  "type": "number"
+                },
+                "ten_box_cost": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "players": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "player_name": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/player_name"
+                      },
+                      "player_card_id": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/player_card_id"
+                      },
+                      "slot": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "is_reward": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/is_reward"
+                      }
+                    },
+                    "required": [
+                      "slot"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "description": "Ordered pool; slot order is preserved."
+                },
+                "odds": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "result_slot": {
+                        "type": "string",
+                        "description": "Pool slot number, or 'player_choice'."
+                      },
+                      "percentage": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "Up to two decimals. All rows must total exactly 100.00."
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "result_slot",
+                      "percentage"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "description": "Must total exactly 100.00% in fixed precision."
+                }
+              },
+              "required": [
+                "name",
+                "players",
+                "odds"
+              ],
+              "additionalProperties": false
+            },
+            "evo_paths": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "player_name": {
+                    "type": "string"
+                  },
+                  "player_card_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "published"
+                    ]
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "from_tier": {
+                          "type": "string"
+                        },
+                        "to_tier": {
+                          "type": "string"
+                        },
+                        "step_order": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "objectives": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "stat": {
+                                "type": "string",
+                                "description": "points, three_pointers_made, mid_range_shots_made, dunks_made, assists, steals, rebounds, blocks, games_won."
+                              },
+                              "amount": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              },
+                              "description": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stat",
+                              "amount"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "resulting_version": {
+                          "type": "object",
+                          "properties": {
+                            "rating": {
+                              "type": "number"
+                            },
+                            "gem_name": {
+                              "type": "string"
+                            },
+                            "stats": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "number"
+                              }
+                            },
+                            "badges": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/properties/players/items/properties/badges/items"
+                              }
+                            },
+                            "traits": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/properties/players/items/properties/badges/items"
+                              }
+                            }
+                          },
+                          "required": [
+                            "stats"
+                          ],
+                          "additionalProperties": false,
+                          "description": "REQUIRED for every step: the materialized playable card version unlocked by completing it."
+                        }
+                      },
+                      "required": [
+                        "from_tier",
+                        "to_tier",
+                        "step_order",
+                        "objectives",
+                        "resulting_version"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "steps"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "forbid_existing_links_to": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Collection names this release must not link cards to (guards against cross-release contamination)."
+            }
+          },
+          "required": [
+            "release"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "commit_content_release",
+        "title": "Commit: atomic content release",
+        "description": "Admin only. Publishes a previewed and user-approved content release in ONE Postgres transaction — cards, collection, membership, reward, team roster, pack pool and odds, evo steps and every materialized evo card version succeed together or the whole release rolls back. The payload must hash identically to its preview (otherwise PREVIEW_PAYLOAD_MISMATCH / PREVIEW_ALREADY_COMMITTED / PREVIEW_TOKEN_EXPIRED and nothing is written). Returns created/updated ids and a post-commit verification summary.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "release": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "draft",
+                    "published"
+                  ]
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            "collection": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": {
+                  "type": "string"
+                },
+                "player_cards": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "player_name": {
+                        "type": "string"
+                      },
+                      "player_card_id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "slot": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "is_reward": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "description": "Ordered membership. Exactly one entry may set is_reward."
+                },
+                "reward_player_name": {
+                  "type": "string"
+                },
+                "reward_player_card_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            "players": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "player_card_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Immutable target for edits; required when the name is duplicated."
+                  },
+                  "new_name": {
+                    "type": "string"
+                  },
+                  "gem_tier": {
+                    "type": "string"
+                  },
+                  "rating": {
+                    "type": "number"
+                  },
+                  "run_rating": {
+                    "type": "number"
+                  },
+                  "position1": {
+                    "type": "string"
+                  },
+                  "position2": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "collection": {
+                    "type": "string"
+                  },
+                  "sub_collection": {
+                    "type": "string"
+                  },
+                  "team": {
+                    "type": "string"
+                  },
+                  "is_collection_reward": {
+                    "type": "boolean"
+                  },
+                  "stats": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number"
+                    },
+                    "description": "stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (0-99)."
+                  },
+                  "badges": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "badge": {
+                              "type": "string"
+                            },
+                            "badge_id": {
+                              "type": "string"
+                            },
+                            "trait": {
+                              "type": "string"
+                            },
+                            "trait_id": {
+                              "type": "string"
+                            },
+                            "tier": {
+                              "type": "string",
+                              "description": "base | gold | hof | diamond | actolytrene. 'Hall of Fame' is accepted."
+                            },
+                            "target_stat": {
+                              "type": "string",
+                              "description": "Trait target stat, e.g. stat_3pt. '3PT' is accepted."
+                            }
+                          },
+                          "additionalProperties": true
+                        }
+                      ]
+                    }
+                  },
+                  "traits": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/properties/players/items/properties/badges/items"
+                    }
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "team": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "category": {
+                  "type": "string"
+                },
+                "unlock_cost": {
+                  "type": "number"
+                },
+                "roster": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "player_name": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/player_name"
+                      },
+                      "player_card_id": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/player_card_id"
+                      },
+                      "slot": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "is_reward": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/is_reward"
+                      }
+                    },
+                    "required": [
+                      "slot"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "roster"
+              ],
+              "additionalProperties": false
+            },
+            "pack": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "pack_type": {
+                  "type": "string",
+                  "enum": [
+                    "standard",
+                    "premium",
+                    "promo"
+                  ]
+                },
+                "cost": {
+                  "type": "number"
+                },
+                "ten_box_cost": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "players": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "player_name": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/player_name"
+                      },
+                      "player_card_id": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/player_card_id"
+                      },
+                      "slot": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "is_reward": {
+                        "$ref": "#/properties/collection/properties/player_cards/items/properties/is_reward"
+                      }
+                    },
+                    "required": [
+                      "slot"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "description": "Ordered pool; slot order is preserved."
+                },
+                "odds": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "result_slot": {
+                        "type": "string",
+                        "description": "Pool slot number, or 'player_choice'."
+                      },
+                      "percentage": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "Up to two decimals. All rows must total exactly 100.00."
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "result_slot",
+                      "percentage"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "description": "Must total exactly 100.00% in fixed precision."
+                }
+              },
+              "required": [
+                "name",
+                "players",
+                "odds"
+              ],
+              "additionalProperties": false
+            },
+            "evo_paths": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "player_name": {
+                    "type": "string"
+                  },
+                  "player_card_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "published"
+                    ]
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "from_tier": {
+                          "type": "string"
+                        },
+                        "to_tier": {
+                          "type": "string"
+                        },
+                        "step_order": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "objectives": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "stat": {
+                                "type": "string",
+                                "description": "points, three_pointers_made, mid_range_shots_made, dunks_made, assists, steals, rebounds, blocks, games_won."
+                              },
+                              "amount": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              },
+                              "description": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stat",
+                              "amount"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "resulting_version": {
+                          "type": "object",
+                          "properties": {
+                            "rating": {
+                              "type": "number"
+                            },
+                            "gem_name": {
+                              "type": "string"
+                            },
+                            "stats": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "number"
+                              }
+                            },
+                            "badges": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/properties/players/items/properties/badges/items"
+                              }
+                            },
+                            "traits": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/properties/players/items/properties/badges/items"
+                              }
+                            }
+                          },
+                          "required": [
+                            "stats"
+                          ],
+                          "additionalProperties": false,
+                          "description": "REQUIRED for every step: the materialized playable card version unlocked by completing it."
+                        }
+                      },
+                      "required": [
+                        "from_tier",
+                        "to_tier",
+                        "step_order",
+                        "objectives",
+                        "resulting_version"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "steps"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "forbid_existing_links_to": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Collection names this release must not link cards to (guards against cross-release contamination)."
+            },
+            "preview_token": {
+              "type": "string",
+              "description": "The preview_token from the matching preview. Single use."
+            }
+          },
+          "required": [
+            "release",
+            "preview_token"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
         "name": "preview_content_bundle",
         "title": "Preview: complete content release bundle",
         "description": "Admin only. ZERO WRITES. Validates one complete content release (release record, collection + membership + reward, bulk player cards with badge/trait replacements, pack with ordered pool and odds totalling 100%, multi-step evo paths with objectives, and optional teams/runs/domination/challenges/locker codes/duos/storylines/social posts). Resolves every name to an exact id and REJECTS ambiguous player/badge/trait/collection/pack/tier/team matches with all candidates listed. Returns the ordered creates, updates, replacements, deletes and links, flags destructive replacements, and returns payload_hash plus a single-use preview_token. Nothing is written until you re-send the identical payload with mode='commit' plus the preview_token, and the whole batch is applied or rolled back as one transaction. Show the returned creates / updates / deletes / replacements to the user and get explicit approval before committing.",
