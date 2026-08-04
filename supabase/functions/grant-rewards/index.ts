@@ -340,18 +340,73 @@ Deno.serve(async (req) => {
         cardQuery = cardQuery.eq("collection_id", collection_id).is("sub_collection_id", null);
       }
       const { data: setCards } = await cardQuery;
-      const required = (setCards ?? []).filter((c) => !c.is_collection_reward).map((c) => c.id);
-      if (required.length === 0) return json({ error: "Collection has no cards" }, 400);
+      const slotCards = (setCards ?? []).filter((c) => !c.is_collection_reward).map((c) => c.id);
+      if (slotCards.length === 0) return json({ error: "Collection has no cards" }, 400);
 
+      // Evolution chains count as a single slot: owning ANY variant in the
+      // chain (base or any evolved version, even one that lives outside the
+      // collection) satisfies that slot. This mirrors the client's display.
+      const { data: evoLinks } = await admin
+        .from("evo_paths")
+        .select("player_card_id, evolves_to_card_id")
+        .not("evolves_to_card_id", "is", null);
+      const nextOf = new Map<string, string[]>();
+      const prevOf = new Map<string, string[]>();
+      for (const l of evoLinks ?? []) {
+        const from = l.player_card_id as string;
+        const to = l.evolves_to_card_id as string;
+        nextOf.set(from, [...(nextOf.get(from) ?? []), to]);
+        prevOf.set(to, [...(prevOf.get(to) ?? []), from]);
+      }
+      const chainOf = (id: string) => {
+        const seen = new Set<string>([id]);
+        const stack = [id];
+        while (stack.length) {
+          const cur = stack.pop()!;
+          for (const n of [...(nextOf.get(cur) ?? []), ...(prevOf.get(cur) ?? [])]) {
+            if (!seen.has(n)) {
+              seen.add(n);
+              stack.push(n);
+            }
+          }
+        }
+        return seen;
+      };
+      const rootOf = (id: string) => {
+        let cur = id;
+        const guard = new Set<string>([cur]);
+        while (true) {
+          const parents = prevOf.get(cur) ?? [];
+          const parent = parents.find((p) => !guard.has(p));
+          if (!parent) return cur;
+          guard.add(parent);
+          cur = parent;
+        }
+      };
+
+      // One slot per evo chain root.
+      const slotsByRoot = new Map<string, Set<string>>();
+      for (const id of slotCards) {
+        const root = rootOf(id);
+        if (!slotsByRoot.has(root)) slotsByRoot.set(root, chainOf(root));
+      }
+
+      const allCandidates = Array.from(
+        new Set(Array.from(slotsByRoot.values()).flatMap((s) => Array.from(s))),
+      );
       const { data: owned } = await admin
         .from("user_collections")
         .select("player_card_id")
         .eq("user_id", user.id)
-        .in("player_card_id", required);
+        .in("player_card_id", allCandidates);
       const ownedSet = new Set((owned ?? []).map((o) => o.player_card_id));
-      if (required.some((id) => !ownedSet.has(id))) {
-        return json({ error: "Collection is not complete yet" }, 400);
+      const missing = Array.from(slotsByRoot.values()).filter(
+        (chain) => !Array.from(chain).some((id) => ownedSet.has(id)),
+      ).length;
+      if (missing > 0) {
+        return json({ error: `Collection is not complete yet (${missing} card(s) missing)` }, 400);
       }
+
 
       const rewardType = target.reward_type as string | null;
       const claimKey = `${sub_collection_id ? "sub" : "col"}:${targetId}:${rewardType ?? "none"}`;
