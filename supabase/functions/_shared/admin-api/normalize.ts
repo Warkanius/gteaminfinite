@@ -116,7 +116,51 @@ export interface NormalizeResult {
   };
 }
 
-const EVO_TIER_ORDER = ["emerald", "amethyst", "diamond", "pink diamond", "actolytrene"];
+/** Continuous evolution tier progression, including the Game Over tier. */
+const EVO_TIER_ORDER = GEM_TIER_ORDER;
+
+/** Badge / signature-trait assignment tiers. */
+const ASSIGNMENT_TIERS = ["base", "gold", "hof", "diamond", "actolytrene"];
+
+/** Every mutable player-card field the bulk API accepts. */
+export const PLAYER_FIELDS = [
+  "player_card_id",
+  "card_key",
+  "temp_ref",
+  "client_ref",
+  "name",
+  "player_name",
+  "new_name",
+  "gem_tier",
+  "gem_name",
+  "tier",
+  "position1",
+  "position2",
+  "rating",
+  "ovr",
+  "run_rating",
+  "stats",
+  "run_stats",
+  ...STAT_KEYS,
+  ...RUN_STAT_KEYS,
+  "market_value",
+  "social_handle",
+  "avatar_url",
+  "is_collection_reward",
+  "card_color_primary",
+  "card_color_secondary",
+  "card_glow_color",
+  "card_animation",
+  "collection",
+  "sub_collection",
+  "team",
+  "status",
+  "evo_stage",
+  "badges",
+  "traits",
+] as const;
+
+const PLAYER_FIELD_SET = new Set<string>(PLAYER_FIELDS as unknown as string[]);
 
 export const EVO_OBJECTIVE_KEYS = [
   "points",
