@@ -722,8 +722,9 @@ export function buildOpenApi(baseUrl: string) {
           type: "oauth2",
           flows: {
             authorizationCode: {
-              authorizationUrl: `${new URL(baseUrl).origin}/auth/v1/oauth/authorize`,
-              tokenUrl: `${new URL(baseUrl).origin}/auth/v1/oauth/token`,
+              authorizationUrl: `${new URL(baseUrl).origin}/functions/v1/gpt-oauth/authorize`,
+              tokenUrl: `${new URL(baseUrl).origin}/functions/v1/gpt-oauth/token`,
+
               scopes: { openid: "Sign in", email: "Email address", profile: "Basic profile" },
             },
           },
