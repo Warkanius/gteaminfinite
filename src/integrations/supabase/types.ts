@@ -14,6 +14,162 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_api_idempotency: {
+        Row: {
+          admin_id: string
+          api_version: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          operation: string
+          payload_hash: string
+          result: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_id: string
+          api_version?: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          operation: string
+          payload_hash: string
+          result?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: string
+          api_version?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          operation?: string
+          payload_hash?: string
+          result?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      admin_api_previews: {
+        Row: {
+          admin_id: string
+          api_version: string
+          canonical_payload: Json
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          operation: string
+          payload_hash: string
+          plan: Json
+          preview_token: string | null
+          summary: Json
+          updated_at: string
+          warnings: Json
+        }
+        Insert: {
+          admin_id: string
+          api_version?: string
+          canonical_payload: Json
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          operation: string
+          payload_hash: string
+          plan?: Json
+          preview_token?: string | null
+          summary?: Json
+          updated_at?: string
+          warnings?: Json
+        }
+        Update: {
+          admin_id?: string
+          api_version?: string
+          canonical_payload?: Json
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          operation?: string
+          payload_hash?: string
+          plan?: Json
+          preview_token?: string | null
+          summary?: Json
+          updated_at?: string
+          warnings?: Json
+        }
+        Relationships: []
+      }
+      admin_api_scheduled_jobs: {
+        Row: {
+          admin_id: string
+          api_version: string
+          approved_at: string
+          attempts: number
+          cancelled_at: string | null
+          canonical_payload: Json
+          created_at: string
+          executed_at: string | null
+          id: string
+          label: string | null
+          last_error: Json | null
+          operation: string
+          payload_hash: string
+          plan_fingerprint: string | null
+          result: Json | null
+          run_at: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          admin_id: string
+          api_version?: string
+          approved_at?: string
+          attempts?: number
+          cancelled_at?: string | null
+          canonical_payload: Json
+          created_at?: string
+          executed_at?: string | null
+          id?: string
+          label?: string | null
+          last_error?: Json | null
+          operation: string
+          payload_hash: string
+          plan_fingerprint?: string | null
+          result?: Json | null
+          run_at: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: string
+          api_version?: string
+          approved_at?: string
+          attempts?: number
+          cancelled_at?: string | null
+          canonical_payload?: Json
+          created_at?: string
+          executed_at?: string | null
+          id?: string
+          label?: string | null
+          last_error?: Json | null
+          operation?: string
+          payload_hash?: string
+          plan_fingerprint?: string | null
+          result?: Json | null
+          run_at?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       admin_preview_tokens: {
         Row: {
           consumed_at: string | null
@@ -3651,6 +3807,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_api_job_commit: {
+        Args: { p_job_id: string; p_preview_token: string }
+        Returns: Json
+      }
+      admin_api_job_preview: { Args: { p_job_id: string }; Returns: Json }
       admin_apply_batch: {
         Args: {
           p_commit?: boolean
