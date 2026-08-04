@@ -2060,6 +2060,9 @@ function formatHundredths(cents) {
   return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
 }
 var sameRef = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+function playerKey(ref) {
+  return (ref.player_card_id ?? ref.player_name ?? "").trim().toLowerCase();
+}
 function validateRelease(input, options = {}) {
   const release = normalizeRelease(input);
   const out = [];
@@ -2108,18 +2111,20 @@ function validateRelease(input, options = {}) {
         slots.add(m.slot);
       }
     });
-    const rewards = [
-      ...members.filter((m) => m.is_reward),
-      ...players.filter((p) => p.is_collection_reward).map((p) => ({ player_name: p.name }))
-    ];
-    const rewardName = collection.reward_player_name ?? rewards[0]?.player_name;
-    const rewardIds = new Set(
-      [collection.reward_player_card_id, ...rewards.map((r) => r.player_card_id)].filter(Boolean).concat(rewardName ? [rewardName.toLowerCase()] : [])
-    );
-    if (rewardIds.size > 1) {
-      err("MULTIPLE_COLLECTION_REWARDS", "Exactly one card may be the collection reward.", "collection.reward");
+    const rewardRefs = /* @__PURE__ */ new Set();
+    members.filter((m) => m.is_reward).forEach((m) => rewardRefs.add(playerKey(m)));
+    players.filter((p) => p.is_collection_reward).forEach((p) => rewardRefs.add((p.player_card_id ?? p.name).toLowerCase()));
+    if (collection.reward_player_card_id) rewardRefs.add(collection.reward_player_card_id.toLowerCase());
+    else if (collection.reward_player_name) rewardRefs.add(collection.reward_player_name.trim().toLowerCase());
+    const rewardName = collection.reward_player_name ?? members.find((m) => m.is_reward)?.player_name ?? players.find((p) => p.is_collection_reward)?.name;
+    if (rewardRefs.size > 1) {
+      err(
+        "MULTIPLE_COLLECTION_REWARDS",
+        `Exactly one card may be the collection reward (found ${[...rewardRefs].join(", ")}).`,
+        "collection.reward"
+      );
     }
-    if (!rewardIds.size) {
+    if (!rewardRefs.size) {
       warn("NO_COLLECTION_REWARD", "This collection has no completion reward card.", "collection.reward");
     }
     if (rewardName && !known({ player_name: rewardName })) {
