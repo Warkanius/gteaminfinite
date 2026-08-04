@@ -620,8 +620,8 @@ export function buildOpenApi(baseUrl: string) {
         operationId: `${mode}ContentRelease`,
         summary: `${isCommit ? "Publish" : "Validate"} a complete atomic content release`,
         description: isCommit
-          ? "Publishes an approved release in ONE transaction: cards, collection, membership, reward, team, pack pool and odds, evo steps and evo card versions all succeed or roll back. Requires the preview_token and an identical body."
-          : "Validates a whole release (collections AND evo paths together) with ZERO writes. Normalizes spellings, checks tier progression, evo versions, odds totalling 100.00, and returns a payload_hash plus preview_token.",
+          ? "Atomically publishes the exact previously previewed content release. Requires the matching single-use preview token and an identical canonical payload. All release operations succeed or roll back together."
+          : "Validates a complete content release with zero writes, including players, collection, reward, team, pack, pool, odds, evo paths, objectives, and playable resulting evo versions. Returns a payload hash and single-use preview token.",
 
         "x-openai-isConsequential": isCommit,
         requestBody: { required: true, content: { "application/json": { schema: ReleaseInput } } },
