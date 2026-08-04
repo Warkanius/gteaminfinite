@@ -779,8 +779,11 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         ...(rewardFields
           ? rewardFields.player_card_id
             ? { reward_card_id: rewardFields.player_card_id }
-            : { reward_card: rewardFields }
+            : rewardFields.player_ref
+              ? { reward_card_ref: rewardFields.player_ref }
+              : { reward_card: rewardFields }
           : {}),
+
         replace_requirements: true,
         requirements: members.map((m, i) => ({
           ...cardRefFields(release, m),
