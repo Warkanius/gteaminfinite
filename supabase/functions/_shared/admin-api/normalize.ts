@@ -6,7 +6,20 @@
 
 import { apiError, apiWarning, type AdminApiError, type AdminApiWarning } from "./errors.ts";
 import { canonicalize, compact } from "./canonical.ts";
-import { checkOvr, oddsTotal, ODDS_TARGET, unscaled, scaled, STAT_KEYS, tierKey, bandFor, bandLabel } from "./decimal.ts";
+import {
+  checkOvr,
+  oddsTotal,
+  ODDS_TARGET,
+  unscaled,
+  scaled,
+  STAT_KEYS,
+  RUN_STAT_KEYS,
+  tierKey,
+  bandFor,
+  bandLabel,
+  GEM_TIER_ORDER,
+  OVR_TOLERANCE,
+} from "./decimal.ts";
 import { normalizeRef, hasTarget, isUuid } from "./refs.ts";
 
 /** Groups understood by public.admin_apply_batch, in dependency order. */
