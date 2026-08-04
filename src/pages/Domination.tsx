@@ -67,19 +67,33 @@ export default function Domination() {
     },
   });
 
-  // Identify which packs are RTTR so we can mark RTTR-eligible nodes
-  const packIds = useMemo(
+  // Identify which packs are RTTR so we can mark RTTR-eligible nodes.
+  // pack_reward is stored as text and legacy content may hold a pack NAME
+  // instead of an id, so we look packs up by both.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const packRefs = useMemo(
     () => Array.from(new Set(games.map((g) => g.pack_reward).filter(Boolean))) as string[],
     [games],
   );
   const { data: rttrPackIds = [] } = useQuery({
-    queryKey: ["rttr-pack-ids", packIds.sort().join(",")],
-    enabled: packIds.length > 0,
+    queryKey: ["rttr-pack-refs", packRefs.slice().sort().join(",")],
+    enabled: packRefs.length > 0,
     queryFn: async () => {
-      const { data } = await supabase.from("packs").select("id, pack_type").in("id", packIds);
-      return (data ?? []).filter((p: any) => p.pack_type === "rttr").map((p: any) => p.id) as string[];
+      const ids = packRefs.filter((r) => UUID_RE.test(r));
+      const names = packRefs.filter((r) => !UUID_RE.test(r));
+      const refs: string[] = [];
+      if (ids.length) {
+        const { data } = await supabase.from("packs").select("id, pack_type").in("id", ids);
+        refs.push(...(data ?? []).filter((p: any) => p.pack_type === "rttr").map((p: any) => p.id));
+      }
+      if (names.length) {
+        const { data } = await supabase.from("packs").select("name, pack_type").in("name", names);
+        refs.push(...(data ?? []).filter((p: any) => p.pack_type === "rttr").map((p: any) => p.name));
+      }
+      return refs;
     },
   });
+
   const rttrPackSet = useMemo(() => new Set(rttrPackIds), [rttrPackIds]);
   const rttrWinMap = useMemo(() => {
     const map = new Map<string, number>();
