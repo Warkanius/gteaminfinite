@@ -60,9 +60,25 @@ export async function handleAdminApi(
 
   if (head === "capabilities" && req.method === "GET") return send(capabilities(ctx.base));
   if (head === "diagnostics" && req.method === "GET") {
-    const result = await runDiagnostics(ctx.client);
+    const url = new URL(req.url);
+    const list = (key: string) =>
+      (url.searchParams.get(key) ?? "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+    const result = await runDiagnostics(ctx.client, {
+      scope: url.searchParams.get("scope") ?? undefined,
+      player_card_ids: list("player_card_ids"),
+      codes: list("codes"),
+      entity_types: list("entity_types"),
+      release_slug: url.searchParams.get("release_slug") ?? undefined,
+      label: url.searchParams.get("label") ?? undefined,
+      limit: Number(url.searchParams.get("limit") ?? "") || undefined,
+      cursor: url.searchParams.get("cursor") ?? undefined,
+    });
     return send({ api_version: API_VERSION, ...result });
   }
+
 
   if (head === "previews" && req.method === "GET") {
     const { preview, error } = await loadPreview(ctx.client, { preview_id: tail });
