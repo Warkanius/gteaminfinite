@@ -166,7 +166,7 @@ export function capabilities(base: string) {
     },
     evo_objective_stats: EVO_OBJECTIVE_KEYS,
     gem_tiers: GEM_TIER_BANDS.map((b) => ({ tier: b.tier, ovr_band: bandLabel(b) })),
-    ovr_rule: "OVR = mean of the nine base stats, decimal, validated against the gem tier band (tolerance 0.05). Tiers are never auto-corrected.",
+    ovr_rule: "OVR = mean of the nine base stats, decimal, validated against the gem tier band with exact integer arithmetic (tolerance 0.0000001). Tiers are never auto-corrected.",
     stats: STAT_KEYS,
     fixed_precision: {
       odds: "hundredths, must total exactly 100.00",
