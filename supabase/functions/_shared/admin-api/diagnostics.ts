@@ -16,9 +16,80 @@ export interface Finding {
   remediation: string;
 }
 
-const EVO_ORDER = ["emerald", "amethyst", "diamond", "pink diamond", "actolytrene"];
+const EVO_ORDER = ["emerald", "amethyst", "diamond", "pink diamond", "actolytrene", "game over"];
 
-export async function runDiagnostics(client: Client): Promise<{ ok: boolean; checked: string[]; findings: Finding[]; counts: Record<string, number> }> {
+export interface DiagnosticsFilters {
+  scope?: string;
+  player_card_ids?: string[];
+  codes?: string[];
+  entity_types?: string[];
+  release_slug?: string;
+  label?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+const MAX_PAGE = 200;
+
+/**
+ * Filtered, paged diagnostics. A broad read can produce thousands of findings,
+ * which overflows the GPT response budget, so callers filter by scope, explicit
+ * ids, codes or label, and page through the rest with an opaque cursor.
+ */
+export async function runDiagnostics(
+  client: Client,
+  filters: DiagnosticsFilters = {},
+): Promise<Record<string, unknown>> {
+  const full = await runDiagnosticsAll(client);
+  const ids = new Set((filters.player_card_ids ?? []).map((v) => v.toLowerCase()));
+  const codes = new Set((filters.codes ?? []).map((v) => v.toUpperCase()));
+  const types = new Set((filters.entity_types ?? []).map((v) => v.toLowerCase()));
+  const scope = filters.scope?.toLowerCase().replace(/s$/, "");
+  const label = filters.label?.toLowerCase();
+  const slug = filters.release_slug?.toLowerCase();
+
+  let findings = full.findings;
+  if (ids.size) findings = findings.filter((f) => f.entity_id && ids.has(f.entity_id.toLowerCase()));
+  if (codes.size) findings = findings.filter((f) => codes.has(f.code));
+  if (types.size) findings = findings.filter((f) => types.has(f.entity_type.toLowerCase()));
+  if (scope) findings = findings.filter((f) => f.entity_type.toLowerCase().replace(/s$/, "") === scope);
+  if (label) findings = findings.filter((f) => (f.label ?? "").toLowerCase().includes(label));
+  if (slug) {
+    findings = findings.filter((f) => JSON.stringify(f.detail ?? {}).toLowerCase().includes(slug) || (f.label ?? "").toLowerCase().includes(slug));
+  }
+
+  const total = findings.length;
+  const limit = Math.min(Math.max(filters.limit ?? 100, 1), MAX_PAGE);
+  const offset = Number.parseInt(filters.cursor ?? "0", 10) || 0;
+  const page = findings.slice(offset, offset + limit);
+  const nextOffset = offset + page.length;
+  const counts: Record<string, number> = {};
+  for (const f of findings) counts[f.code] = (counts[f.code] ?? 0) + 1;
+
+  return {
+    ok: findings.every((f) => f.severity !== "error"),
+    checked: full.checked,
+    items: page,
+    findings: page,
+    counts,
+    total_count: total,
+    returned: page.length,
+    next_cursor: nextOffset < total ? String(nextOffset) : null,
+    truncated: nextOffset < total,
+    applied_filters: {
+      scope: filters.scope ?? null,
+      player_card_ids: filters.player_card_ids ?? [],
+      codes: filters.codes ?? [],
+      entity_types: filters.entity_types ?? [],
+      release_slug: filters.release_slug ?? null,
+      label: filters.label ?? null,
+      limit,
+      cursor: filters.cursor ?? null,
+    },
+  };
+}
+
+async function runDiagnosticsAll(client: Client): Promise<{ ok: boolean; checked: string[]; findings: Finding[]; counts: Record<string, number> }> {
   const findings: Finding[] = [];
   const rows = async (table: string, select = "*") => {
     const { data } = await client.from(table).select(select).limit(5000);
