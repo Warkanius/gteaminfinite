@@ -746,4 +746,5 @@ Rules:
 - Ratings are decimals — preserve the exact value (87.4 stays 87.4).
 - Sending badges or traits on a player replaces ALL of that card's assignments; omit them to leave them alone.
 - run_rank_rewards is one global ladder shared by every Run.
+- For anything spanning more than one entity — a collection plus its cards, a pack, a team and evo paths — use previewContentRelease / commitContentRelease. That is the only way collections AND evo paths (with their materialized versions) are created or updated atomically; do not stitch them together from single-entity operations. Every evo step must include resulting_version, tiers must progress without skipping, and pack odds must total exactly 100.00.
 - This API only edits game content. It cannot and must not be used to modify app code, user accounts, balances, or anyone's collection. If asked, say so and stop.`;
