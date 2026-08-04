@@ -331,9 +331,10 @@ export function buildOpenApi(baseUrl: string) {
         post: {
           operationId: `${mode}${kind.id}`,
           summary: `${isCommit ? "Apply" : "Validate"} a ${kind.label}`,
-          description: isCommit
-            ? `Applies the previously previewed ${kind.label} atomically. Only call after previewing the exact same body and getting explicit user approval. ${kind.destructive}`
-            : `Full validation of a ${kind.label} with ZERO writes. Returns the exact create/update/replace operations that a commit would perform. Always call this first. ${kind.destructive}`,
+          description: (isCommit
+            ? `Applies the previously previewed ${kind.label} atomically. Only call after previewing the identical body and getting explicit approval. ${kind.destructive}`
+            : `Validates a ${kind.label} with ZERO writes and returns the create/update/replace plan. Always call first. ${kind.destructive}`).slice(0, 295),
+
           "x-openai-isConsequential": isCommit,
           requestBody: {
             required: true,
