@@ -306,7 +306,7 @@ function normalizeItem(
   if (group === "players") validatePlayer(out, path, errors, warnings, destructive);
   if (group === "packs") validatePack(out, path, errors, destructive);
   if (group === "collections" || group === "sub_collections") validateCollection(out, path, errors);
-  if (group === "evo_paths") validateEvoPath(out, path, errors, warnings);
+  if (group === "evo_paths") validateEvoPath(out, path, errors, warnings, destructive);
   if (group === "dynamic_duos") validateDuo(out, path, errors);
   if (group === "locker_codes" && typeof out.code === "string") out.code = out.code.trim().toUpperCase();
   if (group === "runs" && Array.isArray(out.rank_rewards)) {
