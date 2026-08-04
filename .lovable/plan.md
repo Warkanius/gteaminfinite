@@ -1,79 +1,69 @@
-## GTeam Infinite Hub — Completion Audit (no files or schema changed)
+# Production-Ready Bulk Admin API for the Custom GPT
 
-Verified against the live codebase, the live database policies, `cron.job`, a typecheck, and the test suite. Overall: the product is far more complete than "prototype" — 39 routes, 17 admin pages, 12 edge functions, 45+ tables all with UI. The blockers are concentrated in **economy integrity** and a handful of **dead ends**, not missing features.
+## Audit: what exists today
 
----
+Single GPT-facing surface: `supabase/functions/actions` (OAuth-only, RLS as caller).
 
-## P0 — Launch blockers
+| Route | Backend handler | Preview/commit | Bulk? |
+| --- | --- | --- | --- |
+| `/diagnostics`, `/references`, `/list`, `/entity` | inline queries | read-only | n/a |
+| `/players/{preview,commit}` | `admin_apply_player` | ad-hoc, no token | one card |
+| `/teams`, `/runs`, `/packs`, `/locker-codes`, `/challenges`, `/dynamic-duos` | `admin_apply_content` | preview flag only, **no preview token** | one entity |
+| `/domination-games/*` | `admin_apply_extra` | no token | one game |
+| `/domination-roads/{preview,commit,delete}` | `admin_road_bulk` / `admin_road_delete` | token + hash | whole road |
+| `/content-release/*` | `prepareRelease` + `admin_apply_batch` | token + hash | multi-entity |
+| `/storyline-bundles/*` | `import-storyline-bundle` fn | no token | bundle |
 
-**1. The entire reward economy is client-authoritative and trivially exploitable (Critical)**
-Live policy confirmed by query: `profiles` UPDATE = `USING (auth.uid() = user_id)` with **no `WITH CHECK` and no column restriction**. Every reward grant is a browser-side read-then-write:
-- `src/components/game/GameResults.tsx:103-106` (win coins), `:177-181` (gems)
-- `src/components/game/RunGameBoard.tsx:223` (milestones), `:284-290` (rank rewards)
-- `src/pages/Collection.tsx:494` (collection reward claims)
+### Confirmed drift and gaps
 
-Any signed-in user can run `supabase.from('profiles').update({coins: 999999999})` from devtools. Contrast: all *spending* paths (`open-pack`, `buy-gem-card`, `buy-auction-card`, `redeem-locker-code`, `quicksell-card`) are correctly server-authoritative. This inconsistency is the single biggest issue.
+1. Two mutation architectures: token/hash-verified (`admin_road_bulk`, `admin_apply_batch`) vs unverified `admin_apply_content` / `admin_apply_player` / `admin_apply_extra` — a commit there is just "preview=false", so the approved payload is never enforced.
+2. Client-side validation lives in duplicated files (`src/lib/contentRelease.ts` and `supabase/functions/actions/contentRelease.ts`, 932 lines each) — guaranteed drift.
+3. Singular endpoints accept fields the bulk release ignores (run stats, market value, social handle, avatar, card colors/animation, sub-collection ordering).
+4. Reference resolution is name-first in singular endpoints, ID-first only in release evo paths. Aliases (`player_id`, `player_name`, `card_key`) are not normalized to one canonical `player_card_id`.
+5. No idempotency keys, no scheduling layer, no capabilities endpoint, no versioned path, no OVR↔gem-tier validation, no fixed-precision odds/hash normalization guarantees.
+6. Audit coverage is partial (`content_audit_log` is written by road/batch paths only).
+7. Diagnostics covers a fraction of the requested checks and returns no remediation guidance.
 
-Related free-reward surfaces, all client-inserted with only `auth.uid() = user_id` checks:
-- `user_evo_progress` insert/update — `src/lib/evoProgressTracker.ts:147,214`
-- Evolution claim grants the evolved card client-side — `src/components/cards/CardDetailDialog.tsx:210-238`
-- `challenge_completions`, `user_rttr_progress` — `GameResults.tsx:194,216`
-- `user_rank_claims` — `RunGameBoard.tsx:274`
-- `user_collections` self-insert — anyone can grant themselves any card
+### Risk report (highest first)
 
-**Fix shape:** one `grant-rewards` edge function that recomputes rewards server-side from the game log / rank / collection state, plus tightening `profiles` UPDATE to a `WITH CHECK` that forbids coin/gem changes from the client (currency mutable only via service role).
+- Unverified commits on 8 singular endpoints (approval bypass).
+- Duplicated validators drifting between app and edge function.
+- No idempotency → GPT/tool retries duplicate packs, locker codes, roads.
+- Large payloads: single JSON response, no server-side preview storage or pagination.
+- Global side effects (`run_rank_rewards` ladder) reachable without an explicit warning gate.
 
-**2. `profiles` is world-readable to all signed-in users** — policy `Profiles viewable by authenticated USING (true)` exposes every player's `display_name`, `team_name`, coins and gems. Fine if intentional for leaderboards; otherwise scope it or move to a public view.
+## Proposed canonical architecture
 
-**3. `/admin/*` has no role gate in the router** — `src/App.tsx:58-71` `ProtectedRoute` checks auth only. Any logged-in user can load `/admin/currencies` and every other admin page. DB RLS blocks most admin *writes* (`has_role` policies), but not the `profiles` writes on `AdminCurrencies.tsx:40,51` (see #1). Needs an `AdminRoute` wrapper using `role` from `useAuth`.
+New versioned surface `/admin-api/v1/*` served by the same `actions` function, built on one pipeline:
 
-**4. Broken redirect: `/play/match` refresh → 404** — `src/pages/Play.tsx:72` navigates to `/game-hub`, a route that does not exist (`App.tsx` defines `/play`). Any refresh or direct visit to a match falls through to `NotFound`.
+```text
+request -> resolve refs (IDs canonical) -> validate -> plan -> normalize
+        -> hash -> preview token (single use, TTL, admin+op+version bound)
+        -> approve -> commit(byte-identical payload + token) -> one transaction -> report
+```
 
----
+- **Shared code**: one `admin-api/` module tree inside `supabase/functions/actions/` (schemas, resolvers, validators, normalizer, planner, errors). The app imports the same files via a thin re-export so app and GPT cannot drift; a CI test asserts hash equality across both entry points.
+- **Endpoints**: `POST /admin-api/v1/{entity}/preview|commit` for every entity, plus `POST /admin-api/v1/bulk/preview|commit` accepting the full release document (players, collections, sub-collections, packs, teams, evo paths, roads, challenges, locker codes, duos, runs, storylines, posts). Singular endpoints become thin wrappers over the bulk planner — no separate code path.
+- **Preview storage**: previews persisted server-side (`admin_previews`) with `GET /admin-api/v1/previews/{id}?section=&page=` for paginated detail; one hash and one token per operation.
+- **Scheduling**: `admin_scheduled_jobs` (UTC timestamps, timezone label, canonical payload, hash, approval record, status) executed by a cron edge function that re-plans and fails on drift instead of applying a stale plan.
+- **Idempotency**: `idempotency_key` on every commit, unique per admin+operation, replaying the stored result.
+- **Diagnostics/capabilities**: `GET /admin-api/v1/diagnostics` (all requested checks + remediation text) and `GET /admin-api/v1/capabilities` (entities, fields, replacement semantics, tiers, objectives, limits, TTLs, transaction scopes, version).
+- **Errors**: uniform `{code, path, entity_type, entity_id, message, expected, received, written, remediation}`.
+- **Compatibility**: existing routes stay, normalizing aliases and returning `deprecation` warnings; removal deferred to v2.
 
-## P1 — Visible incompleteness and journey gaps
+## Phased delivery
 
-**5. No free-play / exhibition 5v5.** `/play/match` is only entered from `Domination.tsx:108` and `Challenges.tsx:58`. `GameHub.tsx` lists only Friends (dead), Runs, Challenges — it does not even link Domination. The headline "5v5 match simulation" has no standalone entry point.
+1. **Foundation** — canonical schema/resolver/validator/normalizer/planner module, fixed-precision decimal helpers, error model, capabilities endpoint, `/admin-api/v1` routing, alias normalization, contract-parity tests.
+2. **Preview/commit hardening** — preview-token infra for every entity (including the 8 unverified ones), server-side preview storage + pagination, drift detection, idempotency, audit-log completion, preview/commit parity tests (zero-write assertions on row counts and timestamps).
+3. **Bulk coverage** — bulk planner groups for all listed content types with explicit replacement semantics, OVR↔gem-tier validation, odds fixed-precision, reward/contamination guards, road merge/replace, full-release and road test suites.
+4. **Scheduling + scale** — scheduled jobs table, cron executor with re-plan, edit/cancel endpoints, timezone handling, scale tests (100 players, 50 packs, 100 challenges, 100 locker codes, large roads), permission matrix for destructive/economy actions.
+5. **Cutover** — OpenAPI regeneration under the 300-char operation-description limit, GPT instructions rewrite, migration notes, deprecation warnings, final GPT-driven end-to-end validation.
 
-**6. "Play With Friends" is a shipped dead link.** `src/pages/GameHub.tsx:6-12` → `url: "#"`; `src/pages/Dashboard.tsx:25` shows the same card but points at `/play`, so the two behave differently. Either disable both or ship the mode.
+## Technical notes
 
-**7. Dynamic Duos never apply in Runs.** Resolved in `LineupSelect.tsx:314` and consumed by `GameBoard.tsx:27,36`, but `RunLineupSelect.tsx` / `RunGameBoard.tsx` contain zero references. Admin-configured duos silently do nothing in 3v3.
+- Postgres side: new `admin_api_plan(payload, version)` planner RPC wrapping the existing `admin_apply_batch` groups so one transaction still covers a whole release; `admin_preview_tokens` extended with admin id, operation type, api version, expiry, consumed_at; `admin_scheduled_jobs` and `admin_idempotency` tables with GRANTs and RLS (admin-only via `has_role`).
+- Decimals: all ratings/odds/economy values handled as strings in normalization and `numeric` in SQL; hashing uses the canonical string form so preview and commit hashes cannot differ by formatting.
+- Response limits: previews over a size threshold return summary + preview id; details fetched page by page.
+- Tests: vitest for schemas/normalization/parity, Deno tests hitting the deployed function for transaction and rollback behavior.
 
-**8. Nav gaps.** `AppSidebar.tsx:39-53` omits `/challenges` and `/runs` — both only reachable via Dashboard/GameHub cards.
-
-**9. Starter pack silently no-ops.** `Dashboard.tsx:46-104` only offers a starter pack if an admin created a `pack_type="starter"` pack; otherwise a brand-new user lands on an empty collection with no cards, no coins prompt, and no message. Needs a guaranteed onboarding grant.
-
----
-
-## P2 — Copy, config, hygiene
-
-**10. `index.html` still ships Lovable defaults**: `<!-- TODO: Update og:title... -->`, `og:title="Lovable App"`, `og:description="Lovable Generated Project"`, `twitter:site="@Lovable"`, duplicate `<meta name="author">`. Title/description are correct; social preview is not.
-
-**11. `public/sw.js:14-15`** references `/pwa-192x192.png`, which does not exist — `public/` contains `icon-192.png` / `icon-512.png`. Push notification icons are broken.
-
-**12. PWA is push-only.** `sw.js` has no `fetch` handler, so `display: standalone` in `manifest.json` gives no offline capability. Fine as a decision; worth stating. No `safe-area-inset-bottom` handling anywhere (only top, `AppLayout.tsx:21`) — bottom content can sit under the iOS home indicator.
-
-**13. Dead files:** `src/pages/Index.tsx` (Lovable scaffold) and `src/pages/Placeholder.tsx` ("coming soon") are unrouted and unused.
-
-**14. `supabase/config.toml` sets `verify_jwt = false` on every function.** Each function does re-check auth today, but the systemic risk is that one future function forgets.
-
-**15. Supabase linter: 12 warnings**, mostly `SECURITY DEFINER` functions executable by `anon`/`authenticated` (`has_role`, `sync_gem_tier_collection`, `handle_new_user*`, `trg_gem_market_sync`) plus a public `social-images` bucket that allows listing. `sync_gem_tier_collection` being anon-callable is the one worth revoking.
-
-**16. Build health is good.** Typecheck passes clean; `bunx vitest run` passes but there is exactly **one** test (`src/test/example.test.ts`) — effectively no coverage of `gameEngine.ts`, `badgeEngine.ts`, `traitEngine.ts`, or `evoProgressTracker.ts`.
-
-**Corrections to note:** cron *is* configured — `refresh-auction` every 5 minutes and `publish-scheduled-posts` every minute are both active in `cron.job` (not visible in migrations, hence easy to misread as missing). MCP tooling is correctly admin-gated and `ALLOWED_TABLES` in `src/lib/mcp/db.ts:5-25` properly excludes `profiles` and user-owned tables.
-
----
-
-## Recommended order of work
-
-1. **Server-authoritative rewards** — new `grant-rewards` edge function; migrate `GameResults`, `RunGameBoard`, `Collection`, `CardDetailDialog` to call it; then tighten `profiles` UPDATE with a `WITH CHECK` and lock evo/claim tables.
-2. **`AdminRoute` role gate** on all `/admin/*` routes.
-3. **Fix `/game-hub` → `/play`** in `Play.tsx:72`.
-4. **Onboarding guarantee** — ensure a starter pack always exists or grant a default; add a fallback message.
-5. **Game mode surface** — add Domination + an exhibition 5v5 to GameHub; remove or disable the Friends card; add Challenges and Runs to the sidebar.
-6. **Wire Dynamic Duos into Runs** (`RunLineupSelect` / `RunGameBoard`).
-7. **Metadata + PWA cleanup** — real OG/Twitter tags, fix the SW icon path, bottom safe-area, delete `Index.tsx`/`Placeholder.tsx`.
-8. **Harden the tail** — revoke anon EXECUTE on definer functions, tighten the `social-images` bucket listing policy, decide on `profiles` read scope, add engine unit tests.
-
-Items 1–4 are launch blockers. 5–6 are product completeness. 7–8 are polish and can follow launch.
+Phase 1 lands first and is independently verifiable; each later phase ships behind the same versioned path without breaking the current GPT.
