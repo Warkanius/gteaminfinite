@@ -361,20 +361,25 @@ function validatePlayer(
   const tier = item.gem_tier ?? item.gem_name ?? item.tier;
   const rating = item.rating ?? item.ovr;
 
-  for (const [key, value] of Object.entries(stats)) {
-    let units: number;
-    try {
-      units = scaled(value as number, 2);
-    } catch {
-      errors.push(apiError("NOT_A_NUMBER", `${key} must be numeric.`, { path: `${path}.${key}`, received: value }));
-      continue;
-    }
-    if (units < 0 || units > 9900) {
-      errors.push(
-        apiError("STAT_OUT_OF_RANGE", `${key} must be between 0 and 99.`, {
+  validateStatRange(stats, path, errors);
+
+  // Runs-mode stats: same 0-99 range, never folded into the base OVR.
+  const runStats: Record<string, unknown> = {};
+  const nestedRun = (item.run_stats ?? {}) as Record<string, unknown>;
+  for (const key of RUN_STAT_KEYS) {
+    const v = item[key] ?? nestedRun[key];
+    if (v !== undefined) runStats[key] = v;
+  }
+  validateStatRange(runStats, path, errors);
+
+  // Every field the outer schema accepts is either applied or reported here.
+  for (const key of Object.keys(item)) {
+    if (!PLAYER_FIELD_SET.has(key)) {
+      warnings.push(
+        apiWarning("UNSUPPORTED_FIELD", `"${key}" is not a player-card field and will be ignored.`, {
+          severity: "warning",
           path: `${path}.${key}`,
-          expected: "0 through 99",
-          received: value,
+          remediation: "Remove the field, or use GET /admin-api/v1/capabilities for the supported player fields.",
         }),
       );
     }
@@ -384,24 +389,26 @@ function validatePlayer(
     const check = checkOvr(stats, tier, rating);
     if (!check.ok && check.code === "OVR_TIER_MISMATCH") {
       errors.push(
-        apiError("OVR_TIER_MISMATCH", `Calculated OVR ${check.computed} does not fit ${String(tier)}.`, {
+        apiError("OVR_TIER_MISMATCH", `Calculated OVR ${check.computed_exact} does not fit ${String(tier)}.`, {
           path: `${path}.rating`,
           entity_type: "player_card",
           entity_id: item.player_card_id as string | undefined,
           input_ref: item.name as string | undefined,
           expected: check.expected,
-          received: check.computed,
-          remediation: `Adjust ${(check.offenders ?? []).join(", ")} or request a different gem tier explicitly.`,
+          received: check.computed_exact,
+          remediation: `Adjust ${(check.offenders ?? []).join(", ")} or request a different gem tier explicitly. The requested tier is never changed automatically.`,
         }),
       );
     } else if (!check.ok && check.code === "OVR_RATING_MISMATCH") {
       errors.push(
-        apiError("OVR_RATING_MISMATCH", `Stored rating does not match the stat average (${check.computed}).`, {
+        apiError("OVR_RATING_MISMATCH", `Supplied rating does not match the stat average (${check.computed_exact}).`, {
           path: `${path}.rating`,
           entity_type: "player_card",
-          expected: check.computed,
+          entity_id: item.player_card_id as string | undefined,
+          input_ref: item.name as string | undefined,
+          expected: check.computed_exact,
           received: check.received,
-          remediation: "Send rating equal to the mean of the nine base stats, or omit rating so it is derived.",
+          remediation: `Send rating equal to the mean of the nine base stats within ${OVR_TOLERANCE}, or omit rating so it is derived exactly.`,
         }),
       );
     } else if (!check.ok && check.code === "UNKNOWN_GEM_TIER") {
@@ -412,37 +419,29 @@ function validatePlayer(
           received: tier,
         }),
       );
-    } else if (check.ok && check.computed && rating === undefined) {
-      item.rating = check.computed;
+    } else if (check.ok && check.computed_exact && rating === undefined) {
+      item.rating = check.computed_exact;
       warnings.push(
-        apiWarning("OVR_DERIVED", `rating derived from the nine stats as ${check.computed}.`, {
+        apiWarning("OVR_DERIVED", `rating derived from the nine stats as ${check.computed_exact}.`, {
           severity: "info",
           path: `${path}.rating`,
         }),
+      );
+    }
+    if (check.computed_exact) {
+      warnings.push(
+        apiWarning(
+          "OVR_REPORT",
+          `Supplied rating ${String(rating ?? "(derived)")}, calculated OVR ${check.computed_exact}, requested tier ${String(tier ?? "(unchanged)")}.`,
+          { severity: "info", path: `${path}.rating` },
+        ),
       );
     }
   } else if (Object.keys(stats).length > 0 && Object.keys(stats).length < STAT_KEYS.length && item.player_card_id === undefined && item.name === undefined) {
     errors.push(apiError("INCOMPLETE_STATS", "Partial stat updates need an explicit player target.", { path }));
   }
 
-  for (const field of ["badges", "traits"] as const) {
-    if (Array.isArray(item[field])) {
-      const count = (item[field] as unknown[]).length;
-      destructive.push(
-        apiWarning(
-          "ASSIGNMENT_REPLACEMENT",
-          count === 0
-            ? `${path}.${field} = [] removes every ${field.slice(0, -1)} assignment on this card.`
-            : `${path}.${field} replaces the card's full ${field} set with ${count} assignment(s).`,
-          {
-            severity: "destructive",
-            path: `${path}.${field}`,
-            remediation: `Omit ${field} to leave existing assignments untouched.`,
-          },
-        ),
-      );
-    }
-  }
+  validateAssignments(item, path, errors, destructive);
 }
 
 function validatePack(item: Record<string, unknown>, path: string, errors: AdminApiError[], destructive: AdminApiWarning[]) {
