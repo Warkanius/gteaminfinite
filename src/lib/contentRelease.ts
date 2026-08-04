@@ -705,12 +705,34 @@ const RELEASE_REF = "ref:release:main";
 const COLLECTION_REF = "ref:collection:main";
 const cardRef = (name: string) => `ref:player:${slug(name)}`;
 
-function refFor(release: ContentReleaseInput, ref: { player_name?: string; player_card_id?: string }) {
-  if (ref.player_card_id) return ref.player_card_id;
-  const match = (release.players ?? []).find((p) => sameRef(p.name, ref.player_name));
-  if (match?.player_card_id) return match.player_card_id;
-  return cardRef(match?.name ?? ref.player_name ?? "");
+/**
+ * Source-card fields for an evo path item. An existing card is targeted by its
+ * immutable `player_card_id` (never treated as a temp ref), or by `card_key`, or
+ * by exact name plus any distinguishing fields so the database rejects ambiguous
+ * names. Only a card created in this same release uses a temp ref.
+ */
+function evoSourceFields(release: ContentReleaseInput, path: ReleaseEvoPathInput): Record<string, unknown> {
+  const match = (release.players ?? []).find(
+    (p) =>
+      (path.player_card_id && p.player_card_id === path.player_card_id) ||
+      sameRef(p.name, path.player_name) ||
+      sameRef(p.new_name, path.player_name),
+  );
+  const id = path.player_card_id ?? match?.player_card_id;
+  if (id) return { player_card_id: id };
+  if (path.card_key) return { source: { card_key: path.card_key } };
+  if (match) return { player_card_ref: cardRef(match.name) };
+  const name = (path.player_name ?? "").trim();
+  const distinguishing: Record<string, unknown> = { name };
+  for (const key of ["rating", "collection", "sub_collection", "team", "card_variant", "evo_stage"] as const) {
+    if (path[key] != null) distinguishing[key] = path[key];
+  }
+  if (path.source_gem_tier) distinguishing.gem_tier = path.source_gem_tier;
+  return Object.keys(distinguishing).length > 1
+    ? { player_name: name, source: distinguishing }
+    : { player_name: name };
 }
+
 
 /**
  * Card reference fields for a batch item. Cards defined in this release use a

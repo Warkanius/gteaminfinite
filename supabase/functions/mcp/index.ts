@@ -2360,12 +2360,6 @@ var slug = (value) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").rep
 var RELEASE_REF = "ref:release:main";
 var COLLECTION_REF = "ref:collection:main";
 var cardRef = (name) => `ref:player:${slug(name)}`;
-function refFor(release, ref) {
-  if (ref.player_card_id) return ref.player_card_id;
-  const match = (release.players ?? []).find((p) => sameRef(p.name, ref.player_name));
-  if (match?.player_card_id) return match.player_card_id;
-  return cardRef(match?.name ?? ref.player_name ?? "");
-}
 function cardRefFields(release, ref) {
   if (ref.player_card_id) return { player_card_id: ref.player_card_id };
   const match = (release.players ?? []).find(
