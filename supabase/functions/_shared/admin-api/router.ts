@@ -127,6 +127,32 @@ export async function handleAdminApi(
   const mode = tail === "preview" ? "preview" : tail === "commit" ? "commit" : null;
   if (mode && req.method === "POST") {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    if (head === "bulk-players" || head === "bulk_players") {
+      const foreign = Object.keys(body).filter(
+        (k) => !["players", "preview_token", "idempotency_key", "notes"].includes(k),
+      );
+      if (foreign.length) {
+        return send(
+          failure("validation", [
+            apiError("PLAYERS_ONLY_SCOPE", "bulk-players updates player cards only.", {
+              received: foreign,
+              expected: ["players", "preview_token", "idempotency_key", "notes"],
+              remediation: "Move releases, collections, packs, teams, evo paths and every other group to /admin-api/v1/bulk or /content-release.",
+            }),
+          ], "bulk_players"),
+          400,
+        );
+      }
+      if (!Array.isArray(body.players) || body.players.length === 0) {
+        return send(
+          failure("validation", [
+            apiError("EMPTY_PAYLOAD", "players must be a non-empty array of player-card creates or updates.", { path: "players" }),
+          ], "bulk_players"),
+          400,
+        );
+      }
+      return await runPipeline(mode, "bulk-players", body, ctx);
+    }
     if (head === "bulk" || head === "release") return await runPipeline(mode, "bulk", body, ctx);
     if (ENTITY_TO_GROUP[head]) return await runPipeline(mode, head, body, ctx);
     return send(
