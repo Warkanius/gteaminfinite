@@ -740,7 +740,7 @@ export function buildOpenApi(baseUrl: string) {
       operationId: "getAdminApiDiagnostics",
       summary: "Full content health audit (v1)",
       description:
-        "Invalid OVR, OVR/tier mismatches, duplicate and ambiguous names, broken collection links, reward contamination, packs missing pools or odds not totalling 100.00, empty rosters, duplicate game orders, broken evo sources, skipped tiers, missing evo versions and stale scheduled jobs — each with remediation.",
+        "Invalid OVR, OVR/tier mismatches, ambiguous names, broken collection links, reward contamination, packs missing pools or odds off 100.00, empty rosters, duplicate game orders, broken evo sources, skipped tiers, missing evo versions, stale jobs — with remediation.",
       "x-openai-isConsequential": false,
       responses: okJson("Diagnostics"),
     },
@@ -751,7 +751,7 @@ export function buildOpenApi(baseUrl: string) {
       operationId: "previewBulk",
       summary: "Preview any bulk change (zero writes)",
       description:
-        "One canonical document may contain players, collections, sub_collections, teams, packs, evo_paths, challenges, locker_codes, dynamic_duos, runs, domination_roads, domination_games, storylines and social_posts. Writes nothing. Returns the plan, canonical_payload, payload_hash and a single-use preview_token.",
+        "One document may contain players, collections, teams, packs, evo_paths, challenges, locker_codes, dynamic_duos, runs, domination roads and games, storylines and posts. Writes nothing. Returns the plan, canonical_payload, payload_hash and a single-use preview_token.",
       "x-openai-isConsequential": false,
       requestBody: { required: true, content: { "application/json": { schema: anyObj, example: { players: [{ player_card_id: "uuid", rating: 2.11 }] } } } },
       responses: okJson("Preview plan"),
