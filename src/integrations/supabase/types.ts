@@ -920,6 +920,199 @@ export type Database = {
         }
         Relationships: []
       }
+      evo_card_version_badges: {
+        Row: {
+          badge_id: string
+          created_at: string
+          evo_card_version_id: string
+          id: string
+          tier: string
+        }
+        Insert: {
+          badge_id: string
+          created_at?: string
+          evo_card_version_id: string
+          id?: string
+          tier?: string
+        }
+        Update: {
+          badge_id?: string
+          created_at?: string
+          evo_card_version_id?: string
+          id?: string
+          tier?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evo_card_version_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evo_card_version_badges_evo_card_version_id_fkey"
+            columns: ["evo_card_version_id"]
+            isOneToOne: false
+            referencedRelation: "evo_card_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evo_card_version_traits: {
+        Row: {
+          created_at: string
+          evo_card_version_id: string
+          id: string
+          target_stat: string | null
+          tier: string
+          trait_id: string
+        }
+        Insert: {
+          created_at?: string
+          evo_card_version_id: string
+          id?: string
+          target_stat?: string | null
+          tier?: string
+          trait_id: string
+        }
+        Update: {
+          created_at?: string
+          evo_card_version_id?: string
+          id?: string
+          target_stat?: string | null
+          tier?: string
+          trait_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evo_card_version_traits_evo_card_version_id_fkey"
+            columns: ["evo_card_version_id"]
+            isOneToOne: false
+            referencedRelation: "evo_card_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evo_card_version_traits_trait_id_fkey"
+            columns: ["trait_id"]
+            isOneToOne: false
+            referencedRelation: "signature_traits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evo_card_versions: {
+        Row: {
+          base_player_card_id: string
+          created_at: string
+          evo_path_id: string
+          gem_name: string | null
+          gem_tier_id: string | null
+          id: string
+          rating: number | null
+          stat_3pt: number
+          stat_ast: number
+          stat_blk: number
+          stat_dnk: number
+          stat_fin: number
+          stat_int: number
+          stat_mid: number
+          stat_reb: number
+          stat_stl: number
+          status: Database["public"]["Enums"]["content_status"]
+          updated_at: string
+          version_order: number
+        }
+        Insert: {
+          base_player_card_id: string
+          created_at?: string
+          evo_path_id: string
+          gem_name?: string | null
+          gem_tier_id?: string | null
+          id?: string
+          rating?: number | null
+          stat_3pt?: number
+          stat_ast?: number
+          stat_blk?: number
+          stat_dnk?: number
+          stat_fin?: number
+          stat_int?: number
+          stat_mid?: number
+          stat_reb?: number
+          stat_stl?: number
+          status?: Database["public"]["Enums"]["content_status"]
+          updated_at?: string
+          version_order: number
+        }
+        Update: {
+          base_player_card_id?: string
+          created_at?: string
+          evo_path_id?: string
+          gem_name?: string | null
+          gem_tier_id?: string | null
+          id?: string
+          rating?: number | null
+          stat_3pt?: number
+          stat_ast?: number
+          stat_blk?: number
+          stat_dnk?: number
+          stat_fin?: number
+          stat_int?: number
+          stat_mid?: number
+          stat_reb?: number
+          stat_stl?: number
+          status?: Database["public"]["Enums"]["content_status"]
+          updated_at?: string
+          version_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evo_card_versions_base_player_card_id_fkey"
+            columns: ["base_player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evo_card_versions_evo_path_id_fkey"
+            columns: ["evo_path_id"]
+            isOneToOne: true
+            referencedRelation: "evo_paths"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evo_card_versions_gem_tier_id_fkey"
+            columns: ["gem_tier_id"]
+            isOneToOne: false
+            referencedRelation: "gem_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evo_objective_registry: {
+        Row: {
+          created_at: string
+          key: string
+          label: string
+          objective_type: string
+          stat_key: string | null
+        }
+        Insert: {
+          created_at?: string
+          key: string
+          label: string
+          objective_type: string
+          stat_key?: string | null
+        }
+        Update: {
+          created_at?: string
+          key?: string
+          label?: string
+          objective_type?: string
+          stat_key?: string | null
+        }
+        Relationships: []
+      }
       evo_objectives: {
         Row: {
           created_at: string
@@ -3215,6 +3408,7 @@ export type Database = {
       user_collections: {
         Row: {
           acquired_at: string
+          active_evo_version_id: string | null
           evolution_progress: Json | null
           id: string
           is_locked: boolean
@@ -3224,6 +3418,7 @@ export type Database = {
         }
         Insert: {
           acquired_at?: string
+          active_evo_version_id?: string | null
           evolution_progress?: Json | null
           id?: string
           is_locked?: boolean
@@ -3233,6 +3428,7 @@ export type Database = {
         }
         Update: {
           acquired_at?: string
+          active_evo_version_id?: string | null
           evolution_progress?: Json | null
           id?: string
           is_locked?: boolean
@@ -3241,6 +3437,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_collections_active_evo_version_id_fkey"
+            columns: ["active_evo_version_id"]
+            isOneToOne: false
+            referencedRelation: "evo_card_versions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_collections_player_card_id_fkey"
             columns: ["player_card_id"]
@@ -3466,7 +3669,20 @@ export type Database = {
         Returns: Json
       }
       admin_apply_evo: {
+        Args: { p_commit: boolean; p_item: Json }
+        Returns: Json
+      }
+      admin_apply_evo_core: {
         Args: { p_commit?: boolean; p_item: Json }
+        Returns: Json
+      }
+      admin_apply_evo_version: {
+        Args: {
+          p_commit: boolean
+          p_evo_path_id: string
+          p_step?: Json
+          p_version: Json
+        }
         Returns: Json
       }
       admin_apply_extra: {
@@ -3546,6 +3762,7 @@ export type Database = {
         Args: { p_code: string; p_extra?: Json; p_message: string }
         Returns: undefined
       }
+      admin_evo_objective_keys: { Args: never; Returns: string[] }
       admin_has_column: {
         Args: { p_column: string; p_table: string }
         Returns: boolean
