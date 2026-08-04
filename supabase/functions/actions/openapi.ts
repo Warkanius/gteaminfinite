@@ -554,8 +554,17 @@ export function buildOpenApi(baseUrl: string) {
           required: ["steps"],
           properties: {
             player_name: { type: "string" },
-            player_card_id: strProp("Immutable card id."),
+            player_card_id: strProp("Immutable card id of an EXISTING source card (preferred). The card is not modified."),
+            card_key: strProp("Slug of an existing source card."),
+            source_gem_tier: strProp("Current tier of the source card; must equal the first step's from_tier."),
+            rating: { type: "number" },
+            collection: { type: "string" },
+            sub_collection: { type: "string" },
+            team: { type: "string" },
+            card_variant: { type: "string" },
+            evo_stage: { type: "integer" },
             status: strProp("draft | published."),
+
             steps: {
               type: "array",
               items: {
