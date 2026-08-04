@@ -2060,9 +2060,6 @@ function formatHundredths(cents) {
   return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
 }
 var sameRef = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
-function playerKey(ref) {
-  return (ref.player_card_id ?? ref.player_name ?? "").trim().toLowerCase();
-}
 function validateRelease(input, options = {}) {
   const release = normalizeRelease(input);
   const out = [];
@@ -2100,22 +2097,44 @@ function validateRelease(input, options = {}) {
     }
   }
   const collection = release.collection;
-  if (collection?.name) {
+  if (collection?.name?.trim()) {
     const members = collection.player_cards ?? [];
     const slots = /* @__PURE__ */ new Set();
     members.forEach((m, i) => {
       const scope = `collection.player_cards[${i}]`;
-      if (!known(m)) err("UNKNOWN_COLLECTION_MEMBER", `"${m.player_name ?? m.player_card_id}" is not part of this release.`, scope);
+      if (!m.player_card_id && !m.player_name?.trim()) {
+        err("MEMBER_REF_REQUIRED", "Each collection member needs player_name or player_card_id.", scope);
+      } else if (!known(m)) {
+        out.push({
+          code: "EXISTING_COLLECTION_MEMBER",
+          severity: "info",
+          message: `"${m.player_name ?? m.player_card_id}" is not defined in this release and will be resolved from existing player cards.`,
+          entity: scope
+        });
+      }
       if (m.slot != null) {
         if (slots.has(m.slot)) err("DUPLICATE_COLLECTION_SLOT", `Slot ${m.slot} is used twice.`, scope);
         slots.add(m.slot);
       }
     });
+    const canonical = (ref) => {
+      if (ref.player_card_id) return `id:${ref.player_card_id.toLowerCase()}`;
+      const name = ref.player_name?.trim().toLowerCase() ?? "";
+      const match = players.find((p) => sameRef(p.name, name) || sameRef(p.new_name, name));
+      if (match?.player_card_id) return `id:${match.player_card_id.toLowerCase()}`;
+      return `name:${name}`;
+    };
     const rewardRefs = /* @__PURE__ */ new Set();
-    members.filter((m) => m.is_reward).forEach((m) => rewardRefs.add(playerKey(m)));
-    players.filter((p) => p.is_collection_reward).forEach((p) => rewardRefs.add((p.player_card_id ?? p.name).toLowerCase()));
-    if (collection.reward_player_card_id) rewardRefs.add(collection.reward_player_card_id.toLowerCase());
-    else if (collection.reward_player_name) rewardRefs.add(collection.reward_player_name.trim().toLowerCase());
+    members.filter((m) => m.is_reward).forEach((m) => rewardRefs.add(canonical(m)));
+    players.filter((p) => p.is_collection_reward).forEach((p) => rewardRefs.add(canonical({ player_name: p.name, player_card_id: p.player_card_id })));
+    if (collection.reward_player_card_id || collection.reward_player_name) {
+      rewardRefs.add(
+        canonical({
+          player_card_id: collection.reward_player_card_id,
+          player_name: collection.reward_player_name
+        })
+      );
+    }
     const rewardName = collection.reward_player_name ?? members.find((m) => m.is_reward)?.player_name ?? players.find((p) => p.is_collection_reward)?.name;
     if (rewardRefs.size > 1) {
       err(
@@ -2127,18 +2146,12 @@ function validateRelease(input, options = {}) {
     if (!rewardRefs.size) {
       warn("NO_COLLECTION_REWARD", "This collection has no completion reward card.", "collection.reward");
     }
-    if (rewardName && !known({ player_name: rewardName })) {
-      err("REWARD_NOT_IN_RELEASE", `Reward card "${rewardName}" is not part of this release.`, "collection.reward");
-    }
     if (rewardName && release.pack?.players?.some((s) => sameRef(s.player_name, rewardName))) {
       err(
         "REWARD_IN_PACK",
         `"${rewardName}" is the collection reward and must not be pullable from the pack.`,
         "pack.players"
       );
-    }
-    if (members.length && !members.some((m) => m.is_reward) && rewardName && !collection.reward_player_name) {
-      warn("REWARD_MEMBERSHIP", `Reward "${rewardName}" is not flagged in the membership list.`, "collection.player_cards");
     }
   }
   for (const forbidden of release.forbid_existing_links_to ?? []) {
@@ -2347,6 +2360,15 @@ function refFor(release, ref) {
   if (match?.player_card_id) return match.player_card_id;
   return cardRef(match?.name ?? ref.player_name ?? "");
 }
+function cardRefFields(release, ref) {
+  if (ref.player_card_id) return { player_card_id: ref.player_card_id };
+  const match = (release.players ?? []).find(
+    (p) => sameRef(p.name, ref.player_name) || sameRef(p.new_name, ref.player_name)
+  );
+  if (match?.player_card_id) return { player_card_id: match.player_card_id };
+  if (match) return { player_ref: cardRef(match.name) };
+  return { player_name: (ref.player_name ?? "").trim() };
+}
 function buildReleasePayload(input) {
   const release = normalizeRelease(input);
   const payload = {
@@ -2376,12 +2398,20 @@ function buildReleasePayload(input) {
     });
   }
   const collection = release.collection;
-  if (collection?.name) {
-    const rewardRef = collection.reward_player_card_id ?? (collection.reward_player_name ? refFor(release, { player_name: collection.reward_player_name }) : (() => {
-      const flagged = collection.player_cards?.find((m) => m.is_reward) ?? (release.players ?? []).find((p) => p.is_collection_reward);
-      const name = flagged;
-      return name ? refFor(release, { player_name: name.player_name ?? name.name }) : void 0;
-    })());
+  if (collection?.name?.trim()) {
+    const rewardTarget = collection.reward_player_card_id || collection.reward_player_name ? { player_card_id: collection.reward_player_card_id, player_name: collection.reward_player_name } : (() => {
+      const flagged = collection.player_cards?.find((m) => m.is_reward);
+      if (flagged) return { player_name: flagged.player_name, player_card_id: flagged.player_card_id };
+      const own = (release.players ?? []).find((p) => p.is_collection_reward);
+      return own ? { player_name: own.name, player_card_id: own.player_card_id } : void 0;
+    })();
+    const rewardFields = rewardTarget ? cardRefFields(release, rewardTarget) : void 0;
+    const members = collection.player_cards?.length ? [...collection.player_cards].sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0)) : (release.players ?? []).map((p, i) => ({
+      player_name: p.name,
+      player_card_id: p.player_card_id,
+      slot: i + 1,
+      is_reward: p.is_collection_reward
+    }));
     payload.collections = [
       {
         temp_ref: COLLECTION_REF,
@@ -2389,16 +2419,10 @@ function buildReleasePayload(input) {
         name: collection.name,
         description: collection.description ?? null,
         release_bundle_ref: RELEASE_REF,
-        ...rewardRef ? { reward_card_ref: rewardRef } : {}
-      }
-    ];
-    const members = collection.player_cards?.length ? [...collection.player_cards].sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0)) : (release.players ?? []).map((p, i) => ({ player_name: p.name, slot: i + 1, is_reward: p.is_collection_reward }));
-    payload.collection_requirements = [
-      {
-        action: "replace",
-        collection_ref: COLLECTION_REF,
+        ...rewardFields ? rewardFields.player_card_id ? { reward_card_id: rewardFields.player_card_id } : rewardFields.player_ref ? { reward_card_ref: rewardFields.player_ref } : { reward_card: rewardFields } : {},
+        replace_requirements: true,
         requirements: members.map((m, i) => ({
-          player_ref: refFor(release, m),
+          ...cardRefFields(release, m),
           sort_order: m.slot ?? i + 1,
           is_reward_card: !!m.is_reward
         }))
@@ -2414,7 +2438,7 @@ function buildReleasePayload(input) {
         ...release.team.unlock_cost != null ? { unlock_cost: release.team.unlock_cost } : {},
         release_bundle_ref: RELEASE_REF,
         replace_roster: true,
-        roster: [...release.team.roster ?? []].sort((a, b) => a.slot - b.slot).map((r) => ({ slot_number: r.slot, player_ref: refFor(release, r) }))
+        roster: [...release.team.roster ?? []].sort((a, b) => a.slot - b.slot).map((r) => ({ slot_number: r.slot, ...cardRefFields(release, r) }))
       }
     ];
   }
@@ -2430,7 +2454,7 @@ function buildReleasePayload(input) {
         release_bundle_ref: RELEASE_REF,
         ...collection?.name ? { collection_ref: COLLECTION_REF } : {},
         replace_pool: true,
-        pool: [...pack.players ?? []].sort((a, b) => a.slot - b.slot).map((s) => ({ slot_number: s.slot, player_ref: refFor(release, s) })),
+        pool: [...pack.players ?? []].sort((a, b) => a.slot - b.slot).map((s) => ({ slot_number: s.slot, ...cardRefFields(release, s) })),
         replace_odds: true,
         odds: (pack.odds ?? []).map((o) => ({
           dice_roll: o.result_slot,

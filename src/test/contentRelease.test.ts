@@ -125,8 +125,10 @@ describe("Galactic acceptance case", () => {
     expect(payload.release_bundles).toHaveLength(1);
     expect(payload.players).toHaveLength(12);
     expect(payload.collections[0].reward_card_ref).toBe("ref:player:galactic-reward");
-    expect(payload.collection_requirements[0].action).toBe("replace");
-    expect(payload.collection_requirements[0].requirements).toHaveLength(12);
+    expect(payload.collections[0].replace_requirements).toBe(true);
+    expect(payload.collections[0].requirements).toHaveLength(12);
+    expect(payload.collection_requirements).toBeUndefined();
+
     expect(payload.packs[0].pool.map((p: any) => p.slot_number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect(payload.packs[0].replace_odds).toBe(true);
     expect(payload.evo_paths).toHaveLength(2);
@@ -244,5 +246,58 @@ describe("safety guards", () => {
     const prepared = prepareRelease(galactic(), { tierOrder: TIERS });
     expect(prepared.valid).toBe(true);
     expect(Object.keys(prepared.payload)).toContain("evo_paths");
+  });
+});
+
+describe("new collection from existing player cards", () => {
+  const existingRelease = () => ({
+    release: { name: "Galactic Wave" },
+    collection: {
+      name: "Galactic",
+      player_cards: [
+        { player_name: "Existing One", slot: 1 },
+        { player_card_id: "11111111-1111-1111-1111-111111111111", slot: 2 },
+        { player_name: "Existing Reward", slot: 3, is_reward: true },
+      ],
+    },
+  });
+
+  it("keeps the collection name and never reports MISSING_NAME-style errors", () => {
+    const { valid, validations, payload } = prepareRelease(existingRelease() as any);
+    expect(validations.filter((v) => v.severity === "error")).toEqual([]);
+    expect(valid).toBe(true);
+    const collections = (payload as Record<string, any>).collections;
+    expect(collections[0].name).toBe("Galactic");
+    expect(collections[0].requirements).toHaveLength(3);
+    expect(collections[0].requirements[0]).toMatchObject({ player_name: "Existing One", sort_order: 1 });
+    expect(collections[0].requirements[1]).toMatchObject({
+      player_card_id: "11111111-1111-1111-1111-111111111111",
+    });
+    expect(collections[0].reward_card).toEqual({ player_name: "Existing Reward" });
+  });
+
+  it("flags unknown members as informational, not errors", () => {
+    const codesFor = prepareRelease(existingRelease() as any).validations.map((v) => v.code);
+    expect(codesFor).toContain("EXISTING_COLLECTION_MEMBER");
+  });
+
+  it("accepts a single is_reward membership entry without a separate reward field", () => {
+    const codesFor = prepareRelease(existingRelease() as any).validations.map((v) => v.code);
+    expect(codesFor).not.toContain("MULTIPLE_COLLECTION_REWARDS");
+    expect(codesFor).not.toContain("NO_COLLECTION_REWARD");
+  });
+
+  it("does not double-count is_reward plus an equivalent reward_player_name", () => {
+    const draft = existingRelease() as any;
+    draft.collection.reward_player_name = "Existing Reward";
+    const codesFor = prepareRelease(draft).validations.map((v: any) => v.code);
+    expect(codesFor).not.toContain("MULTIPLE_COLLECTION_REWARDS");
+  });
+
+  it("still rejects two different reward cards", () => {
+    const draft = existingRelease() as any;
+    draft.collection.player_cards[0].is_reward = true;
+    const codesFor = prepareRelease(draft).validations.map((v: any) => v.code);
+    expect(codesFor).toContain("MULTIPLE_COLLECTION_REWARDS");
   });
 });

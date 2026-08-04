@@ -327,9 +327,7 @@ interface ValidateOptions {
 const sameRef = (a: string | undefined, b: string | undefined) =>
   !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
-function playerKey(ref: { player_name?: string; player_card_id?: string }) {
-  return (ref.player_card_id ?? ref.player_name ?? "").trim().toLowerCase();
-}
+
 
 /** Full zero-write validation. Collects every problem instead of failing fast. */
 export function validateRelease(
@@ -382,24 +380,53 @@ export function validateRelease(
     }
   }
 
-  // collection
+  // collection — a release may create a brand-new collection out of cards that
+  // already exist in the database. Such members are resolved server-side by
+  // player_card_id or unique name, so they are informational, never errors.
   const collection = release.collection;
-  if (collection?.name) {
+  if (collection?.name?.trim()) {
     const members = collection.player_cards ?? [];
     const slots = new Set<number>();
     members.forEach((m, i) => {
       const scope = `collection.player_cards[${i}]`;
-      if (!known(m)) err("UNKNOWN_COLLECTION_MEMBER", `"${m.player_name ?? m.player_card_id}" is not part of this release.`, scope);
+      if (!m.player_card_id && !m.player_name?.trim()) {
+        err("MEMBER_REF_REQUIRED", "Each collection member needs player_name or player_card_id.", scope);
+      } else if (!known(m)) {
+        out.push({
+          code: "EXISTING_COLLECTION_MEMBER",
+          severity: "info",
+          message: `"${m.player_name ?? m.player_card_id}" is not defined in this release and will be resolved from existing player cards.`,
+          entity: scope,
+        });
+      }
       if (m.slot != null) {
         if (slots.has(m.slot)) err("DUPLICATE_COLLECTION_SLOT", `Slot ${m.slot} is used twice.`, scope);
         slots.add(m.slot);
       }
     });
+
+    // One canonical identity per reward candidate so a membership entry flagged
+    // is_reward and an equivalent reward_player_* field are never double-counted.
+    const canonical = (ref: { player_name?: string; player_card_id?: string }) => {
+      if (ref.player_card_id) return `id:${ref.player_card_id.toLowerCase()}`;
+      const name = ref.player_name?.trim().toLowerCase() ?? "";
+      const match = players.find((p) => sameRef(p.name, name) || sameRef(p.new_name, name));
+      if (match?.player_card_id) return `id:${match.player_card_id.toLowerCase()}`;
+      return `name:${name}`;
+    };
     const rewardRefs = new Set<string>();
-    members.filter((m) => m.is_reward).forEach((m) => rewardRefs.add(playerKey(m)));
-    players.filter((p) => p.is_collection_reward).forEach((p) => rewardRefs.add((p.player_card_id ?? p.name).toLowerCase()));
-    if (collection.reward_player_card_id) rewardRefs.add(collection.reward_player_card_id.toLowerCase());
-    else if (collection.reward_player_name) rewardRefs.add(collection.reward_player_name.trim().toLowerCase());
+    members.filter((m) => m.is_reward).forEach((m) => rewardRefs.add(canonical(m)));
+    players
+      .filter((p) => p.is_collection_reward)
+      .forEach((p) => rewardRefs.add(canonical({ player_name: p.name, player_card_id: p.player_card_id })));
+    if (collection.reward_player_card_id || collection.reward_player_name) {
+      rewardRefs.add(
+        canonical({
+          player_card_id: collection.reward_player_card_id,
+          player_name: collection.reward_player_name,
+        }),
+      );
+    }
     const rewardName =
       collection.reward_player_name ??
       members.find((m) => m.is_reward)?.player_name ??
@@ -414,10 +441,6 @@ export function validateRelease(
     if (!rewardRefs.size) {
       warn("NO_COLLECTION_REWARD", "This collection has no completion reward card.", "collection.reward");
     }
-    if (rewardName && !known({ player_name: rewardName })) {
-
-      err("REWARD_NOT_IN_RELEASE", `Reward card "${rewardName}" is not part of this release.`, "collection.reward");
-    }
     if (rewardName && release.pack?.players?.some((s) => sameRef(s.player_name, rewardName))) {
       err(
         "REWARD_IN_PACK",
@@ -425,10 +448,8 @@ export function validateRelease(
         "pack.players",
       );
     }
-    if (members.length && !members.some((m) => m.is_reward) && rewardName && !collection.reward_player_name) {
-      warn("REWARD_MEMBERSHIP", `Reward "${rewardName}" is not flagged in the membership list.`, "collection.player_cards");
-    }
   }
+
 
   // cross-release safety
   for (const forbidden of release.forbid_existing_links_to ?? []) {
@@ -669,6 +690,25 @@ function refFor(release: ContentReleaseInput, ref: { player_name?: string; playe
 }
 
 /**
+ * Card reference fields for a batch item. Cards defined in this release use a
+ * temp_ref; cards that already exist are referenced by id, or by name so the
+ * database resolves them (and rejects ambiguous names) inside the transaction.
+ */
+function cardRefFields(
+  release: ContentReleaseInput,
+  ref: { player_name?: string; player_card_id?: string },
+): Record<string, unknown> {
+  if (ref.player_card_id) return { player_card_id: ref.player_card_id };
+  const match = (release.players ?? []).find(
+    (p) => sameRef(p.name, ref.player_name) || sameRef(p.new_name, ref.player_name),
+  );
+  if (match?.player_card_id) return { player_card_id: match.player_card_id };
+  if (match) return { player_ref: cardRef(match.name) };
+  return { player_name: (ref.player_name ?? "").trim() };
+}
+
+
+/**
  * Turns a release document into an `admin_apply_batch` payload. Cross-entity
  * links use temp_refs so cards, collection, team, pack and evo versions all
  * resolve inside the single commit transaction.
@@ -704,18 +744,31 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
   }
 
   const collection = release.collection;
-  if (collection?.name) {
-    const rewardRef =
-      collection.reward_player_card_id ??
-      (collection.reward_player_name
-        ? refFor(release, { player_name: collection.reward_player_name })
+  if (collection?.name?.trim()) {
+    const rewardTarget: { player_name?: string; player_card_id?: string } | undefined =
+      collection.reward_player_card_id || collection.reward_player_name
+        ? { player_card_id: collection.reward_player_card_id, player_name: collection.reward_player_name }
         : (() => {
-            const flagged =
-              collection.player_cards?.find((m) => m.is_reward) ??
-              (release.players ?? []).find((p) => p.is_collection_reward);
-            const name = (flagged as { player_name?: string; name?: string } | undefined);
-            return name ? refFor(release, { player_name: name.player_name ?? name.name }) : undefined;
-          })());
+            const flagged = collection.player_cards?.find((m) => m.is_reward);
+            if (flagged) return { player_name: flagged.player_name, player_card_id: flagged.player_card_id };
+            const own = (release.players ?? []).find((p) => p.is_collection_reward);
+            return own ? { player_name: own.name, player_card_id: own.player_card_id } : undefined;
+          })();
+    const rewardFields = rewardTarget ? cardRefFields(release, rewardTarget) : undefined;
+
+    const members =
+      collection.player_cards?.length
+        ? [...collection.player_cards].sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))
+        : (release.players ?? []).map((p, i) => ({
+            player_name: p.name,
+            player_card_id: p.player_card_id,
+            slot: i + 1,
+            is_reward: p.is_collection_reward,
+          }));
+
+    // Requirements ride along on the collection item itself so the collection
+    // name is always present in the same write — a separate group referencing an
+    // unwritten collection would look like a nameless new collection in preview.
     payload.collections = [
       {
         temp_ref: COLLECTION_REF,
@@ -723,25 +776,24 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         name: collection.name,
         description: collection.description ?? null,
         release_bundle_ref: RELEASE_REF,
-        ...(rewardRef ? { reward_card_ref: rewardRef } : {}),
-      },
-    ];
-    const members =
-      collection.player_cards?.length
-        ? [...collection.player_cards].sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))
-        : (release.players ?? []).map((p, i) => ({ player_name: p.name, slot: i + 1, is_reward: p.is_collection_reward }));
-    payload.collection_requirements = [
-      {
-        action: "replace",
-        collection_ref: COLLECTION_REF,
+        ...(rewardFields
+          ? rewardFields.player_card_id
+            ? { reward_card_id: rewardFields.player_card_id }
+            : rewardFields.player_ref
+              ? { reward_card_ref: rewardFields.player_ref }
+              : { reward_card: rewardFields }
+          : {}),
+
+        replace_requirements: true,
         requirements: members.map((m, i) => ({
-          player_ref: refFor(release, m),
+          ...cardRefFields(release, m),
           sort_order: m.slot ?? i + 1,
           is_reward_card: !!m.is_reward,
         })),
       },
     ];
   }
+
 
   if (release.team?.name) {
     payload.teams = [
@@ -754,7 +806,7 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         replace_roster: true,
         roster: [...(release.team.roster ?? [])]
           .sort((a, b) => a.slot - b.slot)
-          .map((r) => ({ slot_number: r.slot, player_ref: refFor(release, r) })),
+          .map((r) => ({ slot_number: r.slot, ...cardRefFields(release, r) })),
       },
     ];
   }
@@ -773,7 +825,7 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         replace_pool: true,
         pool: [...(pack.players ?? [])]
           .sort((a, b) => a.slot - b.slot)
-          .map((s) => ({ slot_number: s.slot, player_ref: refFor(release, s) })),
+          .map((s) => ({ slot_number: s.slot, ...cardRefFields(release, s) })),
         replace_odds: true,
         odds: (pack.odds ?? []).map((o) => ({
           dice_roll: o.result_slot,
