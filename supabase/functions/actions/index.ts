@@ -6,6 +6,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { buildOpenApi, GPT_INSTRUCTIONS, READ_TABLE_LIST } from "./openapi.ts";
 import { prepareRelease, type ContentReleaseInput } from "./contentRelease.ts";
+import { handleAdminApi } from "./admin-api/router.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
@@ -62,6 +63,10 @@ Deno.serve(async (req) => {
   if (userErr || !userData?.user) return err("Unauthorized: invalid or expired session.", 401);
 
   try {
+    // Canonical versioned admin API (preview -> approve -> atomic commit, bulk + scheduling).
+    const v1 = await handleAdminApi(path, req, { client: supabase, adminId: userData.user.id, base });
+    if (v1) return v1;
+
     if (path === "/diagnostics" && req.method === "GET") return json(await diagnostics(supabase));
     if (path === "/references" && req.method === "GET") return json(await references(supabase));
 
