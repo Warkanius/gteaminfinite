@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { canonicalize, payloadHash, byteSize } from "../../supabase/functions/actions/admin-api/canonical";
-import { ovrText, checkOvr, oddsTotal, ODDS_TARGET, tierKey, bandFor } from "../../supabase/functions/actions/admin-api/decimal";
-import { normalizeRef, isUuid } from "../../supabase/functions/actions/admin-api/refs";
-import { normalizeDocument, documentForEntity, ENTITY_TO_GROUP, GROUPS } from "../../supabase/functions/actions/admin-api/normalize";
-import { capabilities, LIMITS } from "../../supabase/functions/actions/admin-api/capabilities";
+import { canonicalize, payloadHash, byteSize } from "../../supabase/functions/_shared/admin-api/canonical";
+import { ovrText, checkOvr, oddsTotal, ODDS_TARGET, tierKey, bandFor } from "../../supabase/functions/_shared/admin-api/decimal";
+import { normalizeRef, isUuid } from "../../supabase/functions/_shared/admin-api/refs";
+import { normalizeDocument, documentForEntity, ENTITY_TO_GROUP, GROUPS } from "../../supabase/functions/_shared/admin-api/normalize";
+import { capabilities, LIMITS } from "../../supabase/functions/_shared/admin-api/capabilities";
 
 const KANIAN = "0932b0e9-fb1f-4845-9c36-3842d49141e1";
 
