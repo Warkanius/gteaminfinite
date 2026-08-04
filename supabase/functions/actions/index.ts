@@ -131,6 +131,30 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ------------------------------------------------- atomic content release
+    // Collections + ordered membership + reward, bulk cards, team, pack pool/odds
+    // and multi-step evo paths with materialized versions — one transaction.
+    const releaseMatch = path.match(/^\/content-release\/(preview|commit)$/);
+    if (releaseMatch && req.method === "POST") {
+      const commit = releaseMatch[1] === "commit";
+      const { preview_token, ...doc } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      if (commit && !preview_token) {
+        return err("preview_token is required to commit: preview the identical release document first.", 400);
+      }
+      const { validations, valid, payload } = prepareRelease(doc as unknown as ContentReleaseInput);
+      if (!valid) {
+        return json({ ok: false, stage: "validation", wrote_anything: false, validations }, 400);
+      }
+      return await rpcResult(
+        supabase.rpc("admin_apply_batch", {
+          p_payload: payload,
+          p_commit: commit,
+          p_preview_token: (preview_token as string | undefined) ?? null,
+          p_kind: "content_release",
+        }),
+      );
+    }
+
     const m = path.match(/^\/([a-z-]+)\/(preview|commit)$/);
     if (m && req.method === "POST") {
       const [, group, mode] = m;
