@@ -152,8 +152,10 @@ export default function Domination() {
         <div className="grid gap-4 sm:grid-cols-2">
           {roads.map(([roadName, roadGames]) => {
             const completed = roadGames.filter((g) => wonSet.has(g.id)).length;
-            const roadCompleted = completed === roadGames.length;
             const hasRttr = roadGames.some((g) => g.pack_reward && rttrPackSet.has(g.pack_reward));
+            const baseNodes = roadGames.filter((g) => !(g.pack_reward && rttrPackSet.has(g.pack_reward)));
+            const roadCompleted = (baseNodes.length ? baseNodes : roadGames).every((g) => wonSet.has(g.id));
+
             return (
               <Card
                 key={roadName}
