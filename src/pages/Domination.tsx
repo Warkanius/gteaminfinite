@@ -194,9 +194,13 @@ export default function Domination() {
       {/* Road detail */}
       {selectedRoad && (() => {
         const roadGames = roads.find(([name]) => name === selectedRoad)?.[1] ?? [];
-        const roadCompleted = roadGames.length > 0 && roadGames.every((g) => wonSet.has(g.id));
         const rttrNodes = roadGames.filter((g) => g.pack_reward && rttrPackSet.has(g.pack_reward));
+        // RTTR unlocks once every regular (non-RTTR) node on the road is won.
+        const baseNodes = roadGames.filter((g) => !(g.pack_reward && rttrPackSet.has(g.pack_reward)));
+        const roadCompleted =
+          roadGames.length > 0 && (baseNodes.length ? baseNodes : roadGames).every((g) => wonSet.has(g.id));
         const showRttrTab = roadCompleted && rttrNodes.length > 0;
+
 
         return (
           <div className="space-y-4">
