@@ -212,6 +212,7 @@ export function normalizeDocument(input: Record<string, unknown>): NormalizeResu
       continue;
     }
     const items = raw.map((item, index) => normalizeItem(group, item as Record<string, unknown>, `${group}[${index}]`, errors, warnings, destructive));
+    if (group === "players") detectDuplicateTargets(items, errors);
     canonical[group] = items;
     groupsPlan.push({ group, items: items.length });
     entityCount += items.length;
