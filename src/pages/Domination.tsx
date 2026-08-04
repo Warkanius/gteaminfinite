@@ -67,19 +67,33 @@ export default function Domination() {
     },
   });
 
-  // Identify which packs are RTTR so we can mark RTTR-eligible nodes
-  const packIds = useMemo(
+  // Identify which packs are RTTR so we can mark RTTR-eligible nodes.
+  // pack_reward is stored as text and legacy content may hold a pack NAME
+  // instead of an id, so we look packs up by both.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const packRefs = useMemo(
     () => Array.from(new Set(games.map((g) => g.pack_reward).filter(Boolean))) as string[],
     [games],
   );
   const { data: rttrPackIds = [] } = useQuery({
-    queryKey: ["rttr-pack-ids", packIds.sort().join(",")],
-    enabled: packIds.length > 0,
+    queryKey: ["rttr-pack-refs", packRefs.slice().sort().join(",")],
+    enabled: packRefs.length > 0,
     queryFn: async () => {
-      const { data } = await supabase.from("packs").select("id, pack_type").in("id", packIds);
-      return (data ?? []).filter((p: any) => p.pack_type === "rttr").map((p: any) => p.id) as string[];
+      const ids = packRefs.filter((r) => UUID_RE.test(r));
+      const names = packRefs.filter((r) => !UUID_RE.test(r));
+      const refs: string[] = [];
+      if (ids.length) {
+        const { data } = await supabase.from("packs").select("id, pack_type").in("id", ids);
+        refs.push(...(data ?? []).filter((p: any) => p.pack_type === "rttr").map((p: any) => p.id));
+      }
+      if (names.length) {
+        const { data } = await supabase.from("packs").select("name, pack_type").in("name", names);
+        refs.push(...(data ?? []).filter((p: any) => p.pack_type === "rttr").map((p: any) => p.name));
+      }
+      return refs;
     },
   });
+
   const rttrPackSet = useMemo(() => new Set(rttrPackIds), [rttrPackIds]);
   const rttrWinMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -138,8 +152,10 @@ export default function Domination() {
         <div className="grid gap-4 sm:grid-cols-2">
           {roads.map(([roadName, roadGames]) => {
             const completed = roadGames.filter((g) => wonSet.has(g.id)).length;
-            const roadCompleted = completed === roadGames.length;
             const hasRttr = roadGames.some((g) => g.pack_reward && rttrPackSet.has(g.pack_reward));
+            const baseNodes = roadGames.filter((g) => !(g.pack_reward && rttrPackSet.has(g.pack_reward)));
+            const roadCompleted = (baseNodes.length ? baseNodes : roadGames).every((g) => wonSet.has(g.id));
+
             return (
               <Card
                 key={roadName}
@@ -180,9 +196,13 @@ export default function Domination() {
       {/* Road detail */}
       {selectedRoad && (() => {
         const roadGames = roads.find(([name]) => name === selectedRoad)?.[1] ?? [];
-        const roadCompleted = roadGames.length > 0 && roadGames.every((g) => wonSet.has(g.id));
         const rttrNodes = roadGames.filter((g) => g.pack_reward && rttrPackSet.has(g.pack_reward));
+        // RTTR unlocks once every regular (non-RTTR) node on the road is won.
+        const baseNodes = roadGames.filter((g) => !(g.pack_reward && rttrPackSet.has(g.pack_reward)));
+        const roadCompleted =
+          roadGames.length > 0 && (baseNodes.length ? baseNodes : roadGames).every((g) => wonSet.has(g.id));
         const showRttrTab = roadCompleted && rttrNodes.length > 0;
+
 
         return (
           <div className="space-y-4">
