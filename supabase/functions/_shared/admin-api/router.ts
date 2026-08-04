@@ -324,16 +324,38 @@ async function runPipeline(mode: "preview" | "commit", entity: string, body: Rec
   ];
 
   if (mode === "preview") {
+    const bySeverity = (severity: string) => warnings.filter((w) => w.severity === severity);
+    const withCode = (code: string) => warnings.filter((w) => w.code === code);
     const plan = {
       creates: engine.creates ?? [],
       updates: engine.updates ?? [],
       deletes: engine.deletes ?? [],
       replacements: engine.replacements ?? engine.destructive_operations ?? [],
+      destructive_operations: bySeverity("destructive"),
       resolved_references: engine.resolved_references ?? [],
+      existing_links: engine.existing_links ?? [],
+      cross_release_contamination: engine.cross_release_contamination ?? withCode("CROSS_RELEASE_LINK"),
+      ambiguous_matches: withCode("AMBIGUOUS_MATCH"),
+      unsupported_fields: withCode("UNSUPPORTED_FIELD"),
+      ovr_checks: withCode("OVR_REPORT"),
       operations: engine.operations ?? [],
       warnings,
+      errors: [],
     };
     const token = (engine.preview_token as string) ?? null;
+    const summary = {
+      groups: normalized.plan.groups,
+      entity_count: normalized.plan.entity_count,
+      creates: countOf(plan.creates),
+      updates: countOf(plan.updates),
+      deletes: countOf(plan.deletes),
+      replacements: countOf(plan.replacements),
+      destructive: plan.destructive_operations.length,
+      unsupported_fields: plan.unsupported_fields.length,
+      warnings: warnings.length,
+      errors: 0,
+      validation_status: "valid" as const,
+    };
     const { preview, error: storeError } = await savePreview(ctx.client, {
       operation,
       admin_id: ctx.adminId,
@@ -341,16 +363,7 @@ async function runPipeline(mode: "preview" | "commit", entity: string, body: Rec
       preview_token: token,
       canonical_payload: canonical,
       plan,
-      summary: {
-        groups: normalized.plan.groups,
-        entity_count: normalized.plan.entity_count,
-        creates: countOf(plan.creates),
-        updates: countOf(plan.updates),
-        deletes: countOf(plan.deletes),
-        replacements: countOf(plan.replacements),
-        destructive: normalized.plan.destructive.length,
-        warnings: warnings.length,
-      },
+      summary,
       warnings,
     });
     if (storeError) {
@@ -366,18 +379,24 @@ async function runPipeline(mode: "preview" | "commit", entity: string, body: Rec
       preview_id: preview!.id,
       preview_token: token,
       payload_hash: hash,
+      issued_at: new Date().toISOString(),
       expires_at: preview!.expires_at,
+      preview_token_lifetime_minutes: LIMITS.preview_token_ttl_minutes,
+      atomic_transaction_scope:
+        operation === "bulk_players"
+          ? "every listed player card, its badge and trait replacements, in one transaction; no other entity is touched"
+          : operation === "bulk"
+            ? "one bulk document = one transaction across every included group"
+            : `one ${operation} scope = one transaction`,
       summary: preview!.summary,
       warnings,
       requires_approval: true,
       approval_prompt: "Show creates, updates, deletes, replacements and warnings, then commit the identical canonical_payload with this preview_token.",
+      plan_sections: Object.keys(plan),
+      detail_url: `${ctx.base}/admin-api/${API_VERSION}/previews/${preview!.id}?section=<section>&page=1`,
       ...(paginate
-        ? {
-            plan_paginated: true,
-            plan_sections: Object.keys(plan),
-            detail_url: `${ctx.base}/admin-api/${API_VERSION}/previews/${preview!.id}?section=creates&page=1`,
-          }
-        : { plan }),
+        ? { plan_paginated: true }
+        : { plan_paginated: false, plan }),
       canonical_payload: canonical,
     });
   }
