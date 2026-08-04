@@ -885,12 +885,13 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
 
   if (release.evo_paths?.length) {
     payload.evo_paths = release.evo_paths.flatMap((path) => {
-      const source = refFor(release, { player_name: path.player_name, player_card_id: path.player_card_id });
+      const source = evoSourceFields(release, path);
       return [...(path.steps ?? [])]
         .sort((a, b) => a.step_order - b.step_order)
         .map((step) => ({
           action: "upsert",
-          source_player_ref: source,
+          ...source,
+
           from_tier: step.from_tier,
           to_tier: step.to_tier,
           step_order: step.step_order,

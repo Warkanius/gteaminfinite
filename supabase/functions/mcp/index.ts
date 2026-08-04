@@ -2360,6 +2360,22 @@ var slug = (value) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").rep
 var RELEASE_REF = "ref:release:main";
 var COLLECTION_REF = "ref:collection:main";
 var cardRef = (name) => `ref:player:${slug(name)}`;
+function evoSourceFields(release, path) {
+  const match = (release.players ?? []).find(
+    (p) => path.player_card_id && p.player_card_id === path.player_card_id || sameRef(p.name, path.player_name) || sameRef(p.new_name, path.player_name)
+  );
+  const id = path.player_card_id ?? match?.player_card_id;
+  if (id) return { player_card_id: id };
+  if (path.card_key) return { source: { card_key: path.card_key } };
+  if (match) return { player_card_ref: cardRef(match.name) };
+  const name = (path.player_name ?? "").trim();
+  const distinguishing = { name };
+  for (const key of ["rating", "collection", "sub_collection", "team", "card_variant", "evo_stage"]) {
+    if (path[key] != null) distinguishing[key] = path[key];
+  }
+  if (path.source_gem_tier) distinguishing.gem_tier = path.source_gem_tier;
+  return Object.keys(distinguishing).length > 1 ? { player_name: name, source: distinguishing } : { player_name: name };
+}
 function cardRefFields(release, ref) {
   if (ref.player_card_id) return { player_card_id: ref.player_card_id };
   const match = (release.players ?? []).find(
@@ -2468,10 +2484,10 @@ function buildReleasePayload(input) {
   }
   if (release.evo_paths?.length) {
     payload.evo_paths = release.evo_paths.flatMap((path) => {
-      const source = refFor(release, { player_name: path.player_name, player_card_id: path.player_card_id });
+      const source = evoSourceFields(release, path);
       return [...path.steps ?? []].sort((a, b) => a.step_order - b.step_order).map((step) => ({
         action: "upsert",
-        source_player_ref: source,
+        ...source,
         from_tier: step.from_tier,
         to_tier: step.to_tier,
         step_order: step.step_order,
