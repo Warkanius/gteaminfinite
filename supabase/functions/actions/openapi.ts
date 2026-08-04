@@ -439,6 +439,192 @@ export function buildOpenApi(baseUrl: string) {
     };
   }
 
+  const CardRef = {
+    type: "object",
+    properties: {
+      player_name: strProp("Card display name."),
+      player_card_id: strProp("Immutable card id; required when a name is duplicated."),
+      slot: intProp("1-based ordering slot."),
+      is_reward: { type: "boolean", description: "Collection-completion reward card (exactly one per collection)." },
+    },
+  };
+
+  const Assignment = {
+    type: "object",
+    properties: {
+      badge: strProp("Badge name (badge assignments)."),
+      trait: strProp("Signature trait name (trait assignments)."),
+      tier: strProp("base | gold | hof | diamond | actolytrene. 'Hall of Fame' is accepted."),
+      target_stat: strProp("Trait target stat, e.g. stat_3pt. '3PT' is accepted."),
+    },
+  };
+
+  const ReleaseInput = {
+    type: "object",
+    required: ["release"],
+    description:
+      "One complete content release: the release record, a collection with ordered membership and exactly one completion reward, bulk player cards with badge/trait assignments, an optional team, a pack whose odds total exactly 100.00%, and multi-step evo paths where EVERY step carries a resulting_version.",
+    properties: {
+      release: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string" },
+          slug: { type: "string" },
+          status: strProp("draft | published."),
+          description: { type: "string" },
+        },
+      },
+      collection: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          player_cards: { type: "array", items: CardRef, description: "Ordered membership. Exactly one entry may set is_reward." },
+          reward_player_name: strProp("Completion reward card name."),
+          reward_player_card_id: strProp("Completion reward card id."),
+        },
+      },
+      players: {
+        type: "array",
+        description: "Bulk create/update of the release's cards. Ratings are decimals and preserved exactly.",
+        items: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string" },
+            player_card_id: strProp("Immutable target for edits; required when the name is duplicated."),
+            new_name: strProp("Rename the card."),
+            gem_tier: strProp("Gem tier name."),
+            rating: { type: "number" },
+            run_rating: { type: "number" },
+            position1: { type: "string" },
+            position2: { type: "string" },
+            collection: { type: "string" },
+            sub_collection: { type: "string" },
+            team: { type: "string" },
+            is_collection_reward: { type: "boolean" },
+            stats: { type: "object", additionalProperties: { type: "number" }, description: "stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (0-99)." },
+            badges: { type: "array", items: Assignment, description: "REPLACES every current badge assignment on the card." },
+            traits: { type: "array", items: Assignment, description: "REPLACES every current trait assignment on the card." },
+          },
+        },
+      },
+      team: {
+        type: "object",
+        required: ["name", "roster"],
+        properties: {
+          name: { type: "string" },
+          category: { type: "string" },
+          unlock_cost: { type: "number" },
+          roster: { type: "array", items: CardRef, description: "Ordered roster; REPLACES the whole team roster." },
+        },
+      },
+      pack: {
+        type: "object",
+        required: ["name", "players", "odds"],
+        properties: {
+          name: { type: "string" },
+          pack_type: strProp("standard | premium | promo."),
+          cost: { type: "number" },
+          ten_box_cost: { type: "number" },
+          players: { type: "array", items: CardRef, description: "Ordered pool; REPLACES the pool." },
+          odds: {
+            type: "array",
+            description: "REPLACES the odds table. Must total exactly 100.00 in fixed precision.",
+            items: {
+              type: "object",
+              required: ["result_slot", "percentage"],
+              properties: {
+                result_slot: strProp("Pool slot number, or 'player_choice'."),
+                percentage: { type: "number", description: "Up to two decimals." },
+                description: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+      evo_paths: {
+        type: "array",
+        description: "Multi-step evolution paths. Tier progression must be continuous (no skipped tiers) and every step must materialize a playable version.",
+        items: {
+          type: "object",
+          required: ["steps"],
+          properties: {
+            player_name: { type: "string" },
+            player_card_id: strProp("Immutable card id."),
+            status: strProp("draft | published."),
+            steps: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["from_tier", "to_tier", "step_order", "objectives", "resulting_version"],
+                properties: {
+                  from_tier: { type: "string" },
+                  to_tier: { type: "string" },
+                  step_order: { type: "integer" },
+                  objectives: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      required: ["stat", "amount"],
+                      properties: {
+                        stat: strProp("points, three_pointers_made, mid_range_shots_made, dunks_made, assists, steals, rebounds, blocks, games_won."),
+                        amount: { type: "number" },
+                        description: { type: "string" },
+                      },
+                    },
+                  },
+                  resulting_version: {
+                    type: "object",
+                    required: ["stats"],
+                    description: "REQUIRED on every step: the playable card version unlocked by completing it.",
+                    properties: {
+                      rating: { type: "number" },
+                      gem_name: strProp("Gem tier of the unlocked version."),
+                      stats: { type: "object", additionalProperties: { type: "number" } },
+                      badges: { type: "array", items: Assignment },
+                      traits: { type: "array", items: Assignment },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      forbid_existing_links_to: {
+        type: "array",
+        items: { type: "string" },
+        description: "Collection names this release must not link cards to (guards against cross-release contamination).",
+      },
+      preview_token: strProp("Commit only: the single-use token returned by the matching preview."),
+    },
+  };
+
+  for (const mode of ["preview", "commit"] as const) {
+    const isCommit = mode === "commit";
+    paths[`/content-release/${mode}`] = {
+      post: {
+        operationId: `${mode}ContentRelease`,
+        summary: `${isCommit ? "Publish" : "Validate"} a complete atomic content release`,
+        description: isCommit
+          ? "Publishes a previewed and approved release in ONE transaction: cards, collection, ordered membership, completion reward, team roster, pack pool and odds, evo steps and every materialized evo card version succeed together or the whole release rolls back. Requires the single-use preview_token and a byte-identical body (otherwise PREVIEW_PAYLOAD_MISMATCH / PREVIEW_ALREADY_COMMITTED / PREVIEW_TOKEN_EXPIRED and nothing is written)."
+          : "Full validation with ZERO writes for a whole release — collections AND evo paths together. Normalizes imported spellings ('Hall of Fame' -> hof, '3PT' -> stat_3pt), enforces continuous tier progression, requires a resulting_version on every evo step, keeps the collection reward out of the pack, checks odds total exactly 100.00, rejects ambiguous player names with all candidates listed, and returns ordered creates / updates / replacements plus a payload_hash and single-use preview_token.",
+        "x-openai-isConsequential": isCommit,
+        requestBody: { required: true, content: { "application/json": { schema: ReleaseInput } } },
+        responses: {
+          "200": { description: "Plan", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+          "400": { description: "Rejected; nothing was written." },
+          "401": { description: "Not signed in." },
+          "403": { description: "Signed in but not an admin." },
+        },
+      },
+    };
+  }
+
+
   paths["/diagnostics"] = {
     get: {
       operationId: "getDiagnostics",
