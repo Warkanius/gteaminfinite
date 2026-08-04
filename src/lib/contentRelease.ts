@@ -73,10 +73,21 @@ export interface ReleaseStepInput {
 
 export interface ReleaseEvoPathInput {
   player_name?: string;
+  /** Immutable target. Resolved directly against player_cards.id — never a temp ref. */
   player_card_id?: string;
+  card_key?: string;
+  /** Distinguishing fields for an exact-name lookup, and the source card's current tier. */
+  source_gem_tier?: string;
+  rating?: number;
+  collection?: string;
+  sub_collection?: string;
+  team?: string;
+  card_variant?: string;
+  evo_stage?: number;
   status?: "draft" | "published";
   steps: ReleaseStepInput[];
 }
+
 
 export interface ReleasePlayerInput {
   name: string;
