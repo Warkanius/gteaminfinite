@@ -5,6 +5,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { buildOpenApi, GPT_INSTRUCTIONS, READ_TABLE_LIST } from "./openapi.ts";
+import { prepareRelease, type ContentReleaseInput } from "./contentRelease.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
@@ -127,6 +128,30 @@ Deno.serve(async (req) => {
       if (commit && !preview_token) return err("preview_token is required to commit: preview the same body first.", 400);
       return await rpcResult(
         supabase.rpc("admin_road_delete", { p_payload: payload, p_commit: commit, p_preview_token: preview_token ?? null }),
+      );
+    }
+
+    // ------------------------------------------------- atomic content release
+    // Collections + ordered membership + reward, bulk cards, team, pack pool/odds
+    // and multi-step evo paths with materialized versions — one transaction.
+    const releaseMatch = path.match(/^\/content-release\/(preview|commit)$/);
+    if (releaseMatch && req.method === "POST") {
+      const commit = releaseMatch[1] === "commit";
+      const { preview_token, ...doc } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      if (commit && !preview_token) {
+        return err("preview_token is required to commit: preview the identical release document first.", 400);
+      }
+      const { validations, valid, payload } = prepareRelease(doc as unknown as ContentReleaseInput);
+      if (!valid) {
+        return json({ ok: false, stage: "validation", wrote_anything: false, validations }, 400);
+      }
+      return await rpcResult(
+        supabase.rpc("admin_apply_batch", {
+          p_payload: payload,
+          p_commit: commit,
+          p_preview_token: (preview_token as string | undefined) ?? null,
+          p_kind: "content_release",
+        }),
       );
     }
 
