@@ -538,6 +538,7 @@ function validateEvoPath(
   path: string,
   errors: AdminApiError[],
   warnings: AdminApiWarning[],
+  destructive: AdminApiWarning[],
 ) {
   if (!hasTarget("player", item)) {
     errors.push(
@@ -552,6 +553,20 @@ function validateEvoPath(
     errors.push(apiError("MISSING_EVO_STEPS", "An evo path needs at least one step.", { path: `${path}.steps` }));
     return;
   }
+  const seenOrders = new Map<string, number>();
+  (steps as Array<Record<string, unknown>>).forEach((step, i) => {
+    const order = String(step.step_order ?? "");
+    if (order && seenOrders.has(order)) {
+      errors.push(
+        apiError("DUPLICATE_STEP_ORDER", `step_order ${order} is used by steps ${seenOrders.get(order)! + 1} and ${i + 1}.`, {
+          path: `${path}.steps[${i}].step_order`,
+          received: step.step_order,
+          remediation: "step_order must be unique inside one evo path.",
+        }),
+      );
+    }
+    if (order) seenOrders.set(order, i);
+  });
   let previousTo: string | null = tierKey(item.source_gem_tier ?? "") || null;
   (steps as Array<Record<string, unknown>>).forEach((step, i) => {
     const from = tierKey(step.from_tier);
