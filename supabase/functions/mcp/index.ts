@@ -2219,16 +2219,22 @@ function validateRelease(input, options = {}) {
   const skips = new Set((options.allowedSkips ?? []).map((s) => s.toLowerCase()));
   (release.evo_paths ?? []).forEach((path, pi) => {
     const scope = `evo_paths[${pi}]`;
-    if (!path.player_name && !path.player_card_id) {
-      err("EVO_PLAYER_REQUIRED", "Evo path needs player_name or player_card_id.", scope);
-    } else if (!known({ player_name: path.player_name, player_card_id: path.player_card_id })) {
-      err("EVO_PLAYER_UNKNOWN", `"${path.player_name ?? path.player_card_id}" is not part of this release.`, scope);
-    }
-    const steps = path.steps ?? [];
-    if (!steps.length) err("EVO_NO_STEPS", "Evo path needs at least one step.", scope);
     const base = players.find(
       (p) => path.player_card_id && p.player_card_id === path.player_card_id || sameRef(p.name, path.player_name)
     );
+    if (!path.player_name && !path.player_card_id && !path.card_key) {
+      err("EVO_PLAYER_REQUIRED", "Evo path needs player_card_id, card_key or player_name.", scope);
+    } else if (!base) {
+      out.push({
+        code: "EXISTING_EVO_SOURCE_CARD",
+        severity: "info",
+        message: path.player_card_id ? `Evo source card ${path.player_card_id} is resolved from existing player cards; this release does not modify it.` : `"${path.player_name ?? path.card_key}" is not defined in this release and is resolved from existing player cards by exact name (ambiguous names are rejected).`,
+        entity: scope
+      });
+    }
+    const steps = path.steps ?? [];
+    if (!steps.length) err("EVO_NO_STEPS", "Evo path needs at least one step.", scope);
+    const sourceTier = base?.gem_tier ?? path.source_gem_tier;
     steps.forEach((step, si) => {
       const sScope = `${scope}.steps[${si}]`;
       if (step.step_order !== si + 1) {
@@ -2237,10 +2243,10 @@ function validateRelease(input, options = {}) {
       if (!step.from_tier || !step.to_tier) {
         err("EVO_TIER_REQUIRED", "Both from_tier and to_tier are required.", sScope);
       }
-      if (si === 0 && base?.gem_tier && step.from_tier && !sameRef(base.gem_tier, step.from_tier)) {
+      if (si === 0 && sourceTier && step.from_tier && !sameRef(sourceTier, step.from_tier)) {
         err(
           "EVO_FIRST_STEP_TIER",
-          `First step must start at the base card tier "${base.gem_tier}" (got "${step.from_tier}").`,
+          `First step must start at the source card tier "${sourceTier}" (got "${step.from_tier}").`,
           sScope
         );
       }
@@ -2354,11 +2360,21 @@ var slug = (value) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").rep
 var RELEASE_REF = "ref:release:main";
 var COLLECTION_REF = "ref:collection:main";
 var cardRef = (name) => `ref:player:${slug(name)}`;
-function refFor(release, ref) {
-  if (ref.player_card_id) return ref.player_card_id;
-  const match = (release.players ?? []).find((p) => sameRef(p.name, ref.player_name));
-  if (match?.player_card_id) return match.player_card_id;
-  return cardRef(match?.name ?? ref.player_name ?? "");
+function evoSourceFields(release, path) {
+  const match = (release.players ?? []).find(
+    (p) => path.player_card_id && p.player_card_id === path.player_card_id || sameRef(p.name, path.player_name) || sameRef(p.new_name, path.player_name)
+  );
+  const id = path.player_card_id ?? match?.player_card_id;
+  if (id) return { player_card_id: id };
+  if (path.card_key) return { source: { card_key: path.card_key } };
+  if (match) return { player_card_ref: cardRef(match.name) };
+  const name = (path.player_name ?? "").trim();
+  const distinguishing = { name };
+  for (const key of ["rating", "collection", "sub_collection", "team", "card_variant", "evo_stage"]) {
+    if (path[key] != null) distinguishing[key] = path[key];
+  }
+  if (path.source_gem_tier) distinguishing.gem_tier = path.source_gem_tier;
+  return Object.keys(distinguishing).length > 1 ? { player_name: name, source: distinguishing } : { player_name: name };
 }
 function cardRefFields(release, ref) {
   if (ref.player_card_id) return { player_card_id: ref.player_card_id };
@@ -2468,10 +2484,10 @@ function buildReleasePayload(input) {
   }
   if (release.evo_paths?.length) {
     payload.evo_paths = release.evo_paths.flatMap((path) => {
-      const source = refFor(release, { player_name: path.player_name, player_card_id: path.player_card_id });
+      const source = evoSourceFields(release, path);
       return [...path.steps ?? []].sort((a, b) => a.step_order - b.step_order).map((step) => ({
         action: "upsert",
-        source_player_ref: source,
+        ...source,
         from_tier: step.from_tier,
         to_tier: step.to_tier,
         step_order: step.step_order,
