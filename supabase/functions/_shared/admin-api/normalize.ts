@@ -651,22 +651,132 @@ function validateEvoPath(
       );
     } else if (!check.ok && check.code === "OVR_RATING_MISMATCH") {
       errors.push(
-        apiError("OVR_RATING_MISMATCH", `Step ${i + 1} resulting rating does not match its stats (${check.computed}).`, {
+        apiError("OVR_RATING_MISMATCH", `Step ${i + 1} resulting rating does not match its stats (${check.computed_exact}).`, {
           path: `${path}.steps[${i}].resulting_version.rating`,
-          expected: check.computed,
+          expected: check.computed_exact,
           received: check.received,
+          remediation: `Send the exact nine-stat average (tolerance ${OVR_TOLERANCE}) or omit rating so it is derived.`,
         }),
       );
-    } else if (check.ok && check.computed && version.rating === undefined) {
-      version.rating = check.computed;
+    } else if (!check.ok && check.code === "UNKNOWN_GEM_TIER") {
+      errors.push(
+        apiError("UNKNOWN_GEM_TIER", `Step ${i + 1} resulting tier "${String(targetTier)}" is not a known gem tier.`, {
+          path: `${path}.steps[${i}].resulting_version.gem_name`,
+          expected: EVO_TIER_ORDER,
+          received: targetTier,
+        }),
+      );
+    } else if (check.ok && check.computed_exact && version.rating === undefined) {
+      version.rating = check.computed_exact;
       warnings.push(
-        apiWarning("OVR_DERIVED", `Step ${i + 1} resulting rating derived as ${check.computed}.`, {
+        apiWarning("OVR_DERIVED", `Step ${i + 1} resulting rating derived as ${check.computed_exact}.`, {
           severity: "info",
           path: `${path}.steps[${i}].resulting_version.rating`,
         }),
       );
     }
+    if (check.computed_exact) {
+      warnings.push(
+        apiWarning(
+          "OVR_REPORT",
+          `Step ${i + 1} resulting version: supplied rating ${String(version.rating ?? "(derived)")}, calculated OVR ${check.computed_exact}, requested tier ${String(targetTier)}.`,
+          { severity: "info", path: `${path}.steps[${i}].resulting_version` },
+        ),
+      );
+    }
+    validateAssignments(version, `${path}.steps[${i}].resulting_version`, errors, destructive);
+    if (Array.isArray(version.run_stats) === false && typeof version.run_stats === "object" && version.run_stats) {
+      validateStatRange(version.run_stats as Record<string, unknown>, `${path}.steps[${i}].resulting_version.run_stats`, errors);
+    }
   });
+}
+
+/** Range-checks a stat map (base or Runs-mode) without float comparison. */
+function validateStatRange(stats: Record<string, unknown>, path: string, errors: AdminApiError[]) {
+  for (const [key, value] of Object.entries(stats)) {
+    if (value === undefined || value === null || value === "") continue;
+    let units: number;
+    try {
+      units = scaled(value as number, 2);
+    } catch {
+      errors.push(apiError("NOT_A_NUMBER", `${key} must be numeric.`, { path: `${path}.${key}`, received: value }));
+      continue;
+    }
+    if (units < 0 || units > 9900) {
+      errors.push(
+        apiError("STAT_OUT_OF_RANGE", `${key} must be between 0 and 99.`, {
+          path: `${path}.${key}`,
+          expected: "0 through 99",
+          received: value,
+        }),
+      );
+    }
+  }
+}
+
+/**
+ * Badge / trait replacement validation shared by player cards and evo versions.
+ * A supplied array always replaces the full set; [] removes every assignment.
+ */
+function validateAssignments(
+  item: Record<string, unknown>,
+  path: string,
+  errors: AdminApiError[],
+  destructive: AdminApiWarning[],
+) {
+  for (const field of ["badges", "traits"] as const) {
+    const list = item[field];
+    if (list === undefined) continue;
+    if (!Array.isArray(list)) {
+      errors.push(apiError("INVALID_ASSIGNMENTS", `${path}.${field} must be an array.`, { path: `${path}.${field}`, received: typeof list }));
+      continue;
+    }
+    list.forEach((entry, i) => {
+      const row = (typeof entry === "string" ? { [field === "badges" ? "badge" : "trait"]: entry } : entry) as Record<string, unknown>;
+      const nameKey = field === "badges" ? (row.badge ?? row.badge_id ?? row.name) : (row.trait ?? row.trait_id ?? row.name);
+      if (!nameKey) {
+        errors.push(
+          apiError("MISSING_ASSIGNMENT_TARGET", `${path}.${field}[${i}] needs a ${field === "badges" ? "badge" : "trait"} name or id.`, {
+            path: `${path}.${field}[${i}]`,
+          }),
+        );
+      }
+      if (row.tier !== undefined && !ASSIGNMENT_TIERS.includes(tierKey(row.tier).replace("hall of fame", "hof"))) {
+        errors.push(
+          apiError("UNKNOWN_ASSIGNMENT_TIER", `"${String(row.tier)}" is not a valid assignment tier.`, {
+            path: `${path}.${field}[${i}].tier`,
+            expected: ASSIGNMENT_TIERS,
+            received: row.tier,
+          }),
+        );
+      }
+      if (field === "traits" && row.target_stat !== undefined && row.target_stat !== null) {
+        const target = String(row.target_stat).toLowerCase().replace(/^3pt$/, "stat_3pt");
+        if (!(STAT_KEYS as readonly string[]).includes(target)) {
+          errors.push(
+            apiError("UNKNOWN_TRAIT_TARGET_STAT", `"${String(row.target_stat)}" is not one of the nine base stats.`, {
+              path: `${path}.${field}[${i}].target_stat`,
+              expected: STAT_KEYS,
+              received: row.target_stat,
+            }),
+          );
+        }
+      }
+    });
+    destructive.push(
+      apiWarning(
+        "ASSIGNMENT_REPLACEMENT",
+        list.length === 0
+          ? `${path}.${field} = [] removes every ${field === "badges" ? "badge" : "trait"} assignment.`
+          : `${path}.${field} replaces the full ${field} set with ${list.length} assignment(s).`,
+        {
+          severity: "destructive",
+          path: `${path}.${field}`,
+          remediation: `Omit ${field} to leave existing assignments untouched.`,
+        },
+      ),
+    );
+  }
 }
 
 function validateDuo(item: Record<string, unknown>, path: string, errors: AdminApiError[]) {
