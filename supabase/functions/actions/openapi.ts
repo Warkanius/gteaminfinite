@@ -331,9 +331,10 @@ export function buildOpenApi(baseUrl: string) {
         post: {
           operationId: `${mode}${kind.id}`,
           summary: `${isCommit ? "Apply" : "Validate"} a ${kind.label}`,
-          description: isCommit
-            ? `Applies the previously previewed ${kind.label} atomically. Only call after previewing the exact same body and getting explicit user approval. ${kind.destructive}`
-            : `Full validation of a ${kind.label} with ZERO writes. Returns the exact create/update/replace operations that a commit would perform. Always call this first. ${kind.destructive}`,
+          description: (isCommit
+            ? `Applies the previously previewed ${kind.label} atomically. Only call after previewing the identical body and getting explicit approval. ${kind.destructive}`
+            : `Validates a ${kind.label} with ZERO writes and returns the create/update/replace plan. Always call first. ${kind.destructive}`).slice(0, 295),
+
           "x-openai-isConsequential": isCommit,
           requestBody: {
             required: true,
@@ -610,8 +611,9 @@ export function buildOpenApi(baseUrl: string) {
         operationId: `${mode}ContentRelease`,
         summary: `${isCommit ? "Publish" : "Validate"} a complete atomic content release`,
         description: isCommit
-          ? "Publishes a previewed and approved release in ONE transaction: cards, collection, ordered membership, completion reward, team roster, pack pool and odds, evo steps and every materialized evo card version succeed together or the whole release rolls back. Requires the single-use preview_token and a byte-identical body (otherwise PREVIEW_PAYLOAD_MISMATCH / PREVIEW_ALREADY_COMMITTED / PREVIEW_TOKEN_EXPIRED and nothing is written)."
-          : "Full validation with ZERO writes for a whole release — collections AND evo paths together. Normalizes imported spellings ('Hall of Fame' -> hof, '3PT' -> stat_3pt), enforces continuous tier progression, requires a resulting_version on every evo step, keeps the collection reward out of the pack, checks odds total exactly 100.00, rejects ambiguous player names with all candidates listed, and returns ordered creates / updates / replacements plus a payload_hash and single-use preview_token.",
+          ? "Publishes an approved release in ONE transaction: cards, collection, membership, reward, team, pack pool and odds, evo steps and evo card versions all succeed or roll back. Requires the preview_token and an identical body."
+          : "Validates a whole release (collections AND evo paths together) with ZERO writes. Normalizes spellings, checks tier progression, evo versions, odds totalling 100.00, and returns a payload_hash plus preview_token.",
+
         "x-openai-isConsequential": isCommit,
         requestBody: { required: true, content: { "application/json": { schema: ReleaseInput } } },
         responses: {
@@ -720,8 +722,9 @@ export function buildOpenApi(baseUrl: string) {
           type: "oauth2",
           flows: {
             authorizationCode: {
-              authorizationUrl: `${new URL(baseUrl).origin}/auth/v1/oauth/authorize`,
-              tokenUrl: `${new URL(baseUrl).origin}/auth/v1/oauth/token`,
+              authorizationUrl: `${new URL(baseUrl).origin}/functions/v1/gpt-oauth/authorize`,
+              tokenUrl: `${new URL(baseUrl).origin}/functions/v1/gpt-oauth/token`,
+
               scopes: { openid: "Sign in", email: "Email address", profile: "Basic profile" },
             },
           },
