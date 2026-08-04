@@ -714,6 +714,125 @@ export function buildOpenApi(baseUrl: string) {
     },
   };
 
+  // ---------------------------------------------------------------- v1 bulk API
+  const anyObj = { type: "object", additionalProperties: true } as const;
+  const okJson = (description: string) => ({
+    "200": { description, content: { "application/json": { schema: anyObj } } },
+    "400": { description: "Validation failed. Nothing was written." },
+    "401": { description: "Not signed in." },
+    "403": { description: "Admin role required." },
+    "409": { description: "Preview mismatch, reused token, or idempotency conflict. Nothing was written." },
+  });
+
+  paths["/admin-api/v1/capabilities"] = {
+    get: {
+      operationId: "getAdminApiCapabilities",
+      summary: "Machine-readable backend capabilities",
+      description:
+        "Supported entities, bulk groups, mutable fields, replacement semantics, evo objective statistics, gem tier OVR bands, badges/traits rules, batch and payload limits, preview token TTL, scheduling support and API version. Call this before bulk work instead of guessing.",
+      "x-openai-isConsequential": false,
+      responses: okJson("Capabilities"),
+    },
+  };
+
+  paths["/admin-api/v1/diagnostics"] = {
+    get: {
+      operationId: "getAdminApiDiagnostics",
+      summary: "Full content health audit (v1)",
+      description:
+        "Invalid OVR, OVR/tier mismatches, duplicate and ambiguous names, broken collection links, reward contamination, packs missing pools or odds not totalling 100.00, empty rosters, duplicate game orders, broken evo sources, skipped tiers, missing evo versions and stale scheduled jobs — each with remediation.",
+      "x-openai-isConsequential": false,
+      responses: okJson("Diagnostics"),
+    },
+  };
+
+  paths["/admin-api/v1/bulk/preview"] = {
+    post: {
+      operationId: "previewBulk",
+      summary: "Preview any bulk change (zero writes)",
+      description:
+        "One canonical document may contain players, collections, sub_collections, teams, packs, evo_paths, challenges, locker_codes, dynamic_duos, runs, domination_roads, domination_games, storylines and social_posts. Writes nothing. Returns the plan, canonical_payload, payload_hash and a single-use preview_token.",
+      "x-openai-isConsequential": false,
+      requestBody: { required: true, content: { "application/json": { schema: anyObj, example: { players: [{ player_card_id: "uuid", rating: 2.11 }] } } } },
+      responses: okJson("Preview plan"),
+    },
+  };
+
+  paths["/admin-api/v1/bulk/commit"] = {
+    post: {
+      operationId: "commitBulk",
+      summary: "Commit an approved bulk preview atomically",
+      description:
+        "Send the identical canonical_payload from the preview plus its preview_token. Optional idempotency_key makes retries safe. The whole scope is applied in one transaction or fully rolled back. Requires explicit user approval of the preview first.",
+      "x-openai-isConsequential": true,
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: anyObj, example: { preview_token: "tok", idempotency_key: "release-galactic-1", players: [{ player_card_id: "uuid", rating: 2.11 }] } } },
+      },
+      responses: okJson("Commit report"),
+    },
+  };
+
+  paths["/admin-api/v1/previews/{preview_id}"] = {
+    get: {
+      operationId: "getPreviewDetail",
+      summary: "Paged detail for a stored preview",
+      description: "Reads a large preview plan server-side. Omit section for the summary and section list; pass section and page for paged rows. The payload_hash and preview_token stay the same for the whole operation.",
+      "x-openai-isConsequential": false,
+      parameters: [
+        { name: "preview_id", in: "path", required: true, schema: { type: "string" } },
+        { name: "section", in: "query", required: false, schema: { type: "string" } },
+        { name: "page", in: "query", required: false, schema: { type: "integer", minimum: 1 } },
+      ],
+      responses: okJson("Preview detail"),
+    },
+  };
+
+  paths["/admin-api/v1/schedule"] = {
+    get: {
+      operationId: "listScheduledJobs",
+      summary: "List scheduled content jobs",
+      description: "Every scheduled, running, succeeded, failed or cancelled job with its run time, timezone, payload hash and last error.",
+      "x-openai-isConsequential": false,
+      responses: okJson("Scheduled jobs"),
+    },
+    post: {
+      operationId: "scheduleApprovedPreview",
+      summary: "Schedule an approved preview for later",
+      description:
+        "Stores the approved canonical payload and runs it at run_at (ISO-8601, stored in UTC; timezone is for display). At execution the payload is re-previewed and the plan compared with the approved plan — a changed plan fails the job instead of writing.",
+      "x-openai-isConsequential": true,
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: anyObj, example: { preview_token: "tok", run_at: "2026-08-10T18:00:00Z", timezone: "America/New_York", label: "Galactic drop" } } },
+      },
+      responses: okJson("Scheduled job"),
+    },
+  };
+
+  paths["/admin-api/v1/schedule/{job_id}/cancel"] = {
+    post: {
+      operationId: "cancelScheduledJob",
+      summary: "Cancel a scheduled job",
+      description: "Cancels a job that has not executed yet. Already running or executed jobs cannot be cancelled.",
+      "x-openai-isConsequential": true,
+      parameters: [{ name: "job_id", in: "path", required: true, schema: { type: "string" } }],
+      responses: okJson("Cancelled"),
+    },
+  };
+
+  paths["/admin-api/v1/schedule/{job_id}/reschedule"] = {
+    post: {
+      operationId: "rescheduleJob",
+      summary: "Change a scheduled job's run time",
+      description: "Moves a scheduled job to a new run_at (ISO-8601) and optionally updates its timezone or label. The approved payload and its drift check stay unchanged.",
+      "x-openai-isConsequential": true,
+      parameters: [{ name: "job_id", in: "path", required: true, schema: { type: "string" } }],
+      requestBody: { required: true, content: { "application/json": { schema: anyObj, example: { run_at: "2026-08-11T18:00:00Z", timezone: "UTC" } } } },
+      responses: okJson("Rescheduled"),
+    },
+  };
+
   return {
     openapi: "3.1.0",
     info: {
