@@ -301,3 +301,93 @@ describe("new collection from existing player cards", () => {
     expect(codesFor).toContain("MULTIPLE_COLLECTION_REWARDS");
   });
 });
+
+describe("evo-only release for an existing source card", () => {
+  const KANIAN = "0932b0e9-fb1f-4845-9c36-3842d49141e1";
+  const step = (order: number, from: string, to: string, stat: number) => ({
+    step_order: order,
+    from_tier: from,
+    to_tier: to,
+    objectives: [{ stat: "points", amount: 500 * order }],
+    resulting_version: { rating: 2 + order, gem_name: to, stats: { stat_3pt: stat } },
+  });
+  const kanianPath = () => ({
+    release: { name: "Kanian Tranian Evo", status: "draft" as const },
+    evo_paths: [
+      {
+        player_name: "Kanian Tranian",
+        player_card_id: KANIAN,
+        source_gem_tier: "Amethyst",
+        rating: 2,
+        collection: "Sensations",
+        team: "Sensations",
+        status: "draft" as const,
+        steps: [
+          step(1, "Amethyst", "Diamond", 80),
+          step(2, "Diamond", "Pink Diamond", 85),
+          step(3, "Pink Diamond", "Actolytrene", 90),
+        ],
+      },
+    ],
+  });
+  const tiers = {
+    tierOrder: ["Amethyst", "Diamond", "Pink Diamond", "Actolytrene"],
+  };
+
+  it("previews cleanly without recreating the card in players[]", () => {
+    const { valid, validations } = prepareRelease(kanianPath() as any, tiers);
+    expect(validations.filter((v) => v.severity === "error")).toEqual([]);
+    expect(valid).toBe(true);
+    expect(validations.map((v) => v.code)).toContain("EXISTING_EVO_SOURCE_CARD");
+  });
+
+  it("targets the immutable player_card_id instead of a temp ref", () => {
+    const payload = buildReleasePayload(kanianPath() as any) as Record<string, any>;
+    expect(payload.players).toBeUndefined();
+    expect(payload.collections).toBeUndefined();
+    expect(payload.evo_paths).toHaveLength(3);
+    for (const item of payload.evo_paths) {
+      expect(item.player_card_id).toBe(KANIAN);
+      expect(item.source_player_ref).toBeUndefined();
+      expect(item.player_card_ref).toBeUndefined();
+      expect(item.status).toBe("draft");
+    }
+    expect(payload.evo_paths.map((p: any) => [p.from_tier, p.to_tier])).toEqual([
+      ["Amethyst", "Diamond"],
+      ["Diamond", "Pink Diamond"],
+      ["Pink Diamond", "Actolytrene"],
+    ]);
+  });
+
+  it("validates the source tier against the first step", () => {
+    const draft = kanianPath() as any;
+    draft.evo_paths[0].steps[0].from_tier = "Diamond";
+    draft.evo_paths[0].steps[1].from_tier = "Diamond";
+    const codesFor = prepareRelease(draft, tiers).validations.map((v: any) => v.code);
+    expect(codesFor).toContain("EVO_FIRST_STEP_TIER");
+  });
+
+  it("keeps tier progression continuous", () => {
+    const draft = kanianPath() as any;
+    draft.evo_paths[0].steps = [draft.evo_paths[0].steps[0], draft.evo_paths[0].steps[2]].map((s: any, i: number) => ({
+      ...s,
+      step_order: i + 1,
+    }));
+    const codesFor = prepareRelease(draft, tiers).validations.map((v: any) => v.code);
+    expect(codesFor).toContain("EVO_STEP_CHAIN");
+  });
+
+  it("falls back to an exact-name lookup with distinguishing fields", () => {
+    const draft = kanianPath() as any;
+    delete draft.evo_paths[0].player_card_id;
+    const payload = buildReleasePayload(draft) as Record<string, any>;
+    expect(payload.evo_paths[0].player_name).toBe("Kanian Tranian");
+    expect(payload.evo_paths[0].source).toMatchObject({
+      name: "Kanian Tranian",
+      gem_tier: "Amethyst",
+      rating: 2,
+      collection: "Sensations",
+      team: "Sensations",
+    });
+  });
+});
