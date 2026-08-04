@@ -6,7 +6,20 @@
 
 import { apiError, apiWarning, type AdminApiError, type AdminApiWarning } from "./errors.ts";
 import { canonicalize, compact } from "./canonical.ts";
-import { checkOvr, oddsTotal, ODDS_TARGET, unscaled, scaled, STAT_KEYS, tierKey, bandFor, bandLabel } from "./decimal.ts";
+import {
+  checkOvr,
+  oddsTotal,
+  ODDS_TARGET,
+  unscaled,
+  scaled,
+  STAT_KEYS,
+  RUN_STAT_KEYS,
+  tierKey,
+  bandFor,
+  bandLabel,
+  GEM_TIER_ORDER,
+  OVR_TOLERANCE,
+} from "./decimal.ts";
 import { normalizeRef, hasTarget, isUuid } from "./refs.ts";
 
 /** Groups understood by public.admin_apply_batch, in dependency order. */
@@ -103,7 +116,51 @@ export interface NormalizeResult {
   };
 }
 
-const EVO_TIER_ORDER = ["emerald", "amethyst", "diamond", "pink diamond", "actolytrene"];
+/** Continuous evolution tier progression, including the Game Over tier. */
+const EVO_TIER_ORDER = GEM_TIER_ORDER;
+
+/** Badge / signature-trait assignment tiers. */
+const ASSIGNMENT_TIERS = ["base", "gold", "hof", "diamond", "actolytrene"];
+
+/** Every mutable player-card field the bulk API accepts. */
+export const PLAYER_FIELDS = [
+  "player_card_id",
+  "card_key",
+  "temp_ref",
+  "client_ref",
+  "name",
+  "player_name",
+  "new_name",
+  "gem_tier",
+  "gem_name",
+  "tier",
+  "position1",
+  "position2",
+  "rating",
+  "ovr",
+  "run_rating",
+  "stats",
+  "run_stats",
+  ...STAT_KEYS,
+  ...RUN_STAT_KEYS,
+  "market_value",
+  "social_handle",
+  "avatar_url",
+  "is_collection_reward",
+  "card_color_primary",
+  "card_color_secondary",
+  "card_glow_color",
+  "card_animation",
+  "collection",
+  "sub_collection",
+  "team",
+  "status",
+  "evo_stage",
+  "badges",
+  "traits",
+] as const;
+
+const PLAYER_FIELD_SET = new Set<string>(PLAYER_FIELDS as unknown as string[]);
 
 export const EVO_OBJECTIVE_KEYS = [
   "points",
@@ -155,6 +212,7 @@ export function normalizeDocument(input: Record<string, unknown>): NormalizeResu
       continue;
     }
     const items = raw.map((item, index) => normalizeItem(group, item as Record<string, unknown>, `${group}[${index}]`, errors, warnings, destructive));
+    if (group === "players") detectDuplicateTargets(items, errors);
     canonical[group] = items;
     groupsPlan.push({ group, items: items.length });
     entityCount += items.length;
@@ -166,6 +224,37 @@ export function normalizeDocument(input: Record<string, unknown>): NormalizeResu
     warnings,
     plan: { groups: groupsPlan, entity_count: entityCount, destructive },
   };
+}
+
+/**
+ * Two entries may never target the same card, whether through the same
+ * identifier or through different ones (id, card_key, name, temp_ref).
+ */
+function detectDuplicateTargets(items: Array<Record<string, unknown>>, errors: AdminApiError[]) {
+  const seen = new Map<string, number>();
+  items.forEach((item, index) => {
+    const keys = [
+      item.player_card_id ? `id:${String(item.player_card_id).toLowerCase()}` : null,
+      item.card_key ? `key:${String(item.card_key).toLowerCase()}` : null,
+      item.temp_ref ? `ref:${String(item.temp_ref).toLowerCase()}` : null,
+      !item.player_card_id && !item.card_key && item.name ? `name:${String(item.name).trim().toLowerCase()}` : null,
+    ].filter(Boolean) as string[];
+    for (const key of keys) {
+      const first = seen.get(key);
+      if (first !== undefined) {
+        errors.push(
+          apiError("DUPLICATE_TARGET", `players[${index}] targets the same card as players[${first}].`, {
+            path: `players[${index}]`,
+            entity_type: "player_card",
+            received: key.split(":").slice(1).join(":"),
+            remediation: "Merge the two entries; one card may appear only once per payload.",
+          }),
+        );
+      } else {
+        seen.set(key, index);
+      }
+    }
+  });
 }
 
 function normalizeItem(
@@ -249,7 +338,7 @@ function normalizeItem(
   if (group === "players") validatePlayer(out, path, errors, warnings, destructive);
   if (group === "packs") validatePack(out, path, errors, destructive);
   if (group === "collections" || group === "sub_collections") validateCollection(out, path, errors);
-  if (group === "evo_paths") validateEvoPath(out, path, errors, warnings);
+  if (group === "evo_paths") validateEvoPath(out, path, errors, warnings, destructive);
   if (group === "dynamic_duos") validateDuo(out, path, errors);
   if (group === "locker_codes" && typeof out.code === "string") out.code = out.code.trim().toUpperCase();
   if (group === "runs" && Array.isArray(out.rank_rewards)) {
@@ -304,20 +393,25 @@ function validatePlayer(
   const tier = item.gem_tier ?? item.gem_name ?? item.tier;
   const rating = item.rating ?? item.ovr;
 
-  for (const [key, value] of Object.entries(stats)) {
-    let units: number;
-    try {
-      units = scaled(value as number, 2);
-    } catch {
-      errors.push(apiError("NOT_A_NUMBER", `${key} must be numeric.`, { path: `${path}.${key}`, received: value }));
-      continue;
-    }
-    if (units < 0 || units > 9900) {
-      errors.push(
-        apiError("STAT_OUT_OF_RANGE", `${key} must be between 0 and 99.`, {
+  validateStatRange(stats, path, errors);
+
+  // Runs-mode stats: same 0-99 range, never folded into the base OVR.
+  const runStats: Record<string, unknown> = {};
+  const nestedRun = (item.run_stats ?? {}) as Record<string, unknown>;
+  for (const key of RUN_STAT_KEYS) {
+    const v = item[key] ?? nestedRun[key];
+    if (v !== undefined) runStats[key] = v;
+  }
+  validateStatRange(runStats, path, errors);
+
+  // Every field the outer schema accepts is either applied or reported here.
+  for (const key of Object.keys(item)) {
+    if (!PLAYER_FIELD_SET.has(key)) {
+      warnings.push(
+        apiWarning("UNSUPPORTED_FIELD", `"${key}" is not a player-card field and will be ignored.`, {
+          severity: "warning",
           path: `${path}.${key}`,
-          expected: "0 through 99",
-          received: value,
+          remediation: "Remove the field, or use GET /admin-api/v1/capabilities for the supported player fields.",
         }),
       );
     }
@@ -327,24 +421,26 @@ function validatePlayer(
     const check = checkOvr(stats, tier, rating);
     if (!check.ok && check.code === "OVR_TIER_MISMATCH") {
       errors.push(
-        apiError("OVR_TIER_MISMATCH", `Calculated OVR ${check.computed} does not fit ${String(tier)}.`, {
+        apiError("OVR_TIER_MISMATCH", `Calculated OVR ${check.computed_exact} does not fit ${String(tier)}.`, {
           path: `${path}.rating`,
           entity_type: "player_card",
           entity_id: item.player_card_id as string | undefined,
           input_ref: item.name as string | undefined,
           expected: check.expected,
-          received: check.computed,
-          remediation: `Adjust ${(check.offenders ?? []).join(", ")} or request a different gem tier explicitly.`,
+          received: check.computed_exact,
+          remediation: `Adjust ${(check.offenders ?? []).join(", ")} or request a different gem tier explicitly. The requested tier is never changed automatically.`,
         }),
       );
     } else if (!check.ok && check.code === "OVR_RATING_MISMATCH") {
       errors.push(
-        apiError("OVR_RATING_MISMATCH", `Stored rating does not match the stat average (${check.computed}).`, {
+        apiError("OVR_RATING_MISMATCH", `Supplied rating does not match the stat average (${check.computed_exact}).`, {
           path: `${path}.rating`,
           entity_type: "player_card",
-          expected: check.computed,
+          entity_id: item.player_card_id as string | undefined,
+          input_ref: item.name as string | undefined,
+          expected: check.computed_exact,
           received: check.received,
-          remediation: "Send rating equal to the mean of the nine base stats, or omit rating so it is derived.",
+          remediation: `Send rating equal to the mean of the nine base stats within ${OVR_TOLERANCE}, or omit rating so it is derived exactly.`,
         }),
       );
     } else if (!check.ok && check.code === "UNKNOWN_GEM_TIER") {
@@ -355,37 +451,29 @@ function validatePlayer(
           received: tier,
         }),
       );
-    } else if (check.ok && check.computed && rating === undefined) {
-      item.rating = check.computed;
+    } else if (check.ok && check.computed_exact && rating === undefined) {
+      item.rating = check.computed_exact;
       warnings.push(
-        apiWarning("OVR_DERIVED", `rating derived from the nine stats as ${check.computed}.`, {
+        apiWarning("OVR_DERIVED", `rating derived from the nine stats as ${check.computed_exact}.`, {
           severity: "info",
           path: `${path}.rating`,
         }),
+      );
+    }
+    if (check.computed_exact) {
+      warnings.push(
+        apiWarning(
+          "OVR_REPORT",
+          `Supplied rating ${String(rating ?? "(derived)")}, calculated OVR ${check.computed_exact}, requested tier ${String(tier ?? "(unchanged)")}.`,
+          { severity: "info", path: `${path}.rating` },
+        ),
       );
     }
   } else if (Object.keys(stats).length > 0 && Object.keys(stats).length < STAT_KEYS.length && item.player_card_id === undefined && item.name === undefined) {
     errors.push(apiError("INCOMPLETE_STATS", "Partial stat updates need an explicit player target.", { path }));
   }
 
-  for (const field of ["badges", "traits"] as const) {
-    if (Array.isArray(item[field])) {
-      const count = (item[field] as unknown[]).length;
-      destructive.push(
-        apiWarning(
-          "ASSIGNMENT_REPLACEMENT",
-          count === 0
-            ? `${path}.${field} = [] removes every ${field.slice(0, -1)} assignment on this card.`
-            : `${path}.${field} replaces the card's full ${field} set with ${count} assignment(s).`,
-          {
-            severity: "destructive",
-            path: `${path}.${field}`,
-            remediation: `Omit ${field} to leave existing assignments untouched.`,
-          },
-        ),
-      );
-    }
-  }
+  validateAssignments(item, path, errors, destructive);
 }
 
 function validatePack(item: Record<string, unknown>, path: string, errors: AdminApiError[], destructive: AdminApiWarning[]) {
@@ -481,6 +569,7 @@ function validateEvoPath(
   path: string,
   errors: AdminApiError[],
   warnings: AdminApiWarning[],
+  destructive: AdminApiWarning[],
 ) {
   if (!hasTarget("player", item)) {
     errors.push(
@@ -495,6 +584,20 @@ function validateEvoPath(
     errors.push(apiError("MISSING_EVO_STEPS", "An evo path needs at least one step.", { path: `${path}.steps` }));
     return;
   }
+  const seenOrders = new Map<string, number>();
+  (steps as Array<Record<string, unknown>>).forEach((step, i) => {
+    const order = String(step.step_order ?? "");
+    if (order && seenOrders.has(order)) {
+      errors.push(
+        apiError("DUPLICATE_STEP_ORDER", `step_order ${order} is used by steps ${seenOrders.get(order)! + 1} and ${i + 1}.`, {
+          path: `${path}.steps[${i}].step_order`,
+          received: step.step_order,
+          remediation: "step_order must be unique inside one evo path.",
+        }),
+      );
+    }
+    if (order) seenOrders.set(order, i);
+  });
   let previousTo: string | null = tierKey(item.source_gem_tier ?? "") || null;
   (steps as Array<Record<string, unknown>>).forEach((step, i) => {
     const from = tierKey(step.from_tier);
@@ -594,22 +697,132 @@ function validateEvoPath(
       );
     } else if (!check.ok && check.code === "OVR_RATING_MISMATCH") {
       errors.push(
-        apiError("OVR_RATING_MISMATCH", `Step ${i + 1} resulting rating does not match its stats (${check.computed}).`, {
+        apiError("OVR_RATING_MISMATCH", `Step ${i + 1} resulting rating does not match its stats (${check.computed_exact}).`, {
           path: `${path}.steps[${i}].resulting_version.rating`,
-          expected: check.computed,
+          expected: check.computed_exact,
           received: check.received,
+          remediation: `Send the exact nine-stat average (tolerance ${OVR_TOLERANCE}) or omit rating so it is derived.`,
         }),
       );
-    } else if (check.ok && check.computed && version.rating === undefined) {
-      version.rating = check.computed;
+    } else if (!check.ok && check.code === "UNKNOWN_GEM_TIER") {
+      errors.push(
+        apiError("UNKNOWN_GEM_TIER", `Step ${i + 1} resulting tier "${String(targetTier)}" is not a known gem tier.`, {
+          path: `${path}.steps[${i}].resulting_version.gem_name`,
+          expected: EVO_TIER_ORDER,
+          received: targetTier,
+        }),
+      );
+    } else if (check.ok && check.computed_exact && version.rating === undefined) {
+      version.rating = check.computed_exact;
       warnings.push(
-        apiWarning("OVR_DERIVED", `Step ${i + 1} resulting rating derived as ${check.computed}.`, {
+        apiWarning("OVR_DERIVED", `Step ${i + 1} resulting rating derived as ${check.computed_exact}.`, {
           severity: "info",
           path: `${path}.steps[${i}].resulting_version.rating`,
         }),
       );
     }
+    if (check.computed_exact) {
+      warnings.push(
+        apiWarning(
+          "OVR_REPORT",
+          `Step ${i + 1} resulting version: supplied rating ${String(version.rating ?? "(derived)")}, calculated OVR ${check.computed_exact}, requested tier ${String(targetTier)}.`,
+          { severity: "info", path: `${path}.steps[${i}].resulting_version` },
+        ),
+      );
+    }
+    validateAssignments(version, `${path}.steps[${i}].resulting_version`, errors, destructive);
+    if (Array.isArray(version.run_stats) === false && typeof version.run_stats === "object" && version.run_stats) {
+      validateStatRange(version.run_stats as Record<string, unknown>, `${path}.steps[${i}].resulting_version.run_stats`, errors);
+    }
   });
+}
+
+/** Range-checks a stat map (base or Runs-mode) without float comparison. */
+function validateStatRange(stats: Record<string, unknown>, path: string, errors: AdminApiError[]) {
+  for (const [key, value] of Object.entries(stats)) {
+    if (value === undefined || value === null || value === "") continue;
+    let units: number;
+    try {
+      units = scaled(value as number, 2);
+    } catch {
+      errors.push(apiError("NOT_A_NUMBER", `${key} must be numeric.`, { path: `${path}.${key}`, received: value }));
+      continue;
+    }
+    if (units < 0 || units > 9900) {
+      errors.push(
+        apiError("STAT_OUT_OF_RANGE", `${key} must be between 0 and 99.`, {
+          path: `${path}.${key}`,
+          expected: "0 through 99",
+          received: value,
+        }),
+      );
+    }
+  }
+}
+
+/**
+ * Badge / trait replacement validation shared by player cards and evo versions.
+ * A supplied array always replaces the full set; [] removes every assignment.
+ */
+function validateAssignments(
+  item: Record<string, unknown>,
+  path: string,
+  errors: AdminApiError[],
+  destructive: AdminApiWarning[],
+) {
+  for (const field of ["badges", "traits"] as const) {
+    const list = item[field];
+    if (list === undefined) continue;
+    if (!Array.isArray(list)) {
+      errors.push(apiError("INVALID_ASSIGNMENTS", `${path}.${field} must be an array.`, { path: `${path}.${field}`, received: typeof list }));
+      continue;
+    }
+    list.forEach((entry, i) => {
+      const row = (typeof entry === "string" ? { [field === "badges" ? "badge" : "trait"]: entry } : entry) as Record<string, unknown>;
+      const nameKey = field === "badges" ? (row.badge ?? row.badge_id ?? row.name) : (row.trait ?? row.trait_id ?? row.name);
+      if (!nameKey) {
+        errors.push(
+          apiError("MISSING_ASSIGNMENT_TARGET", `${path}.${field}[${i}] needs a ${field === "badges" ? "badge" : "trait"} name or id.`, {
+            path: `${path}.${field}[${i}]`,
+          }),
+        );
+      }
+      if (row.tier !== undefined && !ASSIGNMENT_TIERS.includes(tierKey(row.tier).replace("hall of fame", "hof"))) {
+        errors.push(
+          apiError("UNKNOWN_ASSIGNMENT_TIER", `"${String(row.tier)}" is not a valid assignment tier.`, {
+            path: `${path}.${field}[${i}].tier`,
+            expected: ASSIGNMENT_TIERS,
+            received: row.tier,
+          }),
+        );
+      }
+      if (field === "traits" && row.target_stat !== undefined && row.target_stat !== null) {
+        const target = String(row.target_stat).toLowerCase().replace(/^3pt$/, "stat_3pt");
+        if (!(STAT_KEYS as readonly string[]).includes(target)) {
+          errors.push(
+            apiError("UNKNOWN_TRAIT_TARGET_STAT", `"${String(row.target_stat)}" is not one of the nine base stats.`, {
+              path: `${path}.${field}[${i}].target_stat`,
+              expected: STAT_KEYS,
+              received: row.target_stat,
+            }),
+          );
+        }
+      }
+    });
+    destructive.push(
+      apiWarning(
+        "ASSIGNMENT_REPLACEMENT",
+        list.length === 0
+          ? `${path}.${field} = [] removes every ${field === "badges" ? "badge" : "trait"} assignment.`
+          : `${path}.${field} replaces the full ${field} set with ${list.length} assignment(s).`,
+        {
+          severity: "destructive",
+          path: `${path}.${field}`,
+          remediation: `Omit ${field} to leave existing assignments untouched.`,
+        },
+      ),
+    );
+  }
 }
 
 function validateDuo(item: Record<string, unknown>, path: string, errors: AdminApiError[]) {

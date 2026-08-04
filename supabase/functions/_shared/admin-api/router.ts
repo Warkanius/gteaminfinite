@@ -60,9 +60,25 @@ export async function handleAdminApi(
 
   if (head === "capabilities" && req.method === "GET") return send(capabilities(ctx.base));
   if (head === "diagnostics" && req.method === "GET") {
-    const result = await runDiagnostics(ctx.client);
+    const url = new URL(req.url);
+    const list = (key: string) =>
+      (url.searchParams.get(key) ?? "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+    const result = await runDiagnostics(ctx.client, {
+      scope: url.searchParams.get("scope") ?? undefined,
+      player_card_ids: list("player_card_ids"),
+      codes: list("codes"),
+      entity_types: list("entity_types"),
+      release_slug: url.searchParams.get("release_slug") ?? undefined,
+      label: url.searchParams.get("label") ?? undefined,
+      limit: Number(url.searchParams.get("limit") ?? "") || undefined,
+      cursor: url.searchParams.get("cursor") ?? undefined,
+    });
     return send({ api_version: API_VERSION, ...result });
   }
+
 
   if (head === "previews" && req.method === "GET") {
     const { preview, error } = await loadPreview(ctx.client, { preview_id: tail });
@@ -111,6 +127,32 @@ export async function handleAdminApi(
   const mode = tail === "preview" ? "preview" : tail === "commit" ? "commit" : null;
   if (mode && req.method === "POST") {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    if (head === "bulk-players" || head === "bulk_players") {
+      const foreign = Object.keys(body).filter(
+        (k) => !["players", "preview_token", "idempotency_key", "notes"].includes(k),
+      );
+      if (foreign.length) {
+        return send(
+          failure("validation", [
+            apiError("PLAYERS_ONLY_SCOPE", "bulk-players updates player cards only.", {
+              received: foreign,
+              expected: ["players", "preview_token", "idempotency_key", "notes"],
+              remediation: "Move releases, collections, packs, teams, evo paths and every other group to /admin-api/v1/bulk or /content-release.",
+            }),
+          ], "bulk_players"),
+          400,
+        );
+      }
+      if (!Array.isArray(body.players) || body.players.length === 0) {
+        return send(
+          failure("validation", [
+            apiError("EMPTY_PAYLOAD", "players must be a non-empty array of player-card creates or updates.", { path: "players" }),
+          ], "bulk_players"),
+          400,
+        );
+      }
+      return await runPipeline(mode, "bulk-players", body, ctx);
+    }
     if (head === "bulk" || head === "release") return await runPipeline(mode, "bulk", body, ctx);
     if (ENTITY_TO_GROUP[head]) return await runPipeline(mode, head, body, ctx);
     return send(
@@ -141,13 +183,14 @@ function prepare(entity: string, body: Record<string, unknown>) {
     preview_id?: string;
     idempotency_key?: string;
   };
-  const document = entity === "bulk" ? doc : documentForEntity(entity, doc as Record<string, unknown>) ?? {};
+  const passthrough = entity === "bulk" || entity === "bulk-players";
+  const document = passthrough ? doc : documentForEntity(entity, doc as Record<string, unknown>) ?? {};
   const normalized = normalizeDocument(document);
   return { normalized, preview_token, preview_id, idempotency_key, schedule };
 }
 
 async function runPipeline(mode: "preview" | "commit", entity: string, body: Record<string, unknown>, ctx: Ctx): Promise<Response> {
-  const operation = entity === "bulk" ? "bulk" : `entity:${entity}`;
+  const operation = entity === "bulk" ? "bulk" : entity === "bulk-players" ? "bulk_players" : `entity:${entity}`;
   if (byteSize(body) > LIMITS.max_request_bytes) {
     return send(
       failure("validation", [
@@ -265,7 +308,7 @@ async function runPipeline(mode: "preview" | "commit", entity: string, body: Rec
     p_payload: canonical,
     p_commit: mode === "commit",
     p_preview_token: mode === "commit" ? preview_token : null,
-    p_kind: operation === "bulk" ? "content_release" : operation,
+    p_kind: operation === "bulk" ? "content_release" : operation === "bulk_players" ? "player_bulk" : operation,
   });
   if (error) {
     const body = fromDbError(error.message, mode === "commit" ? "commit" : "preview", operation);
@@ -281,16 +324,38 @@ async function runPipeline(mode: "preview" | "commit", entity: string, body: Rec
   ];
 
   if (mode === "preview") {
+    const bySeverity = (severity: string) => warnings.filter((w) => w.severity === severity);
+    const withCode = (code: string) => warnings.filter((w) => w.code === code);
     const plan = {
       creates: engine.creates ?? [],
       updates: engine.updates ?? [],
       deletes: engine.deletes ?? [],
       replacements: engine.replacements ?? engine.destructive_operations ?? [],
+      destructive_operations: bySeverity("destructive"),
       resolved_references: engine.resolved_references ?? [],
+      existing_links: engine.existing_links ?? [],
+      cross_release_contamination: engine.cross_release_contamination ?? withCode("CROSS_RELEASE_LINK"),
+      ambiguous_matches: withCode("AMBIGUOUS_MATCH"),
+      unsupported_fields: withCode("UNSUPPORTED_FIELD"),
+      ovr_checks: withCode("OVR_REPORT"),
       operations: engine.operations ?? [],
       warnings,
+      errors: [],
     };
     const token = (engine.preview_token as string) ?? null;
+    const summary = {
+      groups: normalized.plan.groups,
+      entity_count: normalized.plan.entity_count,
+      creates: countOf(plan.creates),
+      updates: countOf(plan.updates),
+      deletes: countOf(plan.deletes),
+      replacements: countOf(plan.replacements),
+      destructive: plan.destructive_operations.length,
+      unsupported_fields: plan.unsupported_fields.length,
+      warnings: warnings.length,
+      errors: 0,
+      validation_status: "valid" as const,
+    };
     const { preview, error: storeError } = await savePreview(ctx.client, {
       operation,
       admin_id: ctx.adminId,
@@ -298,16 +363,7 @@ async function runPipeline(mode: "preview" | "commit", entity: string, body: Rec
       preview_token: token,
       canonical_payload: canonical,
       plan,
-      summary: {
-        groups: normalized.plan.groups,
-        entity_count: normalized.plan.entity_count,
-        creates: countOf(plan.creates),
-        updates: countOf(plan.updates),
-        deletes: countOf(plan.deletes),
-        replacements: countOf(plan.replacements),
-        destructive: normalized.plan.destructive.length,
-        warnings: warnings.length,
-      },
+      summary,
       warnings,
     });
     if (storeError) {
@@ -323,18 +379,24 @@ async function runPipeline(mode: "preview" | "commit", entity: string, body: Rec
       preview_id: preview!.id,
       preview_token: token,
       payload_hash: hash,
+      issued_at: new Date().toISOString(),
       expires_at: preview!.expires_at,
+      preview_token_lifetime_minutes: LIMITS.preview_token_ttl_minutes,
+      atomic_transaction_scope:
+        operation === "bulk_players"
+          ? "every listed player card, its badge and trait replacements, in one transaction; no other entity is touched"
+          : operation === "bulk"
+            ? "one bulk document = one transaction across every included group"
+            : `one ${operation} scope = one transaction`,
       summary: preview!.summary,
       warnings,
       requires_approval: true,
       approval_prompt: "Show creates, updates, deletes, replacements and warnings, then commit the identical canonical_payload with this preview_token.",
+      plan_sections: Object.keys(plan),
+      detail_url: `${ctx.base}/admin-api/${API_VERSION}/previews/${preview!.id}?section=<section>&page=1`,
       ...(paginate
-        ? {
-            plan_paginated: true,
-            plan_sections: Object.keys(plan),
-            detail_url: `${ctx.base}/admin-api/${API_VERSION}/previews/${preview!.id}?section=creates&page=1`,
-          }
-        : { plan }),
+        ? { plan_paginated: true }
+        : { plan_paginated: false, plan }),
       canonical_payload: canonical,
     });
   }

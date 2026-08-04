@@ -281,3 +281,99 @@ describe("scale", () => {
     expect(res.plan.entity_count).toBeGreaterThan(LIMITS.max_entities_per_request);
   });
 });
+
+describe("standalone bulk-player targeting", () => {
+  it("previews eleven cards by immutable id with full stat blocks", () => {
+    const players = Array.from({ length: 11 }, (_, i) => ({
+      player_card_id: `0932b0e9-fb1f-4845-9c36-38423d49${String(1000 + i)}`,
+      name: `Bulk ${i}`,
+      gem_tier: "diamond",
+      rating: 3,
+      run_rating: 3,
+      position1: "SG",
+      is_collection_reward: false,
+      stats: statsFor(3),
+      badges: [{ badge: "Walking Bucket", tier: "diamond" }],
+      traits: [{ trait: "Prime Time", tier: "gold", target_stat: "stat_3pt" }],
+    }));
+    const res = normalizeDocument({ players });
+    expect(res.errors).toEqual([]);
+    expect(res.plan.entity_count).toBe(11);
+  });
+
+  it("rejects two entries that target the same card id", () => {
+    const res = normalizeDocument({
+      players: [
+        { player_card_id: KANIAN, rating: 3, gem_tier: "diamond", stats: statsFor(3) },
+        { player_card_id: KANIAN.toUpperCase(), rating: 3, gem_tier: "diamond", stats: statsFor(3) },
+      ],
+    });
+    expect(res.errors.some((e) => e.code === "DUPLICATE_TARGET")).toBe(true);
+  });
+
+  it("rejects two entries that target the same card through different identifiers", () => {
+    const res = normalizeDocument({
+      players: [
+        { card_key: "kanian-diamond", rating: 3, gem_tier: "diamond", stats: statsFor(3) },
+        { card_key: "Kanian-Diamond", rating: 3, gem_tier: "diamond", stats: statsFor(3) },
+      ],
+    });
+    expect(res.errors.some((e) => e.code === "DUPLICATE_TARGET")).toBe(true);
+  });
+
+  it("reports destructive badge and trait replacement", () => {
+    const res = normalizeDocument({
+      players: [{ player_card_id: KANIAN, rating: 3, gem_tier: "diamond", stats: statsFor(3), badges: [], traits: [] }],
+    });
+    expect(res.plan.destructive.length).toBeGreaterThan(0);
+  });
+});
+
+describe("gem tier bands including game over", () => {
+  const cases: Array<[string, number, boolean]> = [
+    ["emerald", 1, true],
+    ["emerald", 1.99, true],
+    ["amethyst", 2, true],
+    ["diamond", 3, true],
+    ["pink diamond", 4, true],
+    ["pink diamond", 5, false],
+    ["actolytrene", 5, true],
+    ["actolytrene", 5.99, true],
+    ["actolytrene", 6, false],
+    ["game over", 6, true],
+    ["game over", 5.99, false],
+  ];
+  for (const [tier, ovr, ok] of cases) {
+    it(`${tier} ${ok ? "accepts" : "rejects"} ${ovr}`, () => {
+      const res = checkOvr(statsFor(ovr), tierKey(tier), ovr);
+      expect(res.ok).toBe(ok);
+    });
+  }
+
+  it("never rewrites the requested tier", () => {
+    const res = checkOvr(statsFor(6), "pink diamond", 6);
+    expect(res.ok).toBe(false);
+    expect(bandFor("pink diamond")?.tier).toBe("pink diamond");
+  });
+});
+
+describe("capability reporting matches the exposed tool names", () => {
+  const caps = capabilities("https://example.test/functions/v1/actions") as any;
+
+  it("names the four operations the GPT can call", () => {
+    expect(caps.exposed_operations.bulk_players.preview_operation).toBe("previewBulkPlayers");
+    expect(caps.exposed_operations.bulk_players.commit_operation).toBe("commitBulkPlayers");
+    expect(caps.exposed_operations.content_release.preview_operation).toBe("previewContentRelease");
+    expect(caps.exposed_operations.content_release.commit_operation).toBe("commitContentRelease");
+  });
+
+  it("advertises game over and the paged preview sections", () => {
+    expect(caps.exposed_operations.content_release.game_over_supported).toBe(true);
+    expect(caps.exposed_operations.bulk_players.preview_sections).toContain("destructive_operations");
+    expect(caps.exposed_operations.bulk_players.gem_tier_bands.map((b: any) => b.tier)).toContain("game over");
+  });
+
+  it("scopes bulk players to player cards only", () => {
+    expect(caps.exposed_operations.bulk_players.scope).toMatch(/PLAYERS_ONLY_SCOPE/);
+  });
+});
