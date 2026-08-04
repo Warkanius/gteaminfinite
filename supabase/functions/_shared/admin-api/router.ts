@@ -308,7 +308,7 @@ async function runPipeline(mode: "preview" | "commit", entity: string, body: Rec
     p_payload: canonical,
     p_commit: mode === "commit",
     p_preview_token: mode === "commit" ? preview_token : null,
-    p_kind: operation === "bulk" ? "content_release" : operation,
+    p_kind: operation === "bulk" ? "content_release" : operation === "bulk_players" ? "player_bulk" : operation,
   });
   if (error) {
     const body = fromDbError(error.message, mode === "commit" ? "commit" : "preview", operation);
