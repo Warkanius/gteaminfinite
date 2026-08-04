@@ -78,14 +78,20 @@ async function grantPack(admin: Admin, userId: string, packReward: string, sourc
     };
   }
 
-  const { data: packInfo } = await admin.from("packs").select("name").eq("id", packReward).maybeSingle();
+  // `packReward` is normally a pack id, but legacy/imported content may store
+  // the pack name instead — resolve both.
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(packReward);
+  const { data: packInfo } = isUuid
+    ? await admin.from("packs").select("id, name").eq("id", packReward).maybeSingle()
+    : await admin.from("packs").select("id, name").eq("name", packReward).maybeSingle();
   if (!packInfo) return null;
   const { data: inv } = await admin
     .from("user_pack_inventory")
-    .insert({ user_id: userId, pack_id: packReward, source })
+    .insert({ user_id: userId, pack_id: packInfo.id, source })
     .select("id")
     .single();
   return { inventory_ids: inv ? [inv.id] : [], label: `📦 ${packInfo.name}` };
+
 }
 
 Deno.serve(async (req) => {
