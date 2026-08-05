@@ -194,19 +194,10 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         wrote_anything: false,
-        preview_id: record.preview_id,
-        payload_hash: record.payload_hash,
-        status: record.status,
-        expires_at: record.expires_at,
-        summary: record.summary,
-        creates: record.creates,
-        updates: record.updates,
-        replacements: record.replacements,
-        deletes: record.deletes,
-        warnings: record.warnings,
-        destructive_operations: record.destructive_operations,
-        next_step: "Show this plan, get explicit approval, then call commitContentReleaseByPreviewId with preview_id + payload_hash.",
+        ...slimPreview(record),
+        next_step: "Show this plan, get explicit approval, then call commitContentReleaseByPreviewId with preview_id + payload_hash. If the commit answers status 'committing', poll getContentReleasePreview instead of re-committing.",
       });
+
     }
 
     if (path === "/content-release/preview/get" && req.method === "POST") {
