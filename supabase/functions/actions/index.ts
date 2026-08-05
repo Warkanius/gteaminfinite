@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
       if (!body.preview_id) return err("preview_id is required.", 400);
       const { data, error } = await supabase.rpc("content_release_preview_get", { p_preview_id: body.preview_id });
       if (error) return rpcError(error);
-      return json(data);
+      return json(slimPreview(data as Record<string, any>));
     }
 
     if (path === "/content-release/preview/cancel" && req.method === "POST") {
@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
       if (!body.preview_id) return err("preview_id is required.", 400);
       const { data, error } = await supabase.rpc("content_release_preview_cancel", { p_preview_id: body.preview_id });
       if (error) return rpcError(error);
-      return json(data);
+      return json(slimPreview(data as Record<string, any>));
     }
 
     if (path === "/content-release/commit-by-preview-id" && req.method === "POST") {
@@ -231,25 +231,80 @@ Deno.serve(async (req) => {
       if (!body.approved_payload_hash) {
         return err("approved_payload_hash is required: echo back the hash you showed the user for approval.", 400);
       }
-      const { data, error } = await supabase.rpc("content_release_preview_commit", {
+
+      // 1) Claim: all guards (ownership, hash, status, expiry) run synchronously.
+      const { data: claimData, error: claimErr } = await supabase.rpc("content_release_preview_claim", {
         p_preview_id: body.preview_id,
         p_approved_payload_hash: body.approved_payload_hash,
         p_idempotency_key: (body.idempotency_key as string | undefined) ?? null,
       });
-      if (error) return rpcError(error);
-      const record = (data ?? {}) as Record<string, any>;
-      return json({
-        ok: true,
-        applied: true,
-        preview_id: record.preview_id,
-        payload_hash: record.payload_hash,
-        status: record.status,
-        committed_at: record.committed_at,
-        idempotent_replay: record.idempotent_replay ?? false,
-        verification: record.verification_result,
-        commit_result: record.commit_result,
-      });
+      if (claimErr) return rpcError(claimErr);
+      const claim = (claimData ?? {}) as Record<string, any>;
+
+      if (claim.idempotent_replay) {
+        return json({ ok: true, applied: true, idempotent_replay: true, ...commitView(claim) });
+      }
+      if (claim.claimed === false && claim.already_running) {
+        return json({
+          ok: true, applied: false, status: "committing", preview_id: claim.preview_id,
+          payload_hash: claim.payload_hash,
+          message: "This release is already being published. Poll getContentReleasePreview with the same preview_id.",
+        }, 202);
+      }
+
+      // 2) Commit in the background so the connector never waits on a long transaction.
+      const commitPromise = supabase
+        .rpc("content_release_preview_commit", {
+          p_preview_id: body.preview_id,
+          p_approved_payload_hash: body.approved_payload_hash,
+          p_idempotency_key: (body.idempotency_key as string | undefined) ?? null,
+        })
+        .then(async ({ data, error }) => {
+          if (error) {
+            await supabase.rpc("content_release_preview_fail", {
+              p_preview_id: body.preview_id,
+              p_error: error.message,
+            });
+            return { failed: true, message: error.message };
+          }
+          return { failed: false, record: (data ?? {}) as Record<string, any> };
+        })
+        .catch(async (e) => {
+          await supabase.rpc("content_release_preview_fail", {
+            p_preview_id: body.preview_id,
+            p_error: (e as Error).message,
+          });
+          return { failed: true, message: (e as Error).message };
+        });
+
+      // Keep the worker alive past the response so the transaction always finishes.
+      try { (globalThis as any).EdgeRuntime?.waitUntil?.(commitPromise); } catch { /* noop */ }
+
+      // 3) Answer fast: inline result when the commit is quick, otherwise a poll handle.
+      const waitMs = Math.min(Math.max(Number(body.wait_seconds) || 20, 5), 40) * 1000;
+      const raced = await Promise.race([
+        commitPromise,
+        new Promise((resolve) => setTimeout(() => resolve({ pending: true }), waitMs)),
+      ]) as Record<string, any>;
+
+      if (raced.pending) {
+        return json({
+          ok: true,
+          applied: false,
+          status: "committing",
+          preview_id: claim.preview_id,
+          payload_hash: claim.payload_hash,
+          message:
+            "Commit is running server-side and will finish on its own. Poll getContentReleasePreview with this preview_id until status is 'committed' (success) or 'failed' (nothing written). Do NOT re-send the commit.",
+          poll_after_seconds: 15,
+        }, 202);
+      }
+      if (raced.failed) {
+        return err(`Commit failed, the release was rolled back: ${raced.message}`, 400);
+      }
+      return json({ ok: true, applied: true, idempotent_replay: false, ...commitView(raced.record) });
     }
+
 
 
     const m = path.match(/^\/([a-z-]+)\/(preview|commit)$/);
