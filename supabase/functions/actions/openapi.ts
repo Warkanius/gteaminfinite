@@ -664,7 +664,7 @@ export function buildOpenApi(baseUrl: string) {
       operationId: "commitContentReleaseByPreviewId",
       summary: "Publish a stored content-release preview",
       description:
-        "Commits the stored preview exactly as previewed: one transaction, no re-preview, no re-normalization. Requires the preview_id and the payload_hash the user approved. Verifies every created record by immutable id and rolls back on any failure.",
+        "Commits the stored preview exactly as previewed: one transaction, no re-preview. Requires preview_id plus the approved payload_hash. Large releases answer 202 with status committing and keep running server-side: poll getContentReleasePreview until status is committed or failed. Never re-send the commit.",
       "x-openai-isConsequential": true,
       requestBody: {
         required: true,
@@ -677,6 +677,7 @@ export function buildOpenApi(baseUrl: string) {
                 preview_id: strProp("The immutable preview_id returned by previewContentRelease."),
                 approved_payload_hash: strProp("The payload_hash shown to and approved by the user. Must match exactly."),
                 idempotency_key: strProp("Optional. Repeating a commit with the same key returns the original result."),
+                wait_seconds: { type: "integer", description: "Optional 5-40s inline wait before switching to the polling response. Default 20." },
               },
             },
             example: { preview_id: "0f2a…", approved_payload_hash: "9c1b…", idempotency_key: "galactic-release-1" },
@@ -697,7 +698,7 @@ export function buildOpenApi(baseUrl: string) {
       operationId: "getContentReleasePreview",
       summary: "Read a stored content-release preview",
       description:
-        "Returns the stored plan for a preview_id — status, payload hash, expiry, creates, updates, replacements, deletes and warnings. Never returns the secret backend token. Use it to re-show a plan in a later turn before committing.",
+        "Returns the stored plan and live status for a preview_id — pending, committing, committed, failed, expired or cancelled — plus payload hash, expiry, plan sections, post-commit verification and last_error. Use it to re-show a plan and to poll a commit that answered 202.",
       "x-openai-isConsequential": false,
       requestBody: {
         required: true,
@@ -1138,7 +1139,7 @@ Rules:
 - Sending badges or traits on a player replaces ALL of that card's assignments; omit them to leave them alone.
 - run_rank_rewards is one global ladder shared by every Run.
 - To edit a batch of EXISTING player cards and nothing else, use previewBulkPlayers -> approval -> commitBulkPlayers. Never loop the single-player endpoint, and never wrap player edits in a release just to update cards. That operation rejects any other group.
-- For a complete release — collection, reward, team, pack pool and odds, evo paths and playable evo versions — use previewContentRelease, then get explicit approval, then commitContentReleaseByPreviewId with the preview_id and the exact payload_hash you showed. Never re-run the preview before committing and never rebuild the payload; the server keeps the approved plan. Previews live 30 minutes: use getContentReleasePreview to re-show a stored plan in a later turn, and cancelContentReleasePreview to discard one. previewBulk / commitBulk remain for arbitrary multi-group documents. Call getAdminApiCapabilities first for supported fields and limits.
+- For a complete release — collection, reward, team, pack pool and odds, evo paths and playable evo versions — use previewContentRelease, then get explicit approval, then commitContentReleaseByPreviewId with the preview_id and the exact payload_hash you showed. Never re-run the preview before committing and never rebuild the payload; the server keeps the approved plan. If the commit returns status 'committing' (202), tell the user it is publishing and poll getContentReleasePreview every ~15s until status is 'committed' or 'failed' — never re-send the commit, it is already running. Previews live 30 minutes: use getContentReleasePreview to re-show a stored plan in a later turn, and cancelContentReleasePreview to discard one. previewBulk / commitBulk remain for arbitrary multi-group documents. Call getAdminApiCapabilities first for supported fields and limits.
 - Bulk workflow: preview -> show creates/updates/deletes/replacements and every warning -> explicit approval -> commit with the identical canonical_payload, its preview_token and an idempotency_key. For large plans use getPreviewDetail to page through the sections.
 - To publish later, approve a preview and then call scheduleApprovedPreview with run_at; use listScheduledJobs, rescheduleJob and cancelScheduledJob to manage it. A scheduled job that no longer matches its approved plan fails instead of writing.
 - OVR is the average of the nine base stats and must sit inside the gem tier band (Emerald 1.00-1.99, Amethyst 2.00-2.99, Diamond 3.00-3.99, Pink Diamond 4.00-4.99, Actolytrene 5.00-5.99, Game Over 6.00+). Never silently change a requested tier; fix the stats or ask.

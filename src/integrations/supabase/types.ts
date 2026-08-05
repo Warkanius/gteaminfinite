@@ -4088,12 +4088,24 @@ export type Database = {
         Args: { p_preview_id: string }
         Returns: Json
       }
+      content_release_preview_claim: {
+        Args: {
+          p_approved_payload_hash: string
+          p_idempotency_key?: string
+          p_preview_id: string
+        }
+        Returns: Json
+      }
       content_release_preview_commit: {
         Args: {
           p_approved_payload_hash: string
           p_idempotency_key?: string
           p_preview_id: string
         }
+        Returns: Json
+      }
+      content_release_preview_fail: {
+        Args: { p_error: string; p_preview_id: string }
         Returns: Json
       }
       content_release_preview_get: {
