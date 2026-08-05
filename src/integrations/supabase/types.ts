@@ -3928,6 +3928,7 @@ export type Database = {
         Args: { p_column: string; p_table: string }
         Returns: boolean
       }
+      admin_has_pending_ref: { Args: { p_item: Json }; Returns: boolean }
       admin_install_lifecycle: { Args: { p_table: string }; Returns: undefined }
       admin_issue_preview_token: {
         Args: { p_fingerprint: string; p_kind: string; p_payload: Json }
@@ -3944,6 +3945,7 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_pending_refs: { Args: { p_item: Json }; Returns: Json }
       admin_player_matches: { Args: { p_name: string }; Returns: Json }
       admin_player_usage: { Args: { p_card_id: string }; Returns: Json }
       admin_rename_apply: {
