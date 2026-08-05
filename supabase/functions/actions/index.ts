@@ -299,6 +299,23 @@ async function rpcResult(p: Promise<{ data: unknown; error: { message: string } 
   return json(data);
 }
 
+function countOf(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+/** Maps admin_error / preview lifecycle codes to HTTP statuses. */
+function rpcError(error: { message: string }) {
+  const msg = error.message || "";
+  if (/Admin role required/i.test(msg)) return err("Admin role required for this operation.", 403);
+  if (/Not authenticated/i.test(msg) || /UNAUTHORIZED/.test(msg)) return err(`Unauthorized: ${msg}`, 401);
+  if (/PREVIEW_NOT_FOUND/.test(msg)) return err(msg, 404);
+  if (/PREVIEW_ALREADY_COMMITTED/.test(msg)) return err(msg, 409);
+  if (/PAYLOAD_HASH_MISMATCH/.test(msg)) return err(msg, 409);
+  if (/PREVIEW_EXPIRED|PREVIEW_CANCELLED|PREVIEW_TOKEN_INVALID/.test(msg)) return err(msg, 410);
+  return err(`Rejected, nothing was written: ${msg}`, 400);
+}
+
+
 async function requireAdmin(supabase: ReturnType<typeof clientFor>, userId: string) {
   const { data, error } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
   if (error) return `Could not verify admin role: ${error.message}`;
