@@ -211,12 +211,26 @@ Deno.serve(async (req) => {
       return json(slimPreview(data as Record<string, any>));
     }
 
-    if (path === "/content-release/commit-by-preview-id" && req.method === "POST") {
-      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-      if (!body.preview_id) return err("preview_id is required.", 400);
+    if (
+      (path === "/content-release/commit" || path === "/content-release/commit-by-preview-id") &&
+      req.method === "POST"
+    ) {
+      const raw = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      // Accept the approval hash under any of the names the GPT may use.
+      const body: Record<string, unknown> = {
+        ...raw,
+        approved_payload_hash: raw.approved_payload_hash ?? raw.approval_hash ?? raw.payload_hash,
+      };
+      if (!body.preview_id) {
+        return err(
+          "preview_id is required: commit only accepts the stored preview_id + approved hash. Run previewContentRelease first, then commit with preview_id + approved_payload_hash (never the full release payload).",
+          400,
+        );
+      }
       if (!body.approved_payload_hash) {
         return err("approved_payload_hash is required: echo back the hash you showed the user for approval.", 400);
       }
+
 
       // 1) Claim: all guards (ownership, hash, status, expiry) run synchronously.
       const { data: claimData, error: claimErr } = await supabase.rpc("content_release_preview_claim", {
