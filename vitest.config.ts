@@ -11,6 +11,10 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      // Deno-only specifier used by the edge-function router.
+      "npm:@supabase/supabase-js@2/cors": path.resolve(__dirname, "./src/test/stubs/deno-cors.ts"),
+    },
   },
 });

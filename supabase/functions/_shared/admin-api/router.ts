@@ -151,7 +151,21 @@ export async function handleAdminApi(
           400,
         );
       }
+      if (body.players.length > LIMITS.max_items_per_group) {
+        return send(
+          failure("validation", [
+            apiError("BATCH_LIMIT_EXCEEDED", `A bulk-player batch accepts at most ${LIMITS.max_items_per_group} cards.`, {
+              path: "players",
+              expected: LIMITS.max_items_per_group,
+              received: body.players.length,
+              remediation: "Split the cards across several preview/commit cycles; each commit stays atomic.",
+            }),
+          ], "bulk_players"),
+          413,
+        );
+      }
       return await runPipeline(mode, "bulk-players", body, ctx);
+
     }
     if (head === "bulk" || head === "release") return await runPipeline(mode, "bulk", body, ctx);
     if (ENTITY_TO_GROUP[head]) return await runPipeline(mode, head, body, ctx);
