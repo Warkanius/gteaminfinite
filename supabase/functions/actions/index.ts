@@ -141,26 +141,20 @@ Deno.serve(async (req) => {
     // and multi-step evo paths with materialized versions — one transaction.
     // Previews are persisted server-side and approved/committed by preview_id, so
     // the token and canonical payload never have to survive a chat turn.
-    const releaseMatch = path.match(/^\/content-release\/(preview|commit)$/);
-    if (releaseMatch && req.method === "POST") {
-      const commit = releaseMatch[1] === "commit";
-      const { preview_token, preview_ttl_minutes, ...doc } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-      if (commit && !preview_token) {
-        return err("preview_token is required to commit: preview the identical release document first, or commit by preview_id.", 400);
-      }
+    if (path === "/content-release/preview" && req.method === "POST") {
+      const { preview_token: _ignored, preview_ttl_minutes, ...doc } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
       const { validations, valid, payload } = prepareRelease(doc as unknown as ContentReleaseInput);
       if (!valid) {
         return json({ ok: false, stage: "validation", error_code: "VALIDATION_FAILED", wrote_anything: false, validations }, 400);
       }
       const { data, error } = await supabase.rpc("admin_apply_batch", {
         p_payload: payload,
-        p_commit: commit,
-        p_preview_token: (preview_token as string | undefined) ?? null,
+        p_commit: false,
+        p_preview_token: null,
         p_kind: "content_release",
       });
       if (error) return rpcError(error);
       const result = (data ?? {}) as Record<string, any>;
-      if (commit) return json(result);
 
       // Persist the preview: durable id, hash and plan; the token stays server-side.
       const { data: stored, error: storeErr } = await supabase.rpc("content_release_preview_store", {
@@ -194,11 +188,12 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         wrote_anything: false,
+        wrote_game_content: false,
         ...slimPreview(record),
-        next_step: "Show this plan, get explicit approval, then call commitContentReleaseByPreviewId with preview_id + payload_hash. If the commit answers status 'committing', poll getContentReleasePreview instead of re-committing.",
+        next_step: "Show this plan, get explicit approval, then call commitContentRelease with ONLY preview_id + approved_payload_hash. Do not resend the release payload. If the commit answers status 'committing', poll getContentReleasePreview instead of re-committing.",
       });
-
     }
+
 
     if (path === "/content-release/preview/get" && req.method === "POST") {
       const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
