@@ -23,7 +23,12 @@ export const STAT_KEYS = [
 ] as const;
 export type StatKey = (typeof STAT_KEYS)[number];
 
+/** Runs-mode mirrors of the nine base stats (player_cards.run_stat_*). */
+export const RUN_STAT_KEYS = STAT_KEYS.map((k) => `run_${k}`) as unknown as readonly `run_${StatKey}`[];
+export type RunStatKey = `run_${StatKey}`;
+
 export const STAT_RANGE = { min: 0, max: 99 };
+
 
 export const ASSIGNMENT_TIERS = ["base", "gold", "hof", "diamond", "actolytrene"] as const;
 export type AssignmentTier = (typeof ASSIGNMENT_TIERS)[number];
@@ -56,6 +61,7 @@ export interface Assignment {
 }
 
 export type StatBlock = Partial<Record<StatKey, number>>;
+export type RunStatBlock = Partial<Record<RunStatKey, number>>;
 
 export interface ReleaseStepInput {
   from_tier: string;
@@ -64,12 +70,16 @@ export interface ReleaseStepInput {
   objectives: Array<{ stat: string; amount: number; description?: string }>;
   resulting_version: {
     rating?: number;
+    run_rating?: number;
     gem_name?: string;
     stats: StatBlock;
+    /** Runs-mode stats for this version. Flat run_stat_* keys are also accepted. */
+    run_stats?: RunStatBlock;
     badges?: Assignment[];
     traits?: Assignment[];
   };
 }
+
 
 export interface ReleaseEvoPathInput {
   player_name?: string;
@@ -103,7 +113,10 @@ export interface ReleasePlayerInput {
   sub_collection?: string;
   team?: string;
   is_collection_reward?: boolean;
+  /** Base stats. Flat stat_3pt … stat_int keys on the player are also accepted. */
   stats?: StatBlock;
+  /** Runs-mode stats. Flat run_stat_3pt … run_stat_int keys are also accepted. */
+  run_stats?: RunStatBlock;
   badges?: Assignment[];
   traits?: Assignment[];
   [extra: string]: unknown;
@@ -134,6 +147,21 @@ export interface ContentReleaseInput {
     odds: Array<{ result_slot: string; percentage: number | string; description?: string }>;
   };
   evo_paths?: ReleaseEvoPathInput[];
+  /**
+   * Locker codes shipped with the release. A code may reward the pack created in
+   * this same release: set reward_type "pack" and either reward_release_pack
+   * (true) or reward_value.pack_name.
+   */
+  locker_codes?: Array<{
+    code: string;
+    reward_type?: "coins" | "gems" | "pack" | "card";
+    reward_value?: Record<string, unknown>;
+    /** Rewards the pack defined in this release, resolved inside the transaction. */
+    reward_release_pack?: boolean;
+    max_redemptions?: number | null;
+    expires_at?: string | null;
+    status?: "draft" | "published";
+  }>;
   forbid_existing_links_to?: string[];
 }
 
@@ -243,6 +271,56 @@ function normalizeStats(stats: unknown): StatBlock {
   return out;
 }
 
+/** "run_3pt", "runs 3PT", "run_stat_3pt" -> "run_stat_3pt". */
+export function normalizeRunStatKey(value: unknown): string {
+  const raw = String(value ?? "").trim().toLowerCase();
+  const stripped = raw.replace(/^(run|runs)[\s_-]*(stat[\s_-]*)?/, "");
+  const base = normalizeStatKey(stripped);
+  return base.startsWith("stat_") ? `run_${base}` : raw.replace(/[\s-]+/g, "_");
+}
+
+function normalizeRunStats(stats: unknown): RunStatBlock {
+  const out: RunStatBlock = {};
+  for (const [k, v] of Object.entries((stats ?? {}) as Record<string, unknown>)) {
+    const key = normalizeRunStatKey(k) as RunStatKey;
+    out[key] = typeof v === "number" ? v : Number(v);
+  }
+  return out;
+}
+
+/**
+ * Pulls flat stat fields off an object into canonical blocks so a card may be
+ * described flat (`stat_3pt: 88`, `run_stat_3pt: 90`), nested (`stats`,
+ * `run_stats`) or with aliases ("3PT") — all three produce the same payload.
+ */
+function splitStatFields(source: Record<string, unknown>): {
+  rest: Record<string, unknown>;
+  stats: StatBlock;
+  runStats: RunStatBlock;
+} {
+  const rest: Record<string, unknown> = {};
+  const flat: Record<string, unknown> = {};
+  const flatRun: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source)) {
+    const lower = key.trim().toLowerCase();
+    if (lower === "stats" || lower === "run_stats" || lower === "runs_stats") continue;
+    if (/^(run|runs)[\s_-]*(stat)?[\s_-]*/.test(lower) && (RUN_STAT_KEYS as readonly string[]).includes(normalizeRunStatKey(lower))) {
+      flatRun[lower] = value;
+    } else if ((STAT_KEYS as readonly string[]).includes(normalizeStatKey(lower))) {
+      flat[lower] = value;
+    } else {
+      rest[key] = value;
+    }
+  }
+  const nestedRun = (source.run_stats ?? (source as Record<string, unknown>).runs_stats) as unknown;
+  return {
+    rest,
+    stats: { ...normalizeStats(source.stats), ...normalizeStats(flat) },
+    runStats: { ...normalizeRunStats(nestedRun), ...normalizeRunStats(flatRun) },
+  };
+}
+
+
 function normalizeAssignments(list: unknown, kind: "badge" | "trait"): Assignment[] {
   return (Array.isArray(list) ? list : []).map((raw) => {
     const item = typeof raw === "string" ? { [kind]: raw } : { ...(raw as Record<string, unknown>) };
@@ -265,34 +343,50 @@ function normalizeAssignments(list: unknown, kind: "badge" | "trait"): Assignmen
 /** Normalizes an imported release document. Never writes anything. */
 export function normalizeRelease(input: ContentReleaseInput): ContentReleaseInput {
   const out: ContentReleaseInput = JSON.parse(JSON.stringify(input ?? {}));
-  out.players = (out.players ?? []).map((p) => ({
-    ...p,
-    stats: normalizeStats(p.stats),
-    badges: normalizeAssignments(p.badges, "badge"),
-    traits: normalizeAssignments(p.traits, "trait"),
-  }));
+  out.players = (out.players ?? []).map((p) => {
+    const { rest, stats, runStats } = splitStatFields(p as unknown as Record<string, unknown>);
+    return {
+      ...(rest as unknown as ReleasePlayerInput),
+      stats,
+      run_stats: runStats,
+      badges: normalizeAssignments(p.badges, "badge"),
+      traits: normalizeAssignments(p.traits, "trait"),
+    };
+  });
   out.evo_paths = (out.evo_paths ?? []).map((path) => ({
     ...path,
     steps: [...(path.steps ?? [])]
       .sort((a, b) => a.step_order - b.step_order)
-      .map((step) => ({
-        ...step,
-        objectives: (step.objectives ?? []).map((o) => ({
-          ...o,
-          stat: normalizeObjectiveKey(o.stat),
-          amount: Number(o.amount),
-        })),
-        resulting_version: {
-          ...(step.resulting_version ?? { stats: {} }),
-          stats: normalizeStats(step.resulting_version?.stats),
-          badges: normalizeAssignments(step.resulting_version?.badges, "badge"),
-          traits: normalizeAssignments(step.resulting_version?.traits, "trait"),
-        },
-      })),
+      .map((step) => {
+        const version = (step.resulting_version ?? { stats: {} }) as Record<string, unknown>;
+        const { rest, stats, runStats } = splitStatFields(version);
+        return {
+          ...step,
+          objectives: (step.objectives ?? []).map((o) => ({
+            ...o,
+            stat: normalizeObjectiveKey(o.stat),
+            amount: Number(o.amount),
+          })),
+          resulting_version: {
+            ...(rest as ReleaseStepInput["resulting_version"]),
+            stats,
+            run_stats: runStats,
+            badges: normalizeAssignments(version.badges, "badge"),
+            traits: normalizeAssignments(version.traits, "trait"),
+          },
+        };
+      }),
   }));
   if (out.pack) {
     out.pack.players = [...(out.pack.players ?? [])].sort((a, b) => a.slot - b.slot);
     out.pack.odds = (out.pack.odds ?? []).map((o) => ({ ...o, result_slot: String(o.result_slot) }));
+  }
+  if (out.locker_codes?.length) {
+    out.locker_codes = out.locker_codes.map((c) => ({
+      ...c,
+      code: String(c.code ?? "").trim().toUpperCase(),
+      reward_type: c.reward_type ?? (c.reward_release_pack ? "pack" : "coins"),
+    }));
   }
   if (out.team) out.team.roster = [...(out.team.roster ?? [])].sort((a, b) => a.slot - b.slot);
   return out;
@@ -377,6 +471,13 @@ export function validateRelease(
         err("UNKNOWN_STAT_KEY", `"${stat}" is not a supported stat.`, `${scope}.stats`);
       } else if (typeof value !== "number" || Number.isNaN(value) || value < STAT_RANGE.min || value > STAT_RANGE.max) {
         err("STAT_OUT_OF_RANGE", `${stat} must be between ${STAT_RANGE.min} and ${STAT_RANGE.max}.`, `${scope}.stats`);
+      }
+    }
+    for (const [stat, value] of Object.entries(p.run_stats ?? {})) {
+      if (!(RUN_STAT_KEYS as readonly string[]).includes(stat)) {
+        err("UNKNOWN_RUN_STAT_KEY", `"${stat}" is not a supported Runs stat.`, `${scope}.run_stats`);
+      } else if (typeof value !== "number" || Number.isNaN(value) || value < STAT_RANGE.min || value > STAT_RANGE.max) {
+        err("STAT_OUT_OF_RANGE", `${stat} must be between ${STAT_RANGE.min} and ${STAT_RANGE.max}.`, `${scope}.run_stats`);
       }
     }
     validateAssignments(p.badges, p.traits, scope, err);
@@ -637,6 +738,17 @@ export function validateRelease(
             );
           }
         }
+        for (const [stat, value] of Object.entries(version.run_stats ?? {})) {
+          if (!(RUN_STAT_KEYS as readonly string[]).includes(stat)) {
+            err("UNKNOWN_RUN_STAT_KEY", `"${stat}" is not a supported Runs stat.`, `${sScope}.resulting_version.run_stats`);
+          } else if (typeof value !== "number" || Number.isNaN(value) || value < STAT_RANGE.min || value > STAT_RANGE.max) {
+            err(
+              "STAT_OUT_OF_RANGE",
+              `${stat} must be between ${STAT_RANGE.min} and ${STAT_RANGE.max}.`,
+              `${sScope}.resulting_version.run_stats`,
+            );
+          }
+        }
         validateAssignments(version.badges, version.traits, `${sScope}.resulting_version`, err);
       }
     });
@@ -658,7 +770,41 @@ export function validateRelease(
     }
   });
 
+  // locker codes
+  const codesSeen = new Set<string>();
+  (release.locker_codes ?? []).forEach((c, i) => {
+    const scope = `locker_codes[${i}]`;
+    const code = String(c.code ?? "").trim();
+    if (!code) err("LOCKER_CODE_REQUIRED", "Each locker code needs a code.", scope);
+    if (codesSeen.has(code.toUpperCase())) {
+      err("DUPLICATE_LOCKER_CODE", `Code "${code}" appears more than once in this release.`, scope);
+    }
+    codesSeen.add(code.toUpperCase());
+    const type = c.reward_type ?? (c.reward_release_pack ? "pack" : "coins");
+    if (!["coins", "gems", "pack", "card"].includes(type)) {
+      err("INVALID_LOCKER_REWARD_TYPE", `"${type}" is not a locker reward type (coins, gems, pack, card).`, scope);
+    }
+    if (type === "pack") {
+      const named = c.reward_value?.pack_name ?? c.reward_value?.pack_id;
+      if (!c.reward_release_pack && !named) {
+        err(
+          "LOCKER_PACK_REF_REQUIRED",
+          "A pack reward needs reward_release_pack: true (the pack in this release) or reward_value.pack_name.",
+          scope,
+        );
+      }
+      if (c.reward_release_pack && !release.pack?.name?.trim()) {
+        err("LOCKER_RELEASE_PACK_MISSING", "reward_release_pack is set but this release does not define a pack.", scope);
+      }
+    } else if ((type === "coins" || type === "gems") && !(Number(c.reward_value?.amount) > 0)) {
+      err("LOCKER_AMOUNT_REQUIRED", `A ${type} reward needs reward_value.amount greater than 0.`, scope);
+    } else if (type === "card" && !c.reward_value?.card_name && !c.reward_value?.player_card_id) {
+      err("LOCKER_CARD_REF_REQUIRED", "A card reward needs reward_value.card_name or reward_value.player_card_id.", scope);
+    }
+  });
+
   return out;
+
 }
 
 function validateAssignments(
@@ -703,6 +849,7 @@ const slug = (value: string) =>
 
 const RELEASE_REF = "ref:release:main";
 const COLLECTION_REF = "ref:collection:main";
+const PACK_REF = "ref:pack:main";
 const cardRef = (name: string) => `ref:player:${slug(name)}`;
 
 /**
@@ -774,13 +921,14 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
 
   if (release.players?.length) {
     payload.players = release.players.map((p) => {
-      const { stats, is_collection_reward, new_name, player_card_id, badges, traits, ...rest } = p;
+      const { stats, run_stats, is_collection_reward, new_name, player_card_id, badges, traits, ...rest } = p;
       return {
         ...(player_card_id ? { id: player_card_id } : { temp_ref: cardRef(p.name) }),
         action: player_card_id ? "update" : "upsert",
         ...rest,
         ...(new_name ? { name: new_name } : {}),
         ...(stats ?? {}),
+        ...(run_stats ?? {}),
         ...(badges?.length ? { badges, replace_badges: true } : {}),
         ...(traits?.length ? { traits, replace_traits: true } : {}),
         release_bundle_ref: RELEASE_REF,
@@ -860,6 +1008,7 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
   if (pack?.name?.trim()) {
     payload.packs = [
       {
+        temp_ref: PACK_REF,
         action: "upsert",
         name: pack.name,
         pack_type: pack.pack_type ?? "standard",
@@ -905,8 +1054,12 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
           })),
           resulting_version: {
             rating: step.resulting_version.rating ?? null,
+            ...(step.resulting_version.run_rating != null ? { run_rating: step.resulting_version.run_rating } : {}),
             gem_name: step.resulting_version.gem_name ?? step.to_tier,
             stats: step.resulting_version.stats,
+            ...(Object.keys(step.resulting_version.run_stats ?? {}).length
+              ? { run_stats: step.resulting_version.run_stats }
+              : {}),
             badges: step.resulting_version.badges ?? [],
             traits: step.resulting_version.traits ?? [],
             status: "draft",
@@ -915,6 +1068,26 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         }));
     });
   }
+
+  if (release.locker_codes?.length) {
+    payload.locker_codes = release.locker_codes.map((c) => {
+      const type = c.reward_type ?? (c.reward_release_pack ? "pack" : "coins");
+      const rewardValue: Record<string, unknown> =
+        type === "pack" && c.reward_release_pack
+          ? { pack_ref: PACK_REF }
+          : { ...(c.reward_value ?? {}) };
+      return {
+        action: "upsert",
+        code: String(c.code ?? "").trim().toUpperCase(),
+        reward_type: type,
+        reward_value: rewardValue,
+        ...(c.max_redemptions != null ? { max_redemptions: c.max_redemptions } : {}),
+        ...(c.expires_at != null ? { expires_at: c.expires_at } : {}),
+        ...(c.status ? { status: c.status === "published" ? "active" : "draft" } : {}),
+      };
+    });
+  }
+
 
   return payload;
 }

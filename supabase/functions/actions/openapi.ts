@@ -506,7 +506,10 @@ export function buildOpenApi(baseUrl: string) {
             sub_collection: { type: "string" },
             team: { type: "string" },
             is_collection_reward: { type: "boolean" },
-            stats: { type: "object", additionalProperties: { type: "number" }, description: "stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (0-99)." },
+            stats: { type: "object", additionalProperties: { type: "number" }, description: "Base stats block: stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (0-99)." },
+            run_stats: { type: "object", additionalProperties: { type: "number" }, description: "Runs-mode stats block: run_stat_3pt … run_stat_int (0-99)." },
+            ...statProps(STATS, "Base (flat alternative to stats)"),
+            ...statProps(RUN_STATS, "Runs-mode (flat alternative to run_stats)"),
             badges: { type: "array", items: Assignment, description: "REPLACES every current badge assignment on the card." },
             traits: { type: "array", items: Assignment, description: "REPLACES every current trait assignment on the card." },
           },
@@ -592,8 +595,12 @@ export function buildOpenApi(baseUrl: string) {
                     description: "REQUIRED on every step: the playable card version unlocked by completing it.",
                     properties: {
                       rating: { type: "number" },
+                      run_rating: { type: "number" },
                       gem_name: strProp("Gem tier of the unlocked version."),
                       stats: { type: "object", additionalProperties: { type: "number" } },
+                      run_stats: { type: "object", additionalProperties: { type: "number" }, description: "Runs-mode stats for this version (run_stat_3pt … run_stat_int)." },
+                      ...statProps(STATS, "Base (flat alternative to stats)"),
+                      ...statProps(RUN_STATS, "Runs-mode (flat alternative to run_stats)"),
                       badges: { type: "array", items: Assignment },
                       traits: { type: "array", items: Assignment },
                     },
@@ -601,6 +608,23 @@ export function buildOpenApi(baseUrl: string) {
                 },
               },
             },
+          },
+        },
+      },
+      locker_codes: {
+        type: "array",
+        description: "Locker codes published with this release. Set reward_release_pack true to reward the pack created in this same release (resolved inside the transaction).",
+        items: {
+          type: "object",
+          required: ["code"],
+          properties: {
+            code: strProp("Redeemable code; upper-cased."),
+            reward_type: strProp("coins | gems | pack | card."),
+            reward_value: { type: "object", additionalProperties: true, description: "Reward payload, e.g. { amount: 5000 } or { pack_name: '...' }." },
+            reward_release_pack: { type: "boolean", description: "Reward the pack defined in this release." },
+            max_redemptions: { type: "integer" },
+            expires_at: strProp("ISO timestamp."),
+            status: strProp("draft | published."),
           },
         },
       },
@@ -758,7 +782,7 @@ export function buildOpenApi(baseUrl: string) {
 
   // Explicit player-card schema shared by previewBulkPlayers / commitBulkPlayers.
   const num = (description: string) => ({ type: "number", description });
-  const statProps = Object.fromEntries(
+  const bulkStatProps = Object.fromEntries(
     ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"].flatMap((s) => [
       [s, num(`Base stat ${s.replace("stat_", "")} (0-99).`)],
       [s.replace("stat_", "run_stat_"), num(`Runs-mode stat ${s.replace("stat_", "")} (0-99).`)],
@@ -783,7 +807,7 @@ export function buildOpenApi(baseUrl: string) {
       position2: strProp("Secondary position."),
       rating: num("Decimal OVR; must equal the mean of the nine base stats within 1e-7."),
       run_rating: num("Runs-mode rating."),
-      ...statProps,
+      ...bulkStatProps,
       market_value: num("Market value in coins."),
       social_handle: strProp("Social handle."),
       avatar_url: strProp("Avatar image URL."),
@@ -812,7 +836,7 @@ export function buildOpenApi(baseUrl: string) {
           properties: {
             trait: strProp("Signature trait name."),
             tier: { type: "string", enum: tierEnum },
-            target_stat: { type: "string", enum: Object.keys(statProps).filter((k) => k.startsWith("stat_")), description: "Stat the trait boosts." },
+            target_stat: { type: "string", enum: Object.keys(bulkStatProps).filter((k) => k.startsWith("stat_")), description: "Stat the trait boosts." },
           },
         },
       },
