@@ -170,94 +170,12 @@ Deno.serve(async (req) => {
       req.method === "POST"
     ) {
       const raw = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-      // Accept the approval hash under any of the names the GPT may use.
-      const body: Record<string, unknown> = {
-        ...raw,
-        approved_payload_hash: raw.approved_payload_hash ?? raw.approval_hash ?? raw.payload_hash,
-      };
-      if (!body.preview_id) {
-        return err(
-          "preview_id is required: commit only accepts the stored preview_id + approved hash. Run previewContentRelease first, then commit with preview_id + approved_payload_hash (never the full release payload).",
-          400,
-        );
-      }
-      if (!body.approved_payload_hash) {
-        return err("approved_payload_hash is required: echo back the hash you showed the user for approval.", 400);
-      }
-
-
-      // 1) Claim: all guards (ownership, hash, status, expiry) run synchronously.
-      const { data: claimData, error: claimErr } = await supabase.rpc("content_release_preview_claim", {
-        p_preview_id: body.preview_id,
-        p_approved_payload_hash: body.approved_payload_hash,
-        p_idempotency_key: (body.idempotency_key as string | undefined) ?? null,
+      const r = await commitStoredRelease(supabase, raw, {
+        waitUntil: (p) => { try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch { /* noop */ } },
       });
-      if (claimErr) return rpcError(claimErr);
-      const claim = (claimData ?? {}) as Record<string, any>;
-
-      if (claim.idempotent_replay) {
-        return json({ ok: true, applied: true, idempotent_replay: true, ...commitView(claim) });
-      }
-      if (claim.claimed === false && claim.already_running) {
-        return json({
-          ok: true, applied: false, status: "committing", preview_id: claim.preview_id,
-          payload_hash: claim.payload_hash,
-          message: "This release is already being published. Poll getContentReleasePreview with the same preview_id.",
-        }, 202);
-      }
-
-      // 2) Commit in the background so the connector never waits on a long transaction.
-      const commitPromise = supabase
-        .rpc("content_release_preview_commit", {
-          p_preview_id: body.preview_id,
-          p_approved_payload_hash: body.approved_payload_hash,
-          p_idempotency_key: (body.idempotency_key as string | undefined) ?? null,
-        })
-        .then(async ({ data, error }) => {
-          if (error) {
-            await supabase.rpc("content_release_preview_fail", {
-              p_preview_id: body.preview_id,
-              p_error: error.message,
-            });
-            return { failed: true, message: error.message };
-          }
-          return { failed: false, record: (data ?? {}) as Record<string, any> };
-        })
-        .catch(async (e) => {
-          await supabase.rpc("content_release_preview_fail", {
-            p_preview_id: body.preview_id,
-            p_error: (e as Error).message,
-          });
-          return { failed: true, message: (e as Error).message };
-        });
-
-      // Keep the worker alive past the response so the transaction always finishes.
-      try { (globalThis as any).EdgeRuntime?.waitUntil?.(commitPromise); } catch { /* noop */ }
-
-      // 3) Answer fast: inline result when the commit is quick, otherwise a poll handle.
-      const waitMs = Math.min(Math.max(Number(body.wait_seconds) || 20, 5), 40) * 1000;
-      const raced = await Promise.race([
-        commitPromise,
-        new Promise((resolve) => setTimeout(() => resolve({ pending: true }), waitMs)),
-      ]) as Record<string, any>;
-
-      if (raced.pending) {
-        return json({
-          ok: true,
-          applied: false,
-          status: "committing",
-          preview_id: claim.preview_id,
-          payload_hash: claim.payload_hash,
-          message:
-            "Commit is running server-side and will finish on its own. Poll getContentReleasePreview with this preview_id until status is 'committed' (success) or 'failed' (nothing written). Do NOT re-send the commit.",
-          poll_after_seconds: 15,
-        }, 202);
-      }
-      if (raced.failed) {
-        return err(`Commit failed, the release was rolled back: ${raced.message}`, 400);
-      }
-      return json({ ok: true, applied: true, idempotent_replay: false, ...commitView(raced.record) });
+      return json(r.body, r.status);
     }
+
 
 
 
