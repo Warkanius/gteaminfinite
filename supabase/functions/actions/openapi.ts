@@ -637,61 +637,86 @@ export function buildOpenApi(baseUrl: string) {
     },
   };
 
-  for (const mode of ["preview", "commit"] as const) {
-    const isCommit = mode === "commit";
-    paths[`/content-release/${mode}`] = {
-      post: {
-        operationId: `${mode}ContentRelease`,
-        summary: `${isCommit ? "Publish" : "Validate"} a complete atomic content release`,
-        description: isCommit
-          ? "Legacy same-turn commit: publishes the exact previously previewed release using the single-use preview token and an identical payload. Prefer commitContentReleaseByPreviewId."
-          : "Validates a complete content release with zero writes (players, collection, reward, team, pack, pool, odds, evo paths, objectives, playable evo versions) and stores the plan server-side. Returns preview_id, payload_hash and the full plan.",
-
-        "x-openai-isConsequential": isCommit,
-        requestBody: { required: true, content: { "application/json": { schema: ReleaseInput } } },
-        responses: {
-          "200": { description: "Plan", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
-          "400": { description: "Rejected; nothing was written." },
-          "401": { description: "Not signed in." },
-          "403": { description: "Signed in but not an admin." },
-        },
-      },
-    };
-  }
-
-  paths["/content-release/commit-by-preview-id"] = {
+  paths["/content-release/preview"] = {
     post: {
-      operationId: "commitContentReleaseByPreviewId",
+      operationId: "previewContentRelease",
+      summary: "Validate a complete atomic content release",
+      description:
+        "Validates a complete content release (players, collection, reward, team, pack, pool, odds, evo paths, objectives, playable evo versions) and persists the canonical payload server-side. Creates NO game content — the only write is the server-side preview record. Returns preview_id, payload_hash, expires_at, summary, warnings, destructive_operations and the full plan. Commit later with preview_id + payload_hash only.",
+      "x-openai-isConsequential": false,
+      requestBody: { required: true, content: { "application/json": { schema: ReleaseInput } } },
+      responses: {
+        "200": {
+          description: "Stored preview plan",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: true,
+                properties: {
+                  preview_id: strProp("Immutable id of the stored preview. Use it to commit."),
+                  payload_hash: strProp("Deterministic hash of the canonical payload; echo it back on commit."),
+                  expires_at: strProp("ISO timestamp after which the preview can no longer be committed."),
+                  status: strProp("pending | committing | committed | failed | expired | cancelled."),
+                  summary: { type: "object", additionalProperties: true },
+                  warnings: { type: "array", items: { type: "object", additionalProperties: true } },
+                  destructive_operations: { type: "array", items: { type: "object", additionalProperties: true } },
+                  plan: { type: "object", additionalProperties: true, description: "creates, updates, replacements, deletes, resolved_references." },
+                  wrote_game_content: { type: "boolean" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Rejected; nothing was written." },
+        "401": { description: "Not signed in." },
+        "403": { description: "Signed in but not an admin." },
+      },
+    },
+  };
+
+  const CommitByPreviewId = {
+    type: "object",
+    required: ["preview_id", "approved_payload_hash"],
+    properties: {
+      preview_id: strProp("The immutable preview_id returned by previewContentRelease."),
+      approved_payload_hash: strProp("The payload_hash shown to and approved by the user. Must match exactly."),
+      idempotency_key: strProp("Optional. Repeating a commit with the same key returns the original result."),
+      wait_seconds: { type: "integer", description: "Optional 5-40s inline wait before switching to the polling response. Default 20." },
+    },
+    additionalProperties: false,
+  };
+
+  const commitOp = (operationId: string) => ({
+    post: {
+      operationId,
       summary: "Publish a stored content-release preview",
       description:
-        "Commits the stored preview exactly as previewed: one transaction, no re-preview. Requires preview_id plus the approved payload_hash. Large releases answer 202 with status committing and keep running server-side: poll getContentReleasePreview until status is committed or failed. Never re-send the commit.",
+        "Commits the stored preview exactly as previewed: the server loads the canonical payload by preview_id and applies it in one transaction. NEVER send the release payload here — only preview_id plus the approved payload_hash. Retrying with the same preview_id + hash returns the original result instead of duplicating. Large releases answer 202 with status committing: poll getContentReleasePreview until status is committed or failed.",
       "x-openai-isConsequential": true,
       requestBody: {
         required: true,
         content: {
           "application/json": {
-            schema: {
-              type: "object",
-              required: ["preview_id", "approved_payload_hash"],
-              properties: {
-                preview_id: strProp("The immutable preview_id returned by previewContentRelease."),
-                approved_payload_hash: strProp("The payload_hash shown to and approved by the user. Must match exactly."),
-                idempotency_key: strProp("Optional. Repeating a commit with the same key returns the original result."),
-                wait_seconds: { type: "integer", description: "Optional 5-40s inline wait before switching to the polling response. Default 20." },
-              },
-            },
+            schema: CommitByPreviewId,
             example: { preview_id: "0f2a…", approved_payload_hash: "9c1b…", idempotency_key: "galactic-release-1" },
           },
         },
       },
       responses: {
         "200": { description: "Commit result and verification report", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+        "202": { description: "Commit is running server-side; poll getContentReleasePreview." },
+        "400": { description: "Missing preview_id / hash, or commit failed and rolled back." },
         "404": { description: "PREVIEW_NOT_FOUND." },
         "409": { description: "PREVIEW_ALREADY_COMMITTED or PAYLOAD_HASH_MISMATCH; nothing was written." },
         "410": { description: "PREVIEW_EXPIRED or PREVIEW_CANCELLED; run a new preview." },
       },
     },
-  };
+  });
+
+  paths["/content-release/commit"] = commitOp("commitContentRelease");
+  paths["/content-release/commit-by-preview-id"] = commitOp("commitContentReleaseByPreviewId");
+
 
   paths["/content-release/preview/get"] = {
     post: {
@@ -1139,7 +1164,7 @@ Rules:
 - Sending badges or traits on a player replaces ALL of that card's assignments; omit them to leave them alone.
 - run_rank_rewards is one global ladder shared by every Run.
 - To edit a batch of EXISTING player cards and nothing else, use previewBulkPlayers -> approval -> commitBulkPlayers. Never loop the single-player endpoint, and never wrap player edits in a release just to update cards. That operation rejects any other group.
-- For a complete release — collection, reward, team, pack pool and odds, evo paths and playable evo versions — use previewContentRelease, then get explicit approval, then commitContentReleaseByPreviewId with the preview_id and the exact payload_hash you showed. Never re-run the preview before committing and never rebuild the payload; the server keeps the approved plan. If the commit returns status 'committing' (202), tell the user it is publishing and poll getContentReleasePreview every ~15s until status is 'committed' or 'failed' — never re-send the commit, it is already running. Previews live 30 minutes: use getContentReleasePreview to re-show a stored plan in a later turn, and cancelContentReleasePreview to discard one. previewBulk / commitBulk remain for arbitrary multi-group documents. Call getAdminApiCapabilities first for supported fields and limits.
+- For a complete release — collection, reward, team, pack pool and odds, evo paths and playable evo versions — use previewContentRelease, show the plan, get explicit approval, then make commitContentRelease the VERY NEXT write call, sending ONLY { preview_id, approved_payload_hash } from that preview response. previewContentRelease writes no game content; it stores the canonical payload server-side, so between approval and commit you must NOT re-preview, re-normalize, re-read diagnostics, rebuild or resend the release payload. If you no longer have the preview_id or payload_hash, say so and run a new preview — never claim you can commit without them. Retrying the commit with the same preview_id + hash safely returns the original result. If the commit returns status 'committing' (202), tell the user it is publishing and poll getContentReleasePreview every ~15s until status is 'committed' or 'failed'. Previews live 30 minutes: use getContentReleasePreview to re-show a stored plan in a later turn, and cancelContentReleasePreview to discard one. previewBulk / commitBulk remain for arbitrary multi-group documents. Call getAdminApiCapabilities first for supported fields and limits.
 - Bulk workflow: preview -> show creates/updates/deletes/replacements and every warning -> explicit approval -> commit with the identical canonical_payload, its preview_token and an idempotency_key. For large plans use getPreviewDetail to page through the sections.
 - To publish later, approve a preview and then call scheduleApprovedPreview with run_at; use listScheduledJobs, rescheduleJob and cancelScheduledJob to manage it. A scheduled job that no longer matches its approved plan fails instead of writing.
 - OVR is the average of the nine base stats and must sit inside the gem tier band (Emerald 1.00-1.99, Amethyst 2.00-2.99, Diamond 3.00-3.99, Pink Diamond 4.00-4.99, Actolytrene 5.00-5.99, Game Over 6.00+). Never silently change a requested tier; fix the stats or ask.
