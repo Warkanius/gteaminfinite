@@ -644,8 +644,8 @@ export function buildOpenApi(baseUrl: string) {
         operationId: `${mode}ContentRelease`,
         summary: `${isCommit ? "Publish" : "Validate"} a complete atomic content release`,
         description: isCommit
-          ? "Atomically publishes the exact previously previewed content release. Requires the matching single-use preview token and an identical canonical payload. All release operations succeed or roll back together."
-          : "Validates a complete content release with zero writes, including players, collection, reward, team, pack, pool, odds, evo paths, objectives, and playable resulting evo versions. Returns a payload hash and single-use preview token.",
+          ? "Legacy same-turn commit: publishes the exact previously previewed release using the single-use preview token and an identical payload. Prefer commitContentReleaseByPreviewId."
+          : "Validates a complete content release with zero writes (players, collection, reward, team, pack, pool, odds, evo paths, objectives, playable evo versions) and stores the plan server-side. Returns preview_id, payload_hash and the full plan.",
 
         "x-openai-isConsequential": isCommit,
         requestBody: { required: true, content: { "application/json": { schema: ReleaseInput } } },
@@ -658,6 +658,84 @@ export function buildOpenApi(baseUrl: string) {
       },
     };
   }
+
+  paths["/content-release/commit-by-preview-id"] = {
+    post: {
+      operationId: "commitContentReleaseByPreviewId",
+      summary: "Publish a stored content-release preview",
+      description:
+        "Commits the stored preview exactly as previewed: one transaction, no re-preview, no re-normalization. Requires the preview_id and the payload_hash the user approved. Verifies every created record by immutable id and rolls back on any failure.",
+      "x-openai-isConsequential": true,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["preview_id", "approved_payload_hash"],
+              properties: {
+                preview_id: strProp("The immutable preview_id returned by previewContentRelease."),
+                approved_payload_hash: strProp("The payload_hash shown to and approved by the user. Must match exactly."),
+                idempotency_key: strProp("Optional. Repeating a commit with the same key returns the original result."),
+              },
+            },
+            example: { preview_id: "0f2a…", approved_payload_hash: "9c1b…", idempotency_key: "galactic-release-1" },
+          },
+        },
+      },
+      responses: {
+        "200": { description: "Commit result and verification report", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+        "404": { description: "PREVIEW_NOT_FOUND." },
+        "409": { description: "PREVIEW_ALREADY_COMMITTED or PAYLOAD_HASH_MISMATCH; nothing was written." },
+        "410": { description: "PREVIEW_EXPIRED or PREVIEW_CANCELLED; run a new preview." },
+      },
+    },
+  };
+
+  paths["/content-release/preview/get"] = {
+    post: {
+      operationId: "getContentReleasePreview",
+      summary: "Read a stored content-release preview",
+      description:
+        "Returns the stored plan for a preview_id — status, payload hash, expiry, creates, updates, replacements, deletes and warnings. Never returns the secret backend token. Use it to re-show a plan in a later turn before committing.",
+      "x-openai-isConsequential": false,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: { type: "object", required: ["preview_id"], properties: { preview_id: strProp("Immutable preview id.") } },
+          },
+        },
+      },
+      responses: {
+        "200": { description: "Stored preview", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+        "404": { description: "PREVIEW_NOT_FOUND." },
+      },
+    },
+  };
+
+  paths["/content-release/preview/cancel"] = {
+    post: {
+      operationId: "cancelContentReleasePreview",
+      summary: "Cancel a pending content-release preview",
+      description: "Marks a pending preview cancelled so it can never be committed. Committed previews cannot be cancelled.",
+      "x-openai-isConsequential": true,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: { type: "object", required: ["preview_id"], properties: { preview_id: strProp("Immutable preview id.") } },
+          },
+        },
+      },
+      responses: {
+        "200": { description: "Cancelled preview", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+        "404": { description: "PREVIEW_NOT_FOUND." },
+        "409": { description: "PREVIEW_ALREADY_COMMITTED." },
+      },
+    },
+  };
+
 
 
   paths["/diagnostics"] = {
