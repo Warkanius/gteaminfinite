@@ -756,42 +756,115 @@ export function buildOpenApi(baseUrl: string) {
     },
   };
 
+  // Explicit player-card schema shared by previewBulkPlayers / commitBulkPlayers.
+  const num = (description: string) => ({ type: "number", description });
+  const statProps = Object.fromEntries(
+    ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"].flatMap((s) => [
+      [s, num(`Base stat ${s.replace("stat_", "")} (0-99).`)],
+      [s.replace("stat_", "run_stat_"), num(`Runs-mode stat ${s.replace("stat_", "")} (0-99).`)],
+    ]),
+  );
+  const tierEnum = ["base", "gold", "hof", "diamond", "actolytrene"];
+  const bulkPlayerSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      temp_ref: strProp("Client reference so later items in the same payload can point at this card."),
+      player_card_id: strProp("Immutable card id. Authoritative target."),
+      card_key: strProp("Immutable card key. Used when no id is available."),
+      name: strProp("Existing card name to target, or the name of a new card."),
+      new_name: strProp("Rename the card."),
+      gem_tier: strProp("Gem tier, e.g. Emerald, Amethyst, Diamond, Pink Diamond, Actolytrene, Game Over."),
+      gem_name: strProp("Display gem name override."),
+      team: strProp("Team name."),
+      collection: strProp("Collection name."),
+      sub_collection: strProp("Sub-collection name."),
+      position1: strProp("Primary position, e.g. SG."),
+      position2: strProp("Secondary position."),
+      rating: num("Decimal OVR; must equal the mean of the nine base stats within 1e-7."),
+      run_rating: num("Runs-mode rating."),
+      ...statProps,
+      market_value: num("Market value in coins."),
+      social_handle: strProp("Social handle."),
+      avatar_url: strProp("Avatar image URL."),
+      is_collection_reward: { type: "boolean", description: "Marks the card as a collection reward." },
+      card_color_primary: strProp("Card primary colour."),
+      card_color_secondary: strProp("Card secondary colour."),
+      card_glow_color: strProp("Card glow colour."),
+      card_animation: strProp("Card animation: none, pulse, shimmer, glow."),
+      badges: {
+        type: "array",
+        description: "FULL REPLACEMENT of this card's badges. [] clears all; omit to leave untouched.",
+        items: {
+          type: "object",
+          required: ["badge"],
+          additionalProperties: false,
+          properties: { badge: strProp("Badge name."), tier: { type: "string", enum: tierEnum } },
+        },
+      },
+      traits: {
+        type: "array",
+        description: "FULL REPLACEMENT of this card's signature traits. [] clears all; omit to leave untouched.",
+        items: {
+          type: "object",
+          required: ["trait"],
+          additionalProperties: false,
+          properties: {
+            trait: strProp("Signature trait name."),
+            tier: { type: "string", enum: tierEnum },
+            target_stat: { type: "string", enum: Object.keys(statProps).filter((k) => k.startsWith("stat_")), description: "Stat the trait boosts." },
+          },
+        },
+      },
+    },
+  } as const;
+
+  const bulkPlayerExample = {
+    players: [
+      {
+        name: "Player Name",
+        player_card_id: "00000000-0000-0000-0000-000000000001",
+        gem_tier: "Diamond",
+        rating: 3.7777777778,
+        run_rating: 4,
+        position1: "SG",
+        position2: "SF",
+        stat_3pt: 6,
+        stat_mid: 4,
+        stat_fin: 5,
+        stat_dnk: 4,
+        stat_ast: 3,
+        stat_stl: 6,
+        stat_reb: 1,
+        stat_blk: 1,
+        stat_int: 4,
+        badges: [{ badge: "Walking Bucket", tier: "diamond" }],
+        traits: [{ trait: "Prime Time", tier: "gold", target_stat: "stat_3pt" }],
+      },
+    ],
+  };
+
   paths["/admin-api/v1/bulk-players/preview"] = {
     post: {
       operationId: "previewBulkPlayers",
       summary: "Preview bulk player-card changes (zero writes)",
       description:
-        "Validates multiple player-card creates or updates with zero writes. Supports immutable player-card IDs, all nine base stats, Runs stats, decimal ratings, gem tiers, positions, collection-reward flags, and complete badge and trait replacement. Always call before commit.",
+        "Validates up to 500 player-card creates or updates with zero writes. Supports immutable player-card IDs, all nine base stats, Runs stats, decimal ratings, gem tiers, positions, collection-reward flags, and complete badge and trait replacement. Always call before commit.",
       "x-openai-isConsequential": false,
       requestBody: {
         required: true,
         content: {
           "application/json": {
-            schema: anyObj,
-            example: {
-              players: [
-                {
-                  name: "Player Name",
-                  player_card_id: "immutable-uuid",
-                  gem_tier: "Diamond",
-                  rating: 3.7777777778,
-                  run_rating: 4,
-                  position1: "SG",
-                  position2: "SF",
-                  stat_3pt: 6,
-                  stat_mid: 4,
-                  stat_fin: 5,
-                  stat_dnk: 4,
-                  stat_ast: 3,
-                  stat_stl: 6,
-                  stat_reb: 1,
-                  stat_blk: 1,
-                  stat_int: 4,
-                  badges: [{ badge: "Walking Bucket", tier: "diamond" }],
-                  traits: [{ trait: "Prime Time", tier: "gold", target_stat: "stat_3pt" }],
-                },
-              ],
+            schema: {
+              type: "object",
+              required: ["players"],
+              additionalProperties: false,
+              properties: {
+                players: { type: "array", minItems: 1, maxItems: 500, items: bulkPlayerSchema },
+                notes: strProp("Optional free-text note stored with the preview."),
+              },
             },
+            example: bulkPlayerExample,
           },
         },
       },
@@ -804,20 +877,31 @@ export function buildOpenApi(baseUrl: string) {
       operationId: "commitBulkPlayers",
       summary: "Commit an approved bulk player preview atomically",
       description:
-        "Atomically applies the exact previously previewed bulk-player payload. Requires the matching single-use preview token and an identical canonical payload. All player updates succeed or roll back together. No other entity is touched.",
+        "Atomically applies the exact previously previewed bulk-player payload. Requires the matching single-use preview token (30 minute lifetime) and an identical canonical payload. All cards commit together or roll back together. Errors: PREVIEW_MISMATCH, TOKEN_EXPIRED, VALIDATION_FAILED, COMMIT_FAILED.",
       "x-openai-isConsequential": true,
       requestBody: {
         required: true,
         content: {
           "application/json": {
-            schema: anyObj,
-            example: { preview_token: "single-use-token", players: [{ player_card_id: "immutable-uuid", rating: 3.7777777778 }] },
+            schema: {
+              type: "object",
+              required: ["preview_token", "players"],
+              additionalProperties: false,
+              properties: {
+                preview_token: strProp("Single-use token from the matching previewBulkPlayers response."),
+                idempotency_key: strProp("Optional key making a retry of this exact commit safe."),
+                notes: strProp("Optional free-text note; must match the previewed payload."),
+                players: { type: "array", minItems: 1, maxItems: 500, items: bulkPlayerSchema },
+              },
+            },
+            example: { preview_token: "single-use-token", ...bulkPlayerExample },
           },
         },
       },
       responses: okJson("Bulk player commit report"),
     },
   };
+
 
 
   paths["/admin-api/v1/bulk/preview"] = {
