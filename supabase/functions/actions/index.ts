@@ -226,53 +226,8 @@ async function rpcResult(p: Promise<{ data: unknown; error: { message: string } 
   return json(data);
 }
 
-/** Caps a plan array so the connector never receives an over-sized body. */
-function cap(value: unknown, limit = 60) {
-  if (!Array.isArray(value)) return value ?? [];
-  return value.length > limit ? { total: value.length, showing: limit, items: value.slice(0, limit) } : value;
-}
 
-/** Preview record without the canonical payload and with capped plan arrays. */
-function slimPreview(record: Record<string, any> | null) {
-  const r = record ?? {};
-  return {
-    preview_id: r.preview_id,
-    payload_hash: r.payload_hash,
-    status: r.status,
-    created_at: r.created_at,
-    expires_at: r.expires_at,
-    approved_at: r.approved_at,
-    committed_at: r.committed_at,
-    summary: r.summary,
-    creates: cap(r.creates),
-    updates: cap(r.updates),
-    replacements: cap(r.replacements),
-    deletes: cap(r.deletes),
-    warnings: cap(r.warnings),
-    destructive_operations: cap(r.destructive_operations),
-    resolved_references: cap(r.resolved_references),
-    verification: r.verification_result ?? null,
-    last_error: r.last_error ?? null,
-  };
-}
 
-function commitView(record: Record<string, any> | null) {
-  const r = record ?? {};
-  return {
-    preview_id: r.preview_id,
-    payload_hash: r.payload_hash,
-    status: r.status,
-    committed_at: r.committed_at,
-    verification: r.verification_result ?? null,
-    summary: r.summary ?? null,
-    created_ids: r.commit_result?.results ? cap(r.commit_result.results) : undefined,
-  };
-}
-
-function countOf(value: unknown) {
-
-  return Array.isArray(value) ? value.length : 0;
-}
 
 /** Maps admin_error / preview lifecycle codes to HTTP statuses. */
 function rpcError(error: { message: string }) {
