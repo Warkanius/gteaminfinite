@@ -782,7 +782,7 @@ export function buildOpenApi(baseUrl: string) {
 
   // Explicit player-card schema shared by previewBulkPlayers / commitBulkPlayers.
   const num = (description: string) => ({ type: "number", description });
-  const statProps = Object.fromEntries(
+  const bulkStatProps = Object.fromEntries(
     ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"].flatMap((s) => [
       [s, num(`Base stat ${s.replace("stat_", "")} (0-99).`)],
       [s.replace("stat_", "run_stat_"), num(`Runs-mode stat ${s.replace("stat_", "")} (0-99).`)],
@@ -807,7 +807,7 @@ export function buildOpenApi(baseUrl: string) {
       position2: strProp("Secondary position."),
       rating: num("Decimal OVR; must equal the mean of the nine base stats within 1e-7."),
       run_rating: num("Runs-mode rating."),
-      ...statProps,
+      ...bulkStatProps,
       market_value: num("Market value in coins."),
       social_handle: strProp("Social handle."),
       avatar_url: strProp("Avatar image URL."),
@@ -836,7 +836,7 @@ export function buildOpenApi(baseUrl: string) {
           properties: {
             trait: strProp("Signature trait name."),
             tier: { type: "string", enum: tierEnum },
-            target_stat: { type: "string", enum: Object.keys(statProps).filter((k) => k.startsWith("stat_")), description: "Stat the trait boosts." },
+            target_stat: { type: "string", enum: Object.keys(bulkStatProps).filter((k) => k.startsWith("stat_")), description: "Stat the trait boosts." },
           },
         },
       },
