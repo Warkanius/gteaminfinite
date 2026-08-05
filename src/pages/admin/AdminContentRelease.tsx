@@ -55,15 +55,31 @@ const SAMPLE = {
   ],
 } as unknown as ContentReleaseInput;
 
-type PreviewPlan = Record<string, any> | null;
+type PreviewRecord = {
+  preview_id: string;
+  payload_hash: string;
+  status: string;
+  expires_at: string;
+  summary?: Record<string, any>;
+  creates?: any[];
+  updates?: any[];
+  replacements?: any[];
+  deletes?: any[];
+  warnings?: any[];
+  destructive_operations?: any[];
+  commit_result?: Record<string, any> | null;
+  verification_result?: Record<string, any> | null;
+};
 
 export default function AdminContentRelease() {
   const [text, setText] = useState(() => JSON.stringify(SAMPLE, null, 2));
   const [parseError, setParseError] = useState<string | null>(null);
   const [tierOrder, setTierOrder] = useState<string[]>([]);
-  const [plan, setPlan] = useState<PreviewPlan>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"preview" | "commit" | null>(null);
+  const [preview, setPreview] = useState<PreviewRecord | null>(null);
+  const [hashConfirm, setHashConfirm] = useState("");
+  const [lookupId, setLookupId] = useState("");
+  const [commit, setCommit] = useState<Record<string, any> | null>(null);
+  const [busy, setBusy] = useState<"preview" | "commit" | "load" | "cancel" | null>(null);
 
   useEffect(() => {
     supabase
@@ -92,33 +108,113 @@ export default function AdminContentRelease() {
   const errors = (prepared?.validations ?? []).filter((v) => v.severity === "error");
   const warnings = (prepared?.validations ?? []).filter((v) => v.severity !== "error");
   const oddsTotal = parsed?.pack?.odds ? formatHundredths(oddsTotalHundredths(parsed.pack.odds)) : null;
+  const hashMatches = !!preview && hashConfirm.trim() === preview.payload_hash;
+  const expired = !!preview && new Date(preview.expires_at).getTime() < Date.now();
 
-  async function runBatch(mode: "preview" | "commit") {
+  async function runPreview() {
     if (!prepared?.valid) return;
-    setBusy(mode);
+    setBusy("preview");
     try {
       const { data, error } = await supabase.rpc("admin_apply_batch", {
         p_payload: prepared.payload as never,
-        p_commit: mode === "commit",
-        p_preview_token: mode === "commit" ? token : null,
+        p_commit: false,
+        p_preview_token: null,
         p_kind: "content_release",
       });
       if (error) throw error;
-      const result = data as Record<string, any>;
-      setPlan(result);
-      if (mode === "preview") {
-        setToken(result?.preview_token ?? null);
-        toast({ title: "Preview ready", description: "Nothing was written. Review the plan, then publish." });
-      } else {
-        setToken(null);
-        toast({ title: "Release published", description: "Committed in one transaction." });
-      }
+      const plan = data as Record<string, any>;
+      const { data: stored, error: storeErr } = await supabase.rpc("content_release_preview_store", {
+        p_payload_hash: plan.payload_hash,
+        p_canonical_payload: (plan.normalized_payload ?? prepared.payload) as never,
+        p_preview_token: plan.preview_token ?? null,
+        p_summary: {
+          release_name: (parsed as any)?.release?.name ?? null,
+          release_status: (parsed as any)?.release?.status ?? "draft",
+          item_count: plan.item_count ?? 0,
+        } as never,
+        p_plan: {
+          creates: plan.creates ?? [],
+          updates: plan.updates ?? [],
+          replacements: plan.replacements ?? [],
+          deletes: plan.deletes ?? [],
+          warnings: plan.warnings ?? [],
+          destructive_operations: plan.replacements ?? [],
+          resolved_references: plan.resolved_references ?? [],
+          results: plan.results ?? [],
+        } as never,
+        p_ttl_minutes: 30,
+      });
+      if (storeErr) throw storeErr;
+      setPreview(stored as unknown as PreviewRecord);
+      setHashConfirm("");
+      setCommit(null);
+      toast({ title: "Preview stored", description: "Nothing was written. Confirm the payload hash to publish." });
     } catch (e) {
-      toast({ title: `${mode === "preview" ? "Preview" : "Publish"} failed`, description: (e as Error).message, variant: "destructive" });
+      toast({ title: "Preview failed", description: (e as Error).message, variant: "destructive" });
     } finally {
       setBusy(null);
     }
   }
+
+  async function loadPreview() {
+    if (!lookupId.trim()) return;
+    setBusy("load");
+    try {
+      const { data, error } = await supabase.rpc("content_release_preview_get", { p_preview_id: lookupId.trim() });
+      if (error) throw error;
+      const record = data as unknown as PreviewRecord;
+      setPreview(record);
+      setHashConfirm("");
+      setCommit(record.commit_result ?? null);
+      toast({ title: `Preview ${record.status}`, description: `Hash ${record.payload_hash}` });
+    } catch (e) {
+      toast({ title: "Could not load preview", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function cancelPreview() {
+    if (!preview) return;
+    setBusy("cancel");
+    try {
+      const { data, error } = await supabase.rpc("content_release_preview_cancel", { p_preview_id: preview.preview_id });
+      if (error) throw error;
+      setPreview(data as unknown as PreviewRecord);
+      toast({ title: "Preview cancelled", description: "It can no longer be committed." });
+    } catch (e) {
+      toast({ title: "Cancel failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // Commits ONLY by stored preview_id + approved hash: no re-preview, no
+  // re-normalization, no rebuilt request body, no fresh token.
+  async function publish() {
+    if (!preview || !hashMatches) return;
+    setBusy("commit");
+    try {
+      const { data, error } = await supabase.rpc("content_release_preview_commit", {
+        p_preview_id: preview.preview_id,
+        p_approved_payload_hash: preview.payload_hash,
+        p_idempotency_key: `ui:${preview.preview_id}`,
+      });
+      if (error) throw error;
+      const record = data as unknown as PreviewRecord & { idempotent_replay?: boolean };
+      setPreview(record);
+      setCommit(record.commit_result ?? null);
+      toast({
+        title: record.idempotent_replay ? "Already committed" : "Release published",
+        description: "Committed in one transaction and verified by immutable id.",
+      });
+    } catch (e) {
+      toast({ title: "Publish failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
 
   return (
     <div className="space-y-6 p-4 md:p-6">
