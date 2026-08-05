@@ -611,6 +611,23 @@ export function buildOpenApi(baseUrl: string) {
           },
         },
       },
+      locker_codes: {
+        type: "array",
+        description: "Locker codes published with this release. Set reward_release_pack true to reward the pack created in this same release (resolved inside the transaction).",
+        items: {
+          type: "object",
+          required: ["code"],
+          properties: {
+            code: strProp("Redeemable code; upper-cased."),
+            reward_type: strProp("coins | gems | pack | card."),
+            reward_value: { type: "object", additionalProperties: true, description: "Reward payload, e.g. { amount: 5000 } or { pack_name: '...' }." },
+            reward_release_pack: { type: "boolean", description: "Reward the pack defined in this release." },
+            max_redemptions: { type: "integer" },
+            expires_at: strProp("ISO timestamp."),
+            status: strProp("draft | published."),
+          },
+        },
+      },
       forbid_existing_links_to: {
         type: "array",
         items: { type: "string" },
