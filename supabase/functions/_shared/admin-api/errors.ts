@@ -26,6 +26,31 @@ export interface AdminApiWarning {
   entity_id?: string;
   severity: "warning" | "info" | "destructive" | "deprecation";
   remediation?: string;
+  /** Stable public alias so clients can branch on a small, documented set of codes. */
+  alias?: string;
+}
+
+/**
+ * Public alias codes. The internal code stays specific; the alias is one of the
+ * four documented families a client (the Custom GPT) is expected to branch on.
+ */
+export const ERROR_ALIASES: Record<string, string> = {
+  PREVIEW_EXPIRED: "TOKEN_EXPIRED",
+  PREVIEW_ALREADY_COMMITTED: "TOKEN_EXPIRED",
+  UNKNOWN_PREVIEW_TOKEN: "TOKEN_EXPIRED",
+  UNKNOWN_PREVIEW: "TOKEN_EXPIRED",
+  PREVIEW_REQUIRED: "PREVIEW_MISMATCH",
+  PREVIEW_MISMATCH: "PREVIEW_MISMATCH",
+  PREVIEW_OPERATION_MISMATCH: "PREVIEW_MISMATCH",
+  PREVIEW_OWNER_MISMATCH: "PREVIEW_MISMATCH",
+  PREVIEW_STALE: "PREVIEW_MISMATCH",
+  IDEMPOTENCY_MISMATCH: "PREVIEW_MISMATCH",
+};
+
+export function aliasFor(code: string, stage: Failure["stage"]): string {
+  if (ERROR_ALIASES[code]) return ERROR_ALIASES[code];
+  if (stage === "commit") return "COMMIT_FAILED";
+  return "VALIDATION_FAILED";
 }
 
 export function apiError(code: string, message: string, extra: Partial<AdminApiError> = {}): AdminApiError {
@@ -45,6 +70,8 @@ export interface Failure {
   api_version: string;
   operation?: string;
   stage: "auth" | "validation" | "resolution" | "preview" | "commit" | "schedule";
+  /** One of PREVIEW_MISMATCH | TOKEN_EXPIRED | VALIDATION_FAILED | COMMIT_FAILED. */
+  error_code: string;
   wrote_anything: false;
   errors: AdminApiError[];
   warnings?: AdminApiWarning[];
@@ -56,16 +83,19 @@ export function failure(
   operation?: string,
   warnings: AdminApiWarning[] = [],
 ): Failure {
+  const withAlias = errors.map((e) => ({ ...e, alias: e.alias ?? aliasFor(e.code, stage) }));
   return {
     ok: false,
     api_version: API_VERSION,
     operation,
     stage,
+    error_code: withAlias[0]?.alias ?? (stage === "commit" ? "COMMIT_FAILED" : "VALIDATION_FAILED"),
     wrote_anything: false,
-    errors,
+    errors: withAlias,
     warnings,
   };
 }
+
 
 const CODE_HINTS: Record<string, string> = {
   NOT_AUTHENTICATED: "Sign in to GTeam Infinite Hub and retry; the action token expired.",
