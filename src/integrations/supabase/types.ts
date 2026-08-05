@@ -850,6 +850,66 @@ export type Database = {
         }
         Relationships: []
       }
+      content_release_previews: {
+        Row: {
+          approved_at: string | null
+          canonical_payload: Json
+          commit_result: Json | null
+          committed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          idempotency_key: string | null
+          last_error: string | null
+          operation_plan: Json
+          payload_hash: string
+          preview_summary: Json
+          preview_token_encrypted: string | null
+          requested_by: string
+          status: string
+          updated_at: string
+          verification_result: Json | null
+        }
+        Insert: {
+          approved_at?: string | null
+          canonical_payload: Json
+          commit_result?: Json | null
+          committed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          idempotency_key?: string | null
+          last_error?: string | null
+          operation_plan?: Json
+          payload_hash: string
+          preview_summary?: Json
+          preview_token_encrypted?: string | null
+          requested_by: string
+          status?: string
+          updated_at?: string
+          verification_result?: Json | null
+        }
+        Update: {
+          approved_at?: string | null
+          canonical_payload?: Json
+          commit_result?: Json | null
+          committed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          idempotency_key?: string | null
+          last_error?: string | null
+          operation_plan?: Json
+          payload_hash?: string
+          preview_summary?: Json
+          preview_token_encrypted?: string | null
+          requested_by?: string
+          status?: string
+          updated_at?: string
+          verification_result?: Json | null
+        }
+        Relationships: []
+      }
       domination_game_players: {
         Row: {
           domination_game_id: string
@@ -4024,6 +4084,40 @@ export type Database = {
         Args: { p_entity_id: string; p_entity_type: string }
         Returns: Json
       }
+      content_release_preview_cancel: {
+        Args: { p_preview_id: string }
+        Returns: Json
+      }
+      content_release_preview_commit: {
+        Args: {
+          p_approved_payload_hash: string
+          p_idempotency_key?: string
+          p_preview_id: string
+        }
+        Returns: Json
+      }
+      content_release_preview_get: {
+        Args: { p_preview_id: string }
+        Returns: Json
+      }
+      content_release_preview_public: {
+        Args: {
+          p_row: Database["public"]["Tables"]["content_release_previews"]["Row"]
+        }
+        Returns: Json
+      }
+      content_release_preview_store: {
+        Args: {
+          p_canonical_payload: Json
+          p_payload_hash: string
+          p_plan: Json
+          p_preview_token: string
+          p_summary: Json
+          p_ttl_minutes?: number
+        }
+        Returns: Json
+      }
+      content_release_verify: { Args: { p_result: Json }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

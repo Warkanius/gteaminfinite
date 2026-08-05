@@ -644,8 +644,8 @@ export function buildOpenApi(baseUrl: string) {
         operationId: `${mode}ContentRelease`,
         summary: `${isCommit ? "Publish" : "Validate"} a complete atomic content release`,
         description: isCommit
-          ? "Atomically publishes the exact previously previewed content release. Requires the matching single-use preview token and an identical canonical payload. All release operations succeed or roll back together."
-          : "Validates a complete content release with zero writes, including players, collection, reward, team, pack, pool, odds, evo paths, objectives, and playable resulting evo versions. Returns a payload hash and single-use preview token.",
+          ? "Legacy same-turn commit: publishes the exact previously previewed release using the single-use preview token and an identical payload. Prefer commitContentReleaseByPreviewId."
+          : "Validates a complete content release with zero writes (players, collection, reward, team, pack, pool, odds, evo paths, objectives, playable evo versions) and stores the plan server-side. Returns preview_id, payload_hash and the full plan.",
 
         "x-openai-isConsequential": isCommit,
         requestBody: { required: true, content: { "application/json": { schema: ReleaseInput } } },
@@ -658,6 +658,84 @@ export function buildOpenApi(baseUrl: string) {
       },
     };
   }
+
+  paths["/content-release/commit-by-preview-id"] = {
+    post: {
+      operationId: "commitContentReleaseByPreviewId",
+      summary: "Publish a stored content-release preview",
+      description:
+        "Commits the stored preview exactly as previewed: one transaction, no re-preview, no re-normalization. Requires the preview_id and the payload_hash the user approved. Verifies every created record by immutable id and rolls back on any failure.",
+      "x-openai-isConsequential": true,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["preview_id", "approved_payload_hash"],
+              properties: {
+                preview_id: strProp("The immutable preview_id returned by previewContentRelease."),
+                approved_payload_hash: strProp("The payload_hash shown to and approved by the user. Must match exactly."),
+                idempotency_key: strProp("Optional. Repeating a commit with the same key returns the original result."),
+              },
+            },
+            example: { preview_id: "0f2a…", approved_payload_hash: "9c1b…", idempotency_key: "galactic-release-1" },
+          },
+        },
+      },
+      responses: {
+        "200": { description: "Commit result and verification report", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+        "404": { description: "PREVIEW_NOT_FOUND." },
+        "409": { description: "PREVIEW_ALREADY_COMMITTED or PAYLOAD_HASH_MISMATCH; nothing was written." },
+        "410": { description: "PREVIEW_EXPIRED or PREVIEW_CANCELLED; run a new preview." },
+      },
+    },
+  };
+
+  paths["/content-release/preview/get"] = {
+    post: {
+      operationId: "getContentReleasePreview",
+      summary: "Read a stored content-release preview",
+      description:
+        "Returns the stored plan for a preview_id — status, payload hash, expiry, creates, updates, replacements, deletes and warnings. Never returns the secret backend token. Use it to re-show a plan in a later turn before committing.",
+      "x-openai-isConsequential": false,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: { type: "object", required: ["preview_id"], properties: { preview_id: strProp("Immutable preview id.") } },
+          },
+        },
+      },
+      responses: {
+        "200": { description: "Stored preview", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+        "404": { description: "PREVIEW_NOT_FOUND." },
+      },
+    },
+  };
+
+  paths["/content-release/preview/cancel"] = {
+    post: {
+      operationId: "cancelContentReleasePreview",
+      summary: "Cancel a pending content-release preview",
+      description: "Marks a pending preview cancelled so it can never be committed. Committed previews cannot be cancelled.",
+      "x-openai-isConsequential": true,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: { type: "object", required: ["preview_id"], properties: { preview_id: strProp("Immutable preview id.") } },
+          },
+        },
+      },
+      responses: {
+        "200": { description: "Cancelled preview", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } },
+        "404": { description: "PREVIEW_NOT_FOUND." },
+        "409": { description: "PREVIEW_ALREADY_COMMITTED." },
+      },
+    },
+  };
+
 
 
   paths["/diagnostics"] = {
@@ -1060,7 +1138,7 @@ Rules:
 - Sending badges or traits on a player replaces ALL of that card's assignments; omit them to leave them alone.
 - run_rank_rewards is one global ladder shared by every Run.
 - To edit a batch of EXISTING player cards and nothing else, use previewBulkPlayers -> approval -> commitBulkPlayers. Never loop the single-player endpoint, and never wrap player edits in a release just to update cards. That operation rejects any other group.
-- For a complete release — collection, reward, team, pack pool and odds, evo paths and playable evo versions — use previewContentRelease -> approval -> commitContentRelease. previewBulk / commitBulk remain for arbitrary multi-group documents. Call getAdminApiCapabilities first for supported fields and limits.
+- For a complete release — collection, reward, team, pack pool and odds, evo paths and playable evo versions — use previewContentRelease, then get explicit approval, then commitContentReleaseByPreviewId with the preview_id and the exact payload_hash you showed. Never re-run the preview before committing and never rebuild the payload; the server keeps the approved plan. Previews live 30 minutes: use getContentReleasePreview to re-show a stored plan in a later turn, and cancelContentReleasePreview to discard one. previewBulk / commitBulk remain for arbitrary multi-group documents. Call getAdminApiCapabilities first for supported fields and limits.
 - Bulk workflow: preview -> show creates/updates/deletes/replacements and every warning -> explicit approval -> commit with the identical canonical_payload, its preview_token and an idempotency_key. For large plans use getPreviewDetail to page through the sections.
 - To publish later, approve a preview and then call scheduleApprovedPreview with run_at; use listScheduledJobs, rescheduleJob and cancelScheduledJob to manage it. A scheduled job that no longer matches its approved plan fails instead of writing.
 - OVR is the average of the nine base stats and must sit inside the gem tier band (Emerald 1.00-1.99, Amethyst 2.00-2.99, Diamond 3.00-3.99, Pink Diamond 4.00-4.99, Actolytrene 5.00-5.99, Game Over 6.00+). Never silently change a requested tier; fix the stats or ask.

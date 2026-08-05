@@ -139,26 +139,118 @@ Deno.serve(async (req) => {
     // ------------------------------------------------- atomic content release
     // Collections + ordered membership + reward, bulk cards, team, pack pool/odds
     // and multi-step evo paths with materialized versions — one transaction.
+    // Previews are persisted server-side and approved/committed by preview_id, so
+    // the token and canonical payload never have to survive a chat turn.
     const releaseMatch = path.match(/^\/content-release\/(preview|commit)$/);
     if (releaseMatch && req.method === "POST") {
       const commit = releaseMatch[1] === "commit";
-      const { preview_token, ...doc } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const { preview_token, preview_ttl_minutes, ...doc } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
       if (commit && !preview_token) {
-        return err("preview_token is required to commit: preview the identical release document first.", 400);
+        return err("preview_token is required to commit: preview the identical release document first, or commit by preview_id.", 400);
       }
       const { validations, valid, payload } = prepareRelease(doc as unknown as ContentReleaseInput);
       if (!valid) {
-        return json({ ok: false, stage: "validation", wrote_anything: false, validations }, 400);
+        return json({ ok: false, stage: "validation", error_code: "VALIDATION_FAILED", wrote_anything: false, validations }, 400);
       }
-      return await rpcResult(
-        supabase.rpc("admin_apply_batch", {
-          p_payload: payload,
-          p_commit: commit,
-          p_preview_token: (preview_token as string | undefined) ?? null,
-          p_kind: "content_release",
-        }),
-      );
+      const { data, error } = await supabase.rpc("admin_apply_batch", {
+        p_payload: payload,
+        p_commit: commit,
+        p_preview_token: (preview_token as string | undefined) ?? null,
+        p_kind: "content_release",
+      });
+      if (error) return rpcError(error);
+      const result = (data ?? {}) as Record<string, any>;
+      if (commit) return json(result);
+
+      // Persist the preview: durable id, hash and plan; the token stays server-side.
+      const { data: stored, error: storeErr } = await supabase.rpc("content_release_preview_store", {
+        p_payload_hash: result.payload_hash,
+        p_canonical_payload: result.normalized_payload ?? payload,
+        p_preview_token: result.preview_token ?? null,
+        p_summary: {
+          release_name: (doc as any)?.release?.name ?? null,
+          release_status: (doc as any)?.release?.status ?? "draft",
+          item_count: result.item_count ?? 0,
+          creates: countOf(result.creates),
+          updates: countOf(result.updates),
+          replacements: countOf(result.replacements),
+          deletes: countOf(result.deletes),
+          warnings: countOf(result.warnings),
+        },
+        p_plan: {
+          creates: result.creates ?? [],
+          updates: result.updates ?? [],
+          replacements: result.replacements ?? [],
+          deletes: result.deletes ?? [],
+          warnings: result.warnings ?? [],
+          destructive_operations: result.replacements ?? [],
+          resolved_references: result.resolved_references ?? [],
+          results: result.results ?? [],
+        },
+        p_ttl_minutes: Number(preview_ttl_minutes) || 30,
+      });
+      if (storeErr) return rpcError(storeErr);
+      const record = stored as Record<string, any>;
+      return json({
+        ok: true,
+        wrote_anything: false,
+        preview_id: record.preview_id,
+        payload_hash: record.payload_hash,
+        status: record.status,
+        expires_at: record.expires_at,
+        summary: record.summary,
+        creates: record.creates,
+        updates: record.updates,
+        replacements: record.replacements,
+        deletes: record.deletes,
+        warnings: record.warnings,
+        destructive_operations: record.destructive_operations,
+        next_step: "Show this plan, get explicit approval, then call commitContentReleaseByPreviewId with preview_id + payload_hash.",
+      });
     }
+
+    if (path === "/content-release/preview/get" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!body.preview_id) return err("preview_id is required.", 400);
+      const { data, error } = await supabase.rpc("content_release_preview_get", { p_preview_id: body.preview_id });
+      if (error) return rpcError(error);
+      return json(data);
+    }
+
+    if (path === "/content-release/preview/cancel" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!body.preview_id) return err("preview_id is required.", 400);
+      const { data, error } = await supabase.rpc("content_release_preview_cancel", { p_preview_id: body.preview_id });
+      if (error) return rpcError(error);
+      return json(data);
+    }
+
+    if (path === "/content-release/commit-by-preview-id" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!body.preview_id) return err("preview_id is required.", 400);
+      if (!body.approved_payload_hash) {
+        return err("approved_payload_hash is required: echo back the hash you showed the user for approval.", 400);
+      }
+      const { data, error } = await supabase.rpc("content_release_preview_commit", {
+        p_preview_id: body.preview_id,
+        p_approved_payload_hash: body.approved_payload_hash,
+        p_idempotency_key: (body.idempotency_key as string | undefined) ?? null,
+      });
+      if (error) return rpcError(error);
+      const record = (data ?? {}) as Record<string, any>;
+      return json({
+        ok: true,
+        applied: true,
+        preview_id: record.preview_id,
+        payload_hash: record.payload_hash,
+        status: record.status,
+        committed_at: record.committed_at,
+        idempotent_replay: record.idempotent_replay ?? false,
+        verification: record.verification_result,
+        commit_result: record.commit_result,
+      });
+    }
+
 
     const m = path.match(/^\/([a-z-]+)\/(preview|commit)$/);
     if (m && req.method === "POST") {
@@ -206,6 +298,23 @@ async function rpcResult(p: Promise<{ data: unknown; error: { message: string } 
   }
   return json(data);
 }
+
+function countOf(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+/** Maps admin_error / preview lifecycle codes to HTTP statuses. */
+function rpcError(error: { message: string }) {
+  const msg = error.message || "";
+  if (/Admin role required/i.test(msg)) return err("Admin role required for this operation.", 403);
+  if (/Not authenticated/i.test(msg) || /UNAUTHORIZED/.test(msg)) return err(`Unauthorized: ${msg}`, 401);
+  if (/PREVIEW_NOT_FOUND/.test(msg)) return err(msg, 404);
+  if (/PREVIEW_ALREADY_COMMITTED/.test(msg)) return err(msg, 409);
+  if (/PAYLOAD_HASH_MISMATCH/.test(msg)) return err(msg, 409);
+  if (/PREVIEW_EXPIRED|PREVIEW_CANCELLED|PREVIEW_TOKEN_INVALID/.test(msg)) return err(msg, 410);
+  return err(`Rejected, nothing was written: ${msg}`, 400);
+}
+
 
 async function requireAdmin(supabase: ReturnType<typeof clientFor>, userId: string) {
   const { data, error } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
