@@ -16,6 +16,8 @@ export interface AdminApiError {
   matches?: Array<Record<string, unknown>>;
   written: boolean;
   remediation?: string;
+  /** Stable public alias so clients can branch on a small, documented set of codes. */
+  alias?: string;
 }
 
 export interface AdminApiWarning {
@@ -26,9 +28,8 @@ export interface AdminApiWarning {
   entity_id?: string;
   severity: "warning" | "info" | "destructive" | "deprecation";
   remediation?: string;
-  /** Stable public alias so clients can branch on a small, documented set of codes. */
-  alias?: string;
 }
+
 
 /**
  * Public alias codes. The internal code stays specific; the alias is one of the
