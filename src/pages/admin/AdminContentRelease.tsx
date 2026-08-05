@@ -241,29 +241,38 @@ export default function AdminContentRelease() {
               value={text}
               onChange={(e) => {
                 setText(e.target.value);
-                setPlan(null);
-                setToken(null);
+                setPreview(null);
+                setHashConfirm("");
+                setCommit(null);
               }}
-              className="min-h-[420px] font-mono text-xs"
+              className="min-h-[360px] font-mono text-xs"
               spellCheck={false}
             />
             {parseError && <p className="text-xs text-destructive">Invalid JSON: {parseError}</p>}
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={() => runBatch("preview")} disabled={!prepared?.valid || busy !== null}>
+              <Button onClick={runPreview} disabled={!prepared?.valid || busy !== null}>
                 {busy === "preview" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
                 Preview (zero writes)
-              </Button>
-              <Button
-                variant="default"
-                onClick={() => runBatch("commit")}
-                disabled={!token || busy !== null}
-              >
-                {busy === "commit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
-                Publish release
               </Button>
               {oddsTotal && (
                 <Badge variant={oddsTotal === "100.00" ? "secondary" : "destructive"}>Odds {oddsTotal}%</Badge>
               )}
+            </div>
+
+            <div className="space-y-2 rounded-md border border-border/60 p-3">
+              <Label className="text-xs text-muted-foreground">Resume a stored preview by ID</Label>
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  value={lookupId}
+                  onChange={(e) => setLookupId(e.target.value)}
+                  placeholder="preview_id"
+                  className="max-w-[320px] font-mono text-xs"
+                />
+                <Button variant="outline" size="sm" onClick={loadPreview} disabled={busy !== null || !lookupId.trim()}>
+                  {busy === "load" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Load preview
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -272,7 +281,52 @@ export default function AdminContentRelease() {
           <CardHeader>
             <CardTitle className="text-base">Validation &amp; plan</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {preview && (
+              <div className="space-y-3 rounded-md border border-border/60 p-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <Badge variant="outline" className="font-mono text-[10px]">{preview.status}</Badge>
+                  <span className="font-mono">{preview.preview_id}</span>
+                  <span className="text-muted-foreground">
+                    {preview.summary?.release_name ? `${preview.summary.release_name} · ` : ""}
+                    expires {new Date(preview.expires_at).toLocaleString()}
+                  </span>
+                </div>
+                <p className="font-mono text-[11px] break-all">hash {preview.payload_hash}</p>
+                {expired && preview.status === "pending" && (
+                  <p className="text-xs text-destructive">This preview expired. Run a new preview and approve it again.</p>
+                )}
+                {preview.status === "pending" && !expired && (
+                  <>
+                    <Label className="text-xs text-muted-foreground">
+                      Type the payload hash above to confirm you approve exactly this plan.
+                    </Label>
+                    <Input
+                      value={hashConfirm}
+                      onChange={(e) => setHashConfirm(e.target.value)}
+                      placeholder="paste payload hash"
+                      className="font-mono text-xs"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={publish} disabled={!hashMatches || busy !== null}>
+                        {busy === "commit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
+                        Publish this preview
+                      </Button>
+                      <Button variant="outline" onClick={cancelPreview} disabled={busy !== null}>
+                        {busy === "cancel" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Cancel preview
+                      </Button>
+                    </div>
+                  </>
+                )}
+                {preview.verification_result && (
+                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[10px]">
+                    {JSON.stringify(preview.verification_result, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
+
             <Tabs defaultValue="validation">
               <TabsList>
                 <TabsTrigger value="validation">
@@ -292,22 +346,30 @@ export default function AdminContentRelease() {
               </TabsContent>
 
               <TabsContent value="plan">
-                {!plan ? (
+                {!preview ? (
                   <p className="text-sm text-muted-foreground">Run a preview to see creates, updates and replacements.</p>
                 ) : (
                   <ScrollArea className="h-[420px]">
                     <div className="space-y-3 pr-3">
-                      <PlanSection title="Creates" rows={plan.creates} />
-                      <PlanSection title="Updates" rows={plan.updates} />
-                      <PlanSection title="Destructive replacements" rows={plan.replacements} destructive />
-                      <PlanSection title="Deletes" rows={plan.deletes} destructive />
-                      {plan.payload_hash && (
-                        <p className="font-mono text-[11px] text-muted-foreground">hash {plan.payload_hash}</p>
+                      <PlanSection title="Creates" rows={preview.creates} />
+                      <PlanSection title="Updates" rows={preview.updates} />
+                      <PlanSection title="Destructive replacements" rows={preview.destructive_operations ?? preview.replacements} destructive />
+                      <PlanSection title="Deletes" rows={preview.deletes} destructive />
+                      {!!preview.warnings?.length && (
+                        <pre className="whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[10px]">
+                          {JSON.stringify(preview.warnings, null, 2)}
+                        </pre>
+                      )}
+                      {commit && (
+                        <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[10px]">
+                          {JSON.stringify(commit.created_ids ?? commit, null, 2)}
+                        </pre>
                       )}
                     </div>
                   </ScrollArea>
                 )}
               </TabsContent>
+
 
               <TabsContent value="payload">
                 <ScrollArea className="h-[420px]">
