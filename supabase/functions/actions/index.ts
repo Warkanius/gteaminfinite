@@ -142,57 +142,11 @@ Deno.serve(async (req) => {
     // Previews are persisted server-side and approved/committed by preview_id, so
     // the token and canonical payload never have to survive a chat turn.
     if (path === "/content-release/preview" && req.method === "POST") {
-      const { preview_token: _ignored, preview_ttl_minutes, ...doc } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-      const { validations, valid, payload } = prepareRelease(doc as unknown as ContentReleaseInput);
-      if (!valid) {
-        return json({ ok: false, stage: "validation", error_code: "VALIDATION_FAILED", wrote_anything: false, validations }, 400);
-      }
-      const { data, error } = await supabase.rpc("admin_apply_batch", {
-        p_payload: payload,
-        p_commit: false,
-        p_preview_token: null,
-        p_kind: "content_release",
-      });
-      if (error) return rpcError(error);
-      const result = (data ?? {}) as Record<string, any>;
-
-      // Persist the preview: durable id, hash and plan; the token stays server-side.
-      const { data: stored, error: storeErr } = await supabase.rpc("content_release_preview_store", {
-        p_payload_hash: result.payload_hash,
-        p_canonical_payload: result.normalized_payload ?? payload,
-        p_preview_token: result.preview_token ?? null,
-        p_summary: {
-          release_name: (doc as any)?.release?.name ?? null,
-          release_status: (doc as any)?.release?.status ?? "draft",
-          item_count: result.item_count ?? 0,
-          creates: countOf(result.creates),
-          updates: countOf(result.updates),
-          replacements: countOf(result.replacements),
-          deletes: countOf(result.deletes),
-          warnings: countOf(result.warnings),
-        },
-        p_plan: {
-          creates: result.creates ?? [],
-          updates: result.updates ?? [],
-          replacements: result.replacements ?? [],
-          deletes: result.deletes ?? [],
-          warnings: result.warnings ?? [],
-          destructive_operations: result.replacements ?? [],
-          resolved_references: result.resolved_references ?? [],
-          results: result.results ?? [],
-        },
-        p_ttl_minutes: Number(preview_ttl_minutes) || 30,
-      });
-      if (storeErr) return rpcError(storeErr);
-      const record = stored as Record<string, any>;
-      return json({
-        ok: true,
-        wrote_anything: false,
-        wrote_game_content: false,
-        ...slimPreview(record),
-        next_step: "Show this plan, get explicit approval, then call commitContentRelease with ONLY preview_id + approved_payload_hash. Do not resend the release payload. If the commit answers status 'committing', poll getContentReleasePreview instead of re-committing.",
-      });
+      const raw = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const r = await previewRelease(supabase, raw);
+      return json(r.body, r.status);
     }
+
 
 
     if (path === "/content-release/preview/get" && req.method === "POST") {
