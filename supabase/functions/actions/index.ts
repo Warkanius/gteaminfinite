@@ -50,9 +50,43 @@ Deno.serve(async (req) => {
   if (path === "/openapi.json" || path === "/") {
     return json(buildOpenApi(base));
   }
+  if (path === "/openapi-gpt.json") {
+    return json(buildCompactOpenApi(base));
+  }
   if (path === "/gpt-instructions") {
     return new Response(GPT_INSTRUCTIONS, { headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" } });
   }
+  if (path === "/gpt-instructions-compact") {
+    return new Response(GPT_COMPACT_INSTRUCTIONS, { headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" } });
+  }
+
+  // ---- tiny health probe: works signed out, reports admin status when signed in ----
+  if (path === "/health" && req.method === "GET") {
+    const compact = buildCompactOpenApi(base);
+    let authenticated = false;
+    let isAdmin = false;
+    const header = req.headers.get("Authorization") ?? "";
+    if (header.startsWith("Bearer ")) {
+      const t = header.slice(7);
+      const c = clientFor(t);
+      const { data } = await c.auth.getUser(t);
+      if (data?.user) {
+        authenticated = true;
+        const { data: adminOk } = await c.rpc("has_role", { _user_id: data.user.id, _role: "admin" });
+        isAdmin = adminOk === true;
+      }
+    }
+    return json({
+      ok: true,
+      version: "1.0.0",
+      schema_version: COMPACT_SCHEMA_VERSION,
+      schema_hash: schemaHash(compact),
+      authenticated,
+      is_admin: isAdmin,
+      operations: compactOperationIds(base),
+    });
+  }
+
 
   // ---- everything else requires a signed-in GTeam user ----
   const authHeader = req.headers.get("Authorization") ?? "";
