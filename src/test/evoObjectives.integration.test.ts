@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Integration regression tests for the evo-objective write + post-commit
  * verification path.
