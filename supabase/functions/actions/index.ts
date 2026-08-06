@@ -5,6 +5,14 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { buildOpenApi, GPT_INSTRUCTIONS, READ_TABLE_LIST } from "./openapi.ts";
+import {
+  buildCompactOpenApi,
+  compactOperationIds,
+  COMPACT_SCHEMA_VERSION,
+  GPT_COMPACT_INSTRUCTIONS,
+  schemaHash,
+} from "./openapiGpt.ts";
+
 import { commitStoredRelease, previewRelease, slimPreview } from "./contentReleaseFlow.ts";
 import { handleAdminApi } from "../_shared/admin-api/router.ts";
 
