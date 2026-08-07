@@ -28,6 +28,8 @@ const EXPECTED = [
   "exportDominationRoad",
   "previewDominationRoad",
   "commitDominationRoad",
+  "auditEvoVersionRuns",
+  "repairEvoVersionRuns",
 ];
 
 describe("compact GPT OpenAPI", () => {
@@ -100,7 +102,7 @@ describe("compact GPT OpenAPI", () => {
     for (const methods of Object.values<any>(schema.paths)) {
       for (const op of Object.values<any>(methods)) {
         const consequential = op["x-openai-isConsequential"];
-        const isWrite = /^(commit|cancel)/.test(op.operationId);
+        const isWrite = /^(commit|cancel|repair)/.test(op.operationId);
         expect(consequential).toBe(isWrite);
       }
     }

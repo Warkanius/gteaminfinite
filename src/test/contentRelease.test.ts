@@ -131,9 +131,12 @@ describe("Galactic acceptance case", () => {
 
     expect(payload.packs[0].pool.map((p: any) => p.slot_number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect(payload.packs[0].replace_odds).toBe(true);
-    expect(payload.evo_paths).toHaveLength(2);
-    expect(payload.evo_paths[0].resulting_version.stats).toEqual({ stat_3pt: 88 });
-    expect(payload.evo_paths[0].objectives[0].stat_key).toBe("points");
+    // whole-path replacement: one item per player, steps carried inside it
+    expect(payload.evo_paths).toHaveLength(1);
+    expect(payload.evo_paths[0].action).toBe("replace_path");
+    expect(payload.evo_paths[0].steps).toHaveLength(2);
+    expect(payload.evo_paths[0].steps[0].resulting_version.stats).toEqual({ stat_3pt: 88 });
+    expect(payload.evo_paths[0].steps[0].objectives[0].stat_key).toBe("points");
   });
 
   it("keeps the collection reward out of the pack", () => {
@@ -345,14 +348,16 @@ describe("evo-only release for an existing source card", () => {
     const payload = buildReleasePayload(kanianPath() as any) as Record<string, any>;
     expect(payload.players).toBeUndefined();
     expect(payload.collections).toBeUndefined();
-    expect(payload.evo_paths).toHaveLength(3);
-    for (const item of payload.evo_paths) {
-      expect(item.player_card_id).toBe(KANIAN);
-      expect(item.source_player_ref).toBeUndefined();
-      expect(item.player_card_ref).toBeUndefined();
+    expect(payload.evo_paths).toHaveLength(1);
+    const path = payload.evo_paths[0];
+    expect(path.player_card_id).toBe(KANIAN);
+    expect(path.source_player_ref).toBeUndefined();
+    expect(path.player_card_ref).toBeUndefined();
+    expect(path.steps).toHaveLength(3);
+    for (const item of path.steps) {
       expect(item.status).toBe("draft");
     }
-    expect(payload.evo_paths.map((p: any) => [p.from_tier, p.to_tier])).toEqual([
+    expect(path.steps.map((p: any) => [p.from_tier, p.to_tier])).toEqual([
       ["Amethyst", "Diamond"],
       ["Diamond", "Pink Diamond"],
       ["Pink Diamond", "Actolytrene"],

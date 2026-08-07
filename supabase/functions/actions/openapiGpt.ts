@@ -182,6 +182,43 @@ export function buildCompactOpenApi(baseUrl: string) {
     },
   };
 
+  paths["/evo/runs-audit"] = {
+    get: {
+      operationId: "auditEvoVersionRuns",
+      summary: "Audit Runs data on evo card versions",
+      description:
+        "Lists evo card versions whose Runs data is missing or on the wrong scale: run_rating null, run_stat_* null, or Runs stats outside the band implied by their base star stat (20 points per star).",
+      "x-openai-isConsequential": false,
+      responses: okJson("Evo Runs audit"),
+    },
+  };
+
+  paths["/evo/runs-repair"] = {
+    post: {
+      operationId: "repairEvoVersionRuns",
+      summary: "Repair Runs data on evo card versions",
+      description:
+        "Deterministically re-derives run_stat_* and run_rating from each version's base stats using the 20-points-per-star scale. Defaults to a zero-write preview; send commit: true to write. Optional version_id limits it to one version.",
+      "x-openai-isConsequential": true,
+      requestBody: {
+        required: false,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                commit: { type: "boolean", description: "false (default) previews; true writes." },
+                version_id: str("Limit the repair to one evo_card_versions id."),
+              },
+            },
+          },
+        },
+      },
+      responses: okJson("Repair plan or result"),
+    },
+  };
+
+
   paths["/references"] = {
     get: {
       operationId: "getReferences",

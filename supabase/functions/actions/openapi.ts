@@ -795,6 +795,43 @@ export function buildOpenApi(baseUrl: string) {
     },
   };
 
+  paths["/evo/runs-audit"] = {
+    get: {
+      operationId: "auditEvoVersionRuns",
+      summary: "Audit Runs data on evo card versions",
+      description:
+        "Evo card versions whose Runs data is missing or on the wrong scale: run_rating null, run_stat_* null, or a Runs stat outside the band implied by its base star stat (20 points per star: star 1 = 20-39, star 2 = 40-59, …).",
+      "x-openai-isConsequential": false,
+      responses: { "200": { description: "Evo Runs audit", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } }, "401": { description: "Not signed in." } },
+    },
+  };
+
+  paths["/evo/runs-repair"] = {
+    post: {
+      operationId: "repairEvoVersionRuns",
+      summary: "Repair Runs data on evo card versions",
+      description:
+        "Deterministically re-derives run_stat_* and run_rating from each version's base stats on the Runs point scale. Zero-write unless commit: true.",
+      "x-openai-isConsequential": true,
+      requestBody: {
+        required: false,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                commit: { type: "boolean" },
+                version_id: { type: "string", description: "Limit the repair to one evo_card_versions id." },
+              },
+            },
+          },
+        },
+      },
+      responses: { "200": { description: "Repair plan or result", content: { "application/json": { schema: { type: "object", additionalProperties: true } } } }, "401": { description: "Not signed in." } },
+    },
+  };
+
+
   paths["/references"] = {
     get: {
       operationId: "getReferences",

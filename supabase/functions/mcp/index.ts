@@ -1876,7 +1876,7 @@ var releaseBundleTools = [
 import { defineTool as defineTool23 } from "npm:@lovable.dev/mcp-js@0.25.0";
 import { z as z21 } from "npm:zod@^3.25.76";
 
-// src/lib/contentRelease.ts
+// supabase/functions/_shared/admin-api/decimal.ts
 var STAT_KEYS2 = [
   "stat_3pt",
   "stat_mid",
@@ -1888,6 +1888,167 @@ var STAT_KEYS2 = [
   "stat_blk",
   "stat_int"
 ];
+var RUN_STAT_KEYS = STAT_KEYS2.map((k) => k.replace("stat_", "run_stat_"));
+var NUMERIC = /^-?\d*(\.\d+)?$/;
+function parts(value) {
+  let raw = String(value).trim();
+  if (raw !== "" && /e/i.test(raw)) raw = expand(raw);
+  if (raw === "" || raw === "-" || !NUMERIC.test(raw)) throw new Error(`NOT_A_NUMBER: "${raw}"`);
+  const neg = raw.startsWith("-");
+  const [int = "0", frac = ""] = raw.replace("-", "").split(".");
+  return { neg, int: int || "0", frac };
+}
+function expand(raw) {
+  const [mantissa, expPart] = raw.split(/e/i);
+  const exp = Number(expPart);
+  if (!Number.isFinite(exp)) throw new Error(`NOT_A_NUMBER: "${raw}"`);
+  const neg = mantissa.startsWith("-");
+  const [i = "0", f = ""] = mantissa.replace("-", "").split(".");
+  const digits = i + f;
+  let point = i.length + exp;
+  let out;
+  if (point <= 0) out = `0.${"0".repeat(-point)}${digits}`;
+  else if (point >= digits.length) out = digits + "0".repeat(point - digits.length);
+  else out = `${digits.slice(0, point)}.${digits.slice(point)}`;
+  return neg ? `-${out}` : out;
+}
+function scaled(value, places = 2) {
+  const { neg, int, frac } = parts(value);
+  const f = (frac + "0".repeat(places)).slice(0, places);
+  const n = Number(`${int}${f}`);
+  return neg ? -n : n;
+}
+function unscaled(units, places = 2) {
+  const neg = units < 0;
+  const s = String(Math.abs(Math.round(units))).padStart(places + 1, "0");
+  const out = `${s.slice(0, s.length - places)}.${s.slice(s.length - places)}`;
+  return neg ? `-${out}` : out;
+}
+var GEM_TIER_BANDS = [
+  { tier: "emerald", min: 100, max: 199 },
+  { tier: "amethyst", min: 200, max: 299 },
+  { tier: "diamond", min: 300, max: 399 },
+  { tier: "pink diamond", min: 400, max: 499 },
+  { tier: "actolytrene", min: 500, max: 599 },
+  { tier: "game over", min: 600, max: null }
+];
+var GEM_TIER_ORDER = GEM_TIER_BANDS.map((b) => b.tier);
+
+// supabase/functions/_shared/admin-api/runScale.ts
+var RUN_POINTS_PER_STAR = 20;
+var RUN_MAX_STAR = 6;
+var RUN_STAT_RANGE = { min: 0, max: RUN_POINTS_PER_STAR * (RUN_MAX_STAR + 1) - 1 };
+function runBandForBase(baseStat) {
+  const units = scaled(baseStat, 2);
+  const star = Math.min(Math.max(Math.floor(units / 100), 0), RUN_MAX_STAR);
+  return { star, min: star * RUN_POINTS_PER_STAR, max: star * RUN_POINTS_PER_STAR + RUN_POINTS_PER_STAR - 1 };
+}
+function runBandLabel(band) {
+  return `${band.min}-${band.max} (star ${band.star})`;
+}
+function runStatMatchesBase(baseStat, runStat) {
+  const band = runBandForBase(baseStat);
+  const v = scaled(runStat, 2) / 100;
+  return v >= band.min && v <= band.max;
+}
+function hash(seed) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function rand(seed) {
+  let t = hash(seed) + 1831565813 >>> 0;
+  t = Math.imul(t ^ t >>> 15, t | 1);
+  t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
+var JITTER = 6;
+function deriveRunStat(baseStat, seed) {
+  const band = runBandForBase(baseStat);
+  const units = scaled(baseStat, 2);
+  const frac = Math.min(Math.max(units - Math.floor(units / 100) * 100, 0), 99) / 99;
+  const centre = frac * (RUN_POINTS_PER_STAR - 1);
+  const jitter = (rand(seed) * 2 - 1) * JITTER;
+  const offset = Math.min(Math.max(Math.round(centre + jitter), 0), RUN_POINTS_PER_STAR - 1);
+  return band.min + offset;
+}
+function deriveRunStats(stats, seed) {
+  const out = {};
+  STAT_KEYS2.forEach((key, i) => {
+    const base = stats[key];
+    if (base === void 0 || base === null || base === "") return;
+    out[RUN_STAT_KEYS[i]] = deriveRunStat(base, `${seed}|${key}`);
+  });
+  return out;
+}
+function runRatingFromStats(runStats) {
+  let total = 0;
+  for (const key of RUN_STAT_KEYS) {
+    const v = runStats[key];
+    if (v === void 0 || v === null || v === "") return null;
+    total += scaled(v, 2);
+  }
+  return unscaled(Math.round(total / RUN_STAT_KEYS.length), 2);
+}
+var RUN_SCALE_DOC = `Runs-mode stats use a separate scale from base card stats. Base stats are star values (0.00-6.99) and the OVR is their mean. Runs stats are points where each star is worth ${RUN_POINTS_PER_STAR}: star 0 = 0-19, star 1 = 20-39, star 2 = 40-59, star 3 = 60-79, star 4 = 80-99, star 5 = 100-119, star 6 = 120-139. A Runs stat must fall inside the band of its base stat; omit run_stat_* / run_stats and the backend derives them, correlated with the base stat's decimals and randomised inside the band. run_rating is the mean of the nine Runs stats and is derived when omitted.`;
+
+// supabase/functions/_shared/admin-api/playableCard.ts
+var PLAYABLE_IDENTITY_FIELDS = [
+  "gem_tier",
+  "gem_name",
+  "position1",
+  "position2",
+  "rating",
+  "run_rating",
+  "status",
+  "evo_stage"
+];
+var PLAYABLE_STAT_FIELDS = [...STAT_KEYS2];
+var PLAYABLE_RUN_STAT_FIELDS = [...RUN_STAT_KEYS];
+var PLAYABLE_ASSIGNMENT_FIELDS = ["badges", "traits"];
+var PLAYABLE_CARD_FIELDS = [
+  ...PLAYABLE_IDENTITY_FIELDS,
+  ...PLAYABLE_STAT_FIELDS,
+  ...PLAYABLE_RUN_STAT_FIELDS,
+  ...PLAYABLE_ASSIGNMENT_FIELDS
+];
+function completeRunStats(stats, runStats, seed) {
+  const out = {};
+  for (const [k, v] of Object.entries(runStats ?? {})) {
+    if (v !== void 0 && v !== null && v !== "") out[k] = Number(v);
+  }
+  const baseComplete = STAT_KEYS2.every((k) => {
+    const v = (stats ?? {})[k];
+    return v !== void 0 && v !== null && v !== "";
+  });
+  if (baseComplete) {
+    const derived = deriveRunStats(stats ?? {}, seed || "release");
+    for (const key of RUN_STAT_KEYS) if (out[key] === void 0) out[key] = derived[key];
+  }
+  return out;
+}
+function completeRunRating(runStats, supplied) {
+  if (supplied !== void 0 && supplied !== null && supplied !== "") return Number(supplied);
+  const mean = runRatingFromStats(runStats ?? {});
+  return mean === null ? null : Number(mean);
+}
+
+// supabase/functions/actions/contentRelease.ts
+var STAT_KEYS3 = [
+  "stat_3pt",
+  "stat_mid",
+  "stat_fin",
+  "stat_dnk",
+  "stat_ast",
+  "stat_stl",
+  "stat_reb",
+  "stat_blk",
+  "stat_int"
+];
+var RUN_STAT_KEYS2 = STAT_KEYS3.map((k) => `run_${k}`);
 var STAT_RANGE = { min: 0, max: 99 };
 var ASSIGNMENT_TIERS = ["base", "gold", "hof", "diamond", "actolytrene"];
 var EVO_OBJECTIVES = {
@@ -1951,10 +2112,10 @@ function normalizeTier(value) {
 }
 function normalizeStatKey(value) {
   const raw = String(value ?? "").trim().toLowerCase().replace(/[_-]+/g, " ").trim();
-  if (STAT_KEYS2.includes(raw.replace(/\s+/g, "_"))) return raw.replace(/\s+/g, "_");
+  if (STAT_KEYS3.includes(raw.replace(/\s+/g, "_"))) return raw.replace(/\s+/g, "_");
   if (raw.startsWith("stat ")) {
     const direct = `stat_${raw.slice(5).replace(/\s+/g, "_")}`;
-    if (STAT_KEYS2.includes(direct)) return direct;
+    if (STAT_KEYS3.includes(direct)) return direct;
   }
   return STAT_ALIASES[raw] ?? raw.replace(/\s+/g, "_");
 }
@@ -1990,6 +2151,42 @@ function normalizeStats(stats) {
   }
   return out;
 }
+function normalizeRunStatKey(value) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  const stripped = raw.replace(/^(run|runs)[\s_-]*(stat[\s_-]*)?/, "");
+  const base = normalizeStatKey(stripped);
+  return base.startsWith("stat_") ? `run_${base}` : raw.replace(/[\s-]+/g, "_");
+}
+function normalizeRunStats(stats) {
+  const out = {};
+  for (const [k, v] of Object.entries(stats ?? {})) {
+    const key = normalizeRunStatKey(k);
+    out[key] = typeof v === "number" ? v : Number(v);
+  }
+  return out;
+}
+function splitStatFields(source) {
+  const rest = {};
+  const flat = {};
+  const flatRun = {};
+  for (const [key, value] of Object.entries(source)) {
+    const lower = key.trim().toLowerCase();
+    if (lower === "stats" || lower === "run_stats" || lower === "runs_stats") continue;
+    if (/^(run|runs)[\s_-]*(stat)?[\s_-]*/.test(lower) && RUN_STAT_KEYS2.includes(normalizeRunStatKey(lower))) {
+      flatRun[lower] = value;
+    } else if (STAT_KEYS3.includes(normalizeStatKey(lower))) {
+      flat[lower] = value;
+    } else {
+      rest[key] = value;
+    }
+  }
+  const nestedRun = source.run_stats ?? source.runs_stats;
+  return {
+    rest,
+    stats: { ...normalizeStats(source.stats), ...normalizeStats(flat) },
+    runStats: { ...normalizeRunStats(nestedRun), ...normalizeRunStats(flatRun) }
+  };
+}
 function normalizeAssignments(list, kind) {
   return (Array.isArray(list) ? list : []).map((raw) => {
     const item = typeof raw === "string" ? { [kind]: raw } : { ...raw };
@@ -2008,34 +2205,84 @@ function normalizeAssignments(list, kind) {
     return out;
   });
 }
+function completeRunStats2(stats, runStats, seed) {
+  return completeRunStats(stats, runStats, seed);
+}
+function validateRunStats(stats, runStats, scope, err) {
+  for (const [stat, value] of Object.entries(runStats)) {
+    if (!RUN_STAT_KEYS2.includes(stat)) {
+      err("UNKNOWN_RUN_STAT_KEY", `"${stat}" is not a supported Runs stat.`, scope);
+      continue;
+    }
+    if (typeof value !== "number" || Number.isNaN(value) || value < RUN_STAT_RANGE.min || value > RUN_STAT_RANGE.max) {
+      err(
+        "STAT_OUT_OF_RANGE",
+        `${stat} must be between ${RUN_STAT_RANGE.min} and ${RUN_STAT_RANGE.max} on the Runs point scale.`,
+        scope
+      );
+      continue;
+    }
+    const base = stats[stat.replace("run_", "")];
+    if (base === void 0 || base === null) continue;
+    if (!runStatMatchesBase(base, value)) {
+      const band = runBandForBase(base);
+      err(
+        "RUN_STAT_SCALE_MISMATCH",
+        `${stat} must sit inside ${runBandLabel(band)} for a base value of ${String(base)}. ${RUN_SCALE_DOC}`,
+        scope
+      );
+    }
+  }
+}
 function normalizeRelease(input) {
   const out = JSON.parse(JSON.stringify(input ?? {}));
-  out.players = (out.players ?? []).map((p) => ({
-    ...p,
-    stats: normalizeStats(p.stats),
-    badges: normalizeAssignments(p.badges, "badge"),
-    traits: normalizeAssignments(p.traits, "trait")
-  }));
+  out.players = (out.players ?? []).map((p) => {
+    const { rest, stats, runStats } = splitStatFields(p);
+    const seed = String(p.player_card_id ?? p.name ?? "");
+    return {
+      ...rest,
+      stats,
+      run_stats: completeRunStats2(stats, runStats, seed),
+      badges: normalizeAssignments(p.badges, "badge"),
+      traits: normalizeAssignments(p.traits, "trait")
+    };
+  });
   out.evo_paths = (out.evo_paths ?? []).map((path) => ({
     ...path,
-    steps: [...path.steps ?? []].sort((a, b) => a.step_order - b.step_order).map((step) => ({
-      ...step,
-      objectives: (step.objectives ?? []).map((o) => ({
-        ...o,
-        stat: normalizeObjectiveKey(o.stat),
-        amount: Number(o.amount)
-      })),
-      resulting_version: {
-        ...step.resulting_version ?? { stats: {} },
-        stats: normalizeStats(step.resulting_version?.stats),
-        badges: normalizeAssignments(step.resulting_version?.badges, "badge"),
-        traits: normalizeAssignments(step.resulting_version?.traits, "trait")
-      }
-    }))
+    steps: [...path.steps ?? []].sort((a, b) => a.step_order - b.step_order).map((step) => {
+      const version = step.resulting_version ?? { stats: {} };
+      const { rest, stats, runStats } = splitStatFields(version);
+      const seed = `${path.player_name ?? path.player_card_id ?? ""}|step${step.step_order}`;
+      const completedRunStats = completeRunStats2(stats, runStats, seed);
+      const runRating = completeRunRating(completedRunStats, version.run_rating ?? null);
+      return {
+        ...step,
+        objectives: (step.objectives ?? []).map((o) => ({
+          ...o,
+          stat: normalizeObjectiveKey(o.stat),
+          amount: Number(o.amount)
+        })),
+        resulting_version: {
+          ...rest,
+          stats,
+          run_stats: completedRunStats,
+          ...runRating !== null ? { run_rating: runRating } : {},
+          badges: normalizeAssignments(version.badges, "badge"),
+          traits: normalizeAssignments(version.traits, "trait")
+        }
+      };
+    })
   }));
   if (out.pack) {
     out.pack.players = [...out.pack.players ?? []].sort((a, b) => a.slot - b.slot);
     out.pack.odds = (out.pack.odds ?? []).map((o) => ({ ...o, result_slot: String(o.result_slot) }));
+  }
+  if (out.locker_codes?.length) {
+    out.locker_codes = out.locker_codes.map((c) => ({
+      ...c,
+      code: String(c.code ?? "").trim().toUpperCase(),
+      reward_type: c.reward_type ?? (c.reward_release_pack ? "pack" : "coins")
+    }));
   }
   if (out.team) out.team.roster = [...out.team.roster ?? []].sort((a, b) => a.slot - b.slot);
   return out;
@@ -2079,10 +2326,21 @@ function validateRelease(input, options = {}) {
     const key = (p.player_card_id ?? p.name ?? "").trim().toLowerCase();
     if (key) seen.set(key, (seen.get(key) ?? 0) + 1);
     for (const [stat, value] of Object.entries(p.stats ?? {})) {
-      if (!STAT_KEYS2.includes(stat)) {
+      if (!STAT_KEYS3.includes(stat)) {
         err("UNKNOWN_STAT_KEY", `"${stat}" is not a supported stat.`, `${scope}.stats`);
       } else if (typeof value !== "number" || Number.isNaN(value) || value < STAT_RANGE.min || value > STAT_RANGE.max) {
         err("STAT_OUT_OF_RANGE", `${stat} must be between ${STAT_RANGE.min} and ${STAT_RANGE.max}.`, `${scope}.stats`);
+      }
+    }
+    validateRunStats(p.stats ?? {}, p.run_stats ?? {}, `${scope}.run_stats`, err);
+    if (p.run_rating !== void 0 && p.run_rating !== null) {
+      const expected = runRatingFromStats(p.run_stats ?? {});
+      if (expected !== null && Math.abs(Number(p.run_rating) - Number(expected)) > 1) {
+        err(
+          "RUN_RATING_MISMATCH",
+          `run_rating must be the mean of the nine Runs stats (${expected}). ${RUN_SCALE_DOC}`,
+          `${scope}.run_rating`
+        );
       }
     }
     validateAssignments(p.badges, p.traits, scope, err);
@@ -2299,13 +2557,29 @@ function validateRelease(input, options = {}) {
         );
       } else {
         for (const [stat, value] of Object.entries(version.stats)) {
-          if (!STAT_KEYS2.includes(stat)) {
+          if (!STAT_KEYS3.includes(stat)) {
             err("UNKNOWN_STAT_KEY", `"${stat}" is not a supported stat.`, `${sScope}.resulting_version.stats`);
           } else if (typeof value !== "number" || Number.isNaN(value) || value < STAT_RANGE.min || value > STAT_RANGE.max) {
             err(
               "STAT_OUT_OF_RANGE",
               `${stat} must be between ${STAT_RANGE.min} and ${STAT_RANGE.max}.`,
               `${sScope}.resulting_version.stats`
+            );
+          }
+        }
+        validateRunStats(
+          version.stats ?? {},
+          version.run_stats ?? {},
+          `${sScope}.resulting_version.run_stats`,
+          err
+        );
+        if (version.run_rating !== void 0 && version.run_rating !== null) {
+          const expectedRun = runRatingFromStats(version.run_stats ?? {});
+          if (expectedRun !== null && Math.abs(Number(version.run_rating) - Number(expectedRun)) > 1) {
+            err(
+              "RUN_RATING_MISMATCH",
+              `run_rating must be the mean of the nine Runs stats (${expectedRun}). ${RUN_SCALE_DOC}`,
+              `${sScope}.resulting_version.run_rating`
             );
           }
         }
@@ -2323,6 +2597,37 @@ function validateRelease(input, options = {}) {
   (release.pack?.players ?? []).forEach((s, i) => {
     if (versionTiers.has(`${s.player_name}|${s.player_name}`.toLowerCase())) {
       err("EVO_VERSION_IN_PACK", "Evo versions cannot be added to a pack pool.", `pack.players[${i}]`);
+    }
+  });
+  const codesSeen = /* @__PURE__ */ new Set();
+  (release.locker_codes ?? []).forEach((c, i) => {
+    const scope = `locker_codes[${i}]`;
+    const code = String(c.code ?? "").trim();
+    if (!code) err("LOCKER_CODE_REQUIRED", "Each locker code needs a code.", scope);
+    if (codesSeen.has(code.toUpperCase())) {
+      err("DUPLICATE_LOCKER_CODE", `Code "${code}" appears more than once in this release.`, scope);
+    }
+    codesSeen.add(code.toUpperCase());
+    const type = c.reward_type ?? (c.reward_release_pack ? "pack" : "coins");
+    if (!["coins", "gems", "pack", "card"].includes(type)) {
+      err("INVALID_LOCKER_REWARD_TYPE", `"${type}" is not a locker reward type (coins, gems, pack, card).`, scope);
+    }
+    if (type === "pack") {
+      const named = c.reward_value?.pack_name ?? c.reward_value?.pack_id;
+      if (!c.reward_release_pack && !named) {
+        err(
+          "LOCKER_PACK_REF_REQUIRED",
+          "A pack reward needs reward_release_pack: true (the pack in this release) or reward_value.pack_name.",
+          scope
+        );
+      }
+      if (c.reward_release_pack && !release.pack?.name?.trim()) {
+        err("LOCKER_RELEASE_PACK_MISSING", "reward_release_pack is set but this release does not define a pack.", scope);
+      }
+    } else if ((type === "coins" || type === "gems") && !(Number(c.reward_value?.amount) > 0)) {
+      err("LOCKER_AMOUNT_REQUIRED", `A ${type} reward needs reward_value.amount greater than 0.`, scope);
+    } else if (type === "card" && !c.reward_value?.card_name && !c.reward_value?.player_card_id) {
+      err("LOCKER_CARD_REF_REQUIRED", "A card reward needs reward_value.card_name or reward_value.player_card_id.", scope);
     }
   });
   return out;
@@ -2351,7 +2656,7 @@ function validateAssignments(badges, traits, scope, err) {
     if (t.tier && !ASSIGNMENT_TIERS.includes(t.tier)) {
       err("INVALID_TRAIT_TIER", `"${t.tier}" is not a trait tier.`, `${scope}.traits[${i}]`);
     }
-    if (t.target_stat && !STAT_KEYS2.includes(t.target_stat)) {
+    if (t.target_stat && !STAT_KEYS3.includes(t.target_stat)) {
       err("INVALID_TRAIT_TARGET_STAT", `"${t.target_stat}" is not a valid trait target stat.`, `${scope}.traits[${i}]`);
     }
   });
@@ -2359,6 +2664,7 @@ function validateAssignments(badges, traits, scope, err) {
 var slug = (value) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 var RELEASE_REF = "ref:release:main";
 var COLLECTION_REF = "ref:collection:main";
+var PACK_REF = "ref:pack:main";
 var cardRef = (name) => `ref:player:${slug(name)}`;
 function evoSourceFields(release, path) {
   const match = (release.players ?? []).find(
@@ -2400,13 +2706,14 @@ function buildReleasePayload(input) {
   };
   if (release.players?.length) {
     payload.players = release.players.map((p) => {
-      const { stats, is_collection_reward, new_name, player_card_id, badges, traits, ...rest } = p;
+      const { stats, run_stats, is_collection_reward, new_name, player_card_id, badges, traits, ...rest } = p;
       return {
         ...player_card_id ? { id: player_card_id } : { temp_ref: cardRef(p.name) },
         action: player_card_id ? "update" : "upsert",
         ...rest,
         ...new_name ? { name: new_name } : {},
         ...stats ?? {},
+        ...run_stats ?? {},
         ...badges?.length ? { badges, replace_badges: true } : {},
         ...traits?.length ? { traits, replace_traits: true } : {},
         release_bundle_ref: RELEASE_REF
@@ -2462,6 +2769,7 @@ function buildReleasePayload(input) {
   if (pack?.name?.trim()) {
     payload.packs = [
       {
+        temp_ref: PACK_REF,
         action: "upsert",
         name: pack.name,
         pack_type: pack.pack_type ?? "standard",
@@ -2483,32 +2791,69 @@ function buildReleasePayload(input) {
     ];
   }
   if (release.evo_paths?.length) {
+    const stepItem = (path, step) => ({
+      from_tier: step.from_tier,
+      to_tier: step.to_tier,
+      step_order: step.step_order,
+      ...step.evo_path_id ? { evo_path_id: step.evo_path_id } : {},
+      status: path.status === "published" ? "active" : "draft",
+      objectives: step.objectives.map((o, i) => ({
+        key: o.stat,
+        ...EVO_OBJECTIVES[o.stat],
+        target: o.amount,
+        description: o.description ?? null,
+        sort_order: i + 1
+      })),
+      // A resulting_version is a COMPLETE playable card snapshot: tier, positions,
+      // both ratings, the nine base stats, the nine Runs stats and assignments.
+      resulting_version: {
+        rating: step.resulting_version.rating ?? null,
+        ...step.resulting_version.run_rating != null ? { run_rating: step.resulting_version.run_rating } : {},
+        gem_name: step.resulting_version.gem_name ?? step.to_tier,
+        gem_tier: step.resulting_version.gem_tier ?? step.to_tier,
+        ...step.resulting_version.position1 != null ? { position1: step.resulting_version.position1 } : {},
+        ...step.resulting_version.position2 !== void 0 ? { position2: step.resulting_version.position2 } : {},
+        stats: step.resulting_version.stats,
+        ...Object.keys(step.resulting_version.run_stats ?? {}).length ? { run_stats: step.resulting_version.run_stats } : {},
+        badges: step.resulting_version.badges ?? [],
+        traits: step.resulting_version.traits ?? [],
+        status: path.status === "published" ? "active" : "draft"
+      }
+    });
     payload.evo_paths = release.evo_paths.flatMap((path) => {
       const source = evoSourceFields(release, path);
-      return [...path.steps ?? []].sort((a, b) => a.step_order - b.step_order).map((step) => ({
+      const steps = [...path.steps ?? []].sort((a, b) => a.step_order - b.step_order).map((step) => stepItem(path, step));
+      if (path.replace_existing_path === false) {
+        return steps.map((step) => ({
+          action: "upsert",
+          ...source,
+          ...step,
+          release_bundle_ref: RELEASE_REF
+        }));
+      }
+      return [
+        {
+          action: "replace_path",
+          ...source,
+          steps,
+          release_bundle_ref: RELEASE_REF
+        }
+      ];
+    });
+  }
+  if (release.locker_codes?.length) {
+    payload.locker_codes = release.locker_codes.map((c) => {
+      const type = c.reward_type ?? (c.reward_release_pack ? "pack" : "coins");
+      const rewardValue = type === "pack" && c.reward_release_pack ? { pack_ref: PACK_REF } : { ...c.reward_value ?? {} };
+      return {
         action: "upsert",
-        ...source,
-        from_tier: step.from_tier,
-        to_tier: step.to_tier,
-        step_order: step.step_order,
-        status: path.status === "published" ? "active" : "draft",
-        objectives: step.objectives.map((o, i) => ({
-          key: o.stat,
-          ...EVO_OBJECTIVES[o.stat],
-          target: o.amount,
-          description: o.description ?? null,
-          sort_order: i + 1
-        })),
-        resulting_version: {
-          rating: step.resulting_version.rating ?? null,
-          gem_name: step.resulting_version.gem_name ?? step.to_tier,
-          stats: step.resulting_version.stats,
-          badges: step.resulting_version.badges ?? [],
-          traits: step.resulting_version.traits ?? [],
-          status: "draft"
-        },
-        release_bundle_ref: RELEASE_REF
-      }));
+        code: String(c.code ?? "").trim().toUpperCase(),
+        reward_type: type,
+        reward_value: rewardValue,
+        ...c.max_redemptions != null ? { max_redemptions: c.max_redemptions } : {},
+        ...c.expires_at != null ? { expires_at: c.expires_at } : {},
+        ...c.status ? { status: c.status === "published" ? "active" : "draft" } : {}
+      };
     });
   }
   return payload;
