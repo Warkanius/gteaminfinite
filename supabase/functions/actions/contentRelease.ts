@@ -19,6 +19,12 @@ import {
   RUN_STAT_RANGE,
   RUN_SCALE_DOC,
 } from "../_shared/admin-api/runScale.ts";
+import {
+  completeRunRating,
+  completeRunStats as sharedCompleteRunStats,
+  PLAYABLE_CARD_FIELDS,
+} from "../_shared/admin-api/playableCard.ts";
+
 
 export const STAT_KEYS = [
   "stat_3pt",
@@ -80,16 +86,26 @@ export interface ReleaseStepInput {
   /** Immutable id of an existing step to update in place (optional, authoritative). */
   evo_path_id?: string;
   objectives: Array<{ stat: string; amount: number; description?: string }>;
+  /**
+   * A complete playable card snapshot for this step (see PLAYABLE_CARD_FIELDS):
+   * identity, both ratings, base stats, Runs stats and assignments.
+   */
   resulting_version: {
     rating?: number;
     run_rating?: number;
     gem_name?: string;
+    gem_tier?: string;
+    position1?: string;
+    position2?: string | null;
+    status?: string;
     stats: StatBlock;
     /** Runs-mode stats for this version. Flat run_stat_* keys are also accepted. */
     run_stats?: RunStatBlock;
     badges?: Assignment[];
     traits?: Assignment[];
+    [extra: string]: unknown;
   };
+
 }
 
 
@@ -365,21 +381,18 @@ function normalizeAssignments(list: unknown, kind: "badge" | "trait"): Assignmen
  * twenty Runs points (star 0 = 0-19, star 1 = 20-39, ... star 6 = 120-139).
  * Missing values are derived from the base stats, correlated with the star value
  * and its decimals and randomised deterministically inside the band.
+ *
+ * The derivation itself lives in the shared playable-card model so normal cards
+ * and evo card versions can never diverge.
  */
 function completeRunStats(
   stats: Record<string, unknown>,
   runStats: Record<string, unknown>,
   seed: string,
 ): RunStatBlock {
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(runStats)) if (v !== undefined && v !== null) out[k] = Number(v);
-  const baseComplete = STAT_KEYS.every((k) => stats[k] !== undefined && stats[k] !== null);
-  if (baseComplete) {
-    const derived = deriveRunStats(stats, seed || "release");
-    for (const key of RUN_STAT_KEYS) if (out[key] === undefined) out[key] = derived[key];
-  }
-  return out as RunStatBlock;
+  return sharedCompleteRunStats(stats, runStats, seed) as RunStatBlock;
 }
+
 
 /** Validates supplied Runs stats against the Runs point scale and their bands. */
 function validateRunStats(
@@ -435,6 +448,11 @@ export function normalizeRelease(input: ContentReleaseInput): ContentReleaseInpu
       .map((step) => {
         const version = (step.resulting_version ?? { stats: {} }) as Record<string, unknown>;
         const { rest, stats, runStats } = splitStatFields(version);
+        // Same seed shape as normal cards so a version's Runs stats are stable
+        // across preview and commit.
+        const seed = `${path.player_name ?? path.player_card_id ?? ""}|step${step.step_order}`;
+        const completedRunStats = completeRunStats(stats, runStats, seed);
+        const runRating = completeRunRating(completedRunStats, (version.run_rating ?? null) as number | null);
         return {
           ...step,
           objectives: (step.objectives ?? []).map((o) => ({
@@ -445,12 +463,14 @@ export function normalizeRelease(input: ContentReleaseInput): ContentReleaseInpu
           resulting_version: {
             ...(rest as ReleaseStepInput["resulting_version"]),
             stats,
-            run_stats: completeRunStats(stats, runStats, `${path.player_name ?? path.player_card_id ?? ""}|step${step.step_order}`),
+            run_stats: completedRunStats,
+            ...(runRating !== null ? { run_rating: runRating } : {}),
             badges: normalizeAssignments(version.badges, "badge"),
             traits: normalizeAssignments(version.traits, "trait"),
           },
         };
       }),
+
   }));
   if (out.pack) {
     out.pack.players = [...(out.pack.players ?? [])].sort((a, b) => a.slot - b.slot);
@@ -823,7 +843,18 @@ export function validateRelease(
           `${sScope}.resulting_version.run_stats`,
           err,
         );
+        if (version.run_rating !== undefined && version.run_rating !== null) {
+          const expectedRun = runRatingFromStats((version.run_stats ?? {}) as Record<string, unknown>);
+          if (expectedRun !== null && Math.abs(Number(version.run_rating) - Number(expectedRun)) > 1) {
+            err(
+              "RUN_RATING_MISMATCH",
+              `run_rating must be the mean of the nine Runs stats (${expectedRun}). ${RUN_SCALE_DOC}`,
+              `${sScope}.resulting_version.run_rating`,
+            );
+          }
+        }
         validateAssignments(version.badges, version.traits, `${sScope}.resulting_version`, err);
+
       }
     });
 
@@ -1125,18 +1156,24 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         description: o.description ?? null,
         sort_order: i + 1,
       })),
+      // A resulting_version is a COMPLETE playable card snapshot: tier, positions,
+      // both ratings, the nine base stats, the nine Runs stats and assignments.
       resulting_version: {
         rating: step.resulting_version.rating ?? null,
         ...(step.resulting_version.run_rating != null ? { run_rating: step.resulting_version.run_rating } : {}),
         gem_name: step.resulting_version.gem_name ?? step.to_tier,
+        gem_tier: step.resulting_version.gem_tier ?? step.to_tier,
+        ...(step.resulting_version.position1 != null ? { position1: step.resulting_version.position1 } : {}),
+        ...(step.resulting_version.position2 !== undefined ? { position2: step.resulting_version.position2 } : {}),
         stats: step.resulting_version.stats,
         ...(Object.keys(step.resulting_version.run_stats ?? {}).length
           ? { run_stats: step.resulting_version.run_stats }
           : {}),
         badges: step.resulting_version.badges ?? [],
         traits: step.resulting_version.traits ?? [],
-        status: "draft",
+        status: path.status === "published" ? "active" : "draft",
       },
+
     });
 
     payload.evo_paths = release.evo_paths.flatMap((path): Record<string, unknown>[] => {

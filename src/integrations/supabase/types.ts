@@ -1225,6 +1225,8 @@ export type Database = {
           gem_name: string | null
           gem_tier_id: string | null
           id: string
+          position1: string | null
+          position2: string | null
           rating: number | null
           run_rating: number | null
           run_stat_3pt: number
@@ -1256,6 +1258,8 @@ export type Database = {
           gem_name?: string | null
           gem_tier_id?: string | null
           id?: string
+          position1?: string | null
+          position2?: string | null
           rating?: number | null
           run_rating?: number | null
           run_stat_3pt?: number
@@ -1287,6 +1291,8 @@ export type Database = {
           gem_name?: string | null
           gem_tier_id?: string | null
           id?: string
+          position1?: string | null
+          position2?: string | null
           rating?: number | null
           run_rating?: number | null
           run_stat_3pt?: number
@@ -3975,6 +3981,7 @@ export type Database = {
         }
         Returns: string
       }
+      admin_base_stat_keys: { Args: never; Returns: string[] }
       admin_canonical_hash: { Args: { p: Json }; Returns: string }
       admin_canonical_json: { Args: { p: Json }; Returns: Json }
       admin_col_type: {
@@ -4007,6 +4014,10 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_derive_run_stat: {
+        Args: { p_base: number; p_seed: string }
+        Returns: number
+      }
       admin_diff_fields: {
         Args: { p_fields: Json; p_id: string; p_table: string }
         Returns: Json
@@ -4022,6 +4033,7 @@ export type Database = {
         Returns: undefined
       }
       admin_evo_objective_keys: { Args: never; Returns: string[] }
+      admin_evo_version_audit: { Args: never; Returns: Json }
       admin_has_column: {
         Args: { p_column: string; p_table: string }
         Returns: boolean
@@ -4070,6 +4082,10 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_repair_evo_version_runs: {
+        Args: { p_commit?: boolean; p_version_id?: string }
+        Returns: Json
+      }
       admin_require_admin: { Args: never; Returns: undefined }
       admin_resolve_card: { Args: { p_ref: Json }; Returns: string }
       admin_resolve_pack: {
@@ -4104,6 +4120,9 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_run_band: { Args: { p_base: number }; Returns: number[] }
+      admin_run_rating: { Args: { p_run: Json }; Returns: number }
+      admin_run_stat_keys: { Args: never; Returns: string[] }
       admin_slugify: { Args: { p_text: string }; Returns: string }
       admin_stat_keys: { Args: never; Returns: string[] }
       admin_strip_pending: { Args: { p_item: Json }; Returns: Json }
@@ -4173,6 +4192,8 @@ export type Database = {
         Returns: Json
       }
       content_release_verify: { Args: { p_result: Json }; Returns: Json }
+      content_release_verify_base: { Args: { p_result: Json }; Returns: Json }
+      content_release_verify_evo: { Args: { p_result: Json }; Returns: Json }
       evo_seed_objectives_from_legacy: {
         Args: { p_path: string }
         Returns: number
