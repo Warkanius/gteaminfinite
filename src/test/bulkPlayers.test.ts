@@ -95,7 +95,7 @@ const sixPlayers = () =>
     name: `Bulk Player ${i}`,
     gem_tier: "diamond",
     rating: 3,
-    run_rating: 3,
+
     position1: "SG",
     is_collection_reward: false,
     ...statsFor(3),

@@ -289,7 +289,7 @@ describe("standalone bulk-player targeting", () => {
       name: `Bulk ${i}`,
       gem_tier: "diamond",
       rating: 3,
-      run_rating: 3,
+
       position1: "SG",
       is_collection_reward: false,
       stats: statsFor(3),
