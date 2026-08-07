@@ -21,6 +21,16 @@ import {
   OVR_TOLERANCE,
 } from "./decimal.ts";
 import { normalizeRef, hasTarget, isUuid } from "./refs.ts";
+import {
+  deriveRunStats,
+  runBandForBase,
+  runBandLabel,
+  runRatingFromStats,
+  runStatMatchesBase,
+  RUN_STAT_RANGE,
+  RUN_SCALE_DOC,
+} from "./runScale.ts";
+
 
 /** Groups understood by public.admin_apply_batch, in dependency order. */
 export const GROUPS = [
