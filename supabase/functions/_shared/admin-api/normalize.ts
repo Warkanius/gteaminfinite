@@ -405,14 +405,17 @@ function validatePlayer(
 
   validateStatRange(stats, path, errors);
 
-  // Runs-mode stats: same 0-99 range, never folded into the base OVR.
+  // Runs-mode stats live on their own point scale (20 points per star), never
+  // on the star scale and never folded into the base OVR.
   const runStats: Record<string, unknown> = {};
   const nestedRun = (item.run_stats ?? {}) as Record<string, unknown>;
   for (const key of RUN_STAT_KEYS) {
     const v = item[key] ?? nestedRun[key];
     if (v !== undefined) runStats[key] = v;
   }
-  validateStatRange(runStats, path, errors);
+  validateStatRange(runStats, path, errors, "run");
+  applyRunScale(item, stats, runStats, path, errors, warnings);
+
 
   // Every field the outer schema accepts is either applied or reported here.
   for (const key of Object.keys(item)) {
