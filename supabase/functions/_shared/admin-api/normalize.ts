@@ -744,14 +744,140 @@ function validateEvoPath(
       );
     }
     validateAssignments(version, `${path}.steps[${i}].resulting_version`, errors, destructive);
-    if (Array.isArray(version.run_stats) === false && typeof version.run_stats === "object" && version.run_stats) {
-      validateStatRange(version.run_stats as Record<string, unknown>, `${path}.steps[${i}].resulting_version.run_stats`, errors);
+
+    // Runs stats for the resulting version follow the same Runs point scale.
+    const versionRun: Record<string, unknown> = {};
+    const nestedVersionRun = (version.run_stats ?? {}) as Record<string, unknown>;
+    for (const key of RUN_STAT_KEYS) {
+      const v = version[key] ?? nestedVersionRun[key];
+      if (v !== undefined) versionRun[key] = v;
+    }
+    validateStatRange(versionRun, `${path}.steps[${i}].resulting_version.run_stats`, errors, "run");
+    applyRunScale(
+      version,
+      stats,
+      versionRun,
+      `${path}.steps[${i}].resulting_version`,
+      errors,
+      warnings,
+      `evo:${String(path)}:${i}`,
+    );
+    if (version.run_stats && typeof version.run_stats === "object" && !Array.isArray(version.run_stats)) {
+      version.run_stats = { ...(version.run_stats as Record<string, unknown>), ...versionRun };
     }
   });
 }
 
-/** Range-checks a stat map (base or Runs-mode) without float comparison. */
-function validateStatRange(stats: Record<string, unknown>, path: string, errors: AdminApiError[]) {
+/**
+ * Enforces and completes the Runs point scale for a player card or evo version.
+ *
+ * - Supplied Runs stats must sit inside the band of their base stat
+ *   (star * 20 .. star * 20 + 19). Out-of-band values are rejected, which is how
+ *   star-scale values accidentally sent as Runs stats get caught.
+ * - Missing Runs stats are derived from the base stats: correlated with the
+ *   star value and its decimals, randomised inside the band deterministically so
+ *   preview, hash and commit all produce the same numbers.
+ * - run_rating is the mean of the nine Runs stats and is derived when omitted.
+ */
+function applyRunScale(
+  item: Record<string, unknown>,
+  stats: Record<string, unknown>,
+  runStats: Record<string, unknown>,
+  path: string,
+  errors: AdminApiError[],
+  warnings: AdminApiWarning[],
+  seedExtra = "",
+) {
+  const baseComplete = Object.keys(stats).length === STAT_KEYS.length;
+
+  // 1. Band check for everything supplied alongside a base stat.
+  STAT_KEYS.forEach((baseKey, i) => {
+    const runKey = RUN_STAT_KEYS[i];
+    const runValue = runStats[runKey];
+    const baseValue = stats[baseKey];
+    if (runValue === undefined || baseValue === undefined) return;
+    if (!runStatMatchesBase(baseValue as number, runValue as number)) {
+      const band = runBandForBase(baseValue as number);
+      errors.push(
+        apiError(
+          "RUN_STAT_SCALE_MISMATCH",
+          `${runKey} is on the Runs point scale and must sit inside ${runBandLabel(band)} for a base ${baseKey} of ${String(baseValue)}.`,
+          {
+            path: `${path}.${runKey}`,
+            expected: `${band.min} through ${band.max}`,
+            received: runValue,
+            remediation: `Each star is worth 20 Runs points. ${RUN_SCALE_DOC}`,
+          },
+        ),
+      );
+    }
+  });
+
+  // 2. Derive whatever is missing from the base stats.
+  if (baseComplete) {
+    const missing = RUN_STAT_KEYS.filter((k) => runStats[k] === undefined);
+    if (missing.length) {
+      const seed = `${String(item.player_card_id ?? item.card_key ?? item.name ?? item.temp_ref ?? path)}${seedExtra}`;
+      const derived = deriveRunStats(stats, seed);
+      for (const key of missing) {
+        runStats[key] = derived[key];
+        item[key] = derived[key];
+      }
+      warnings.push(
+        apiWarning(
+          "RUN_STATS_DERIVED",
+          `Derived ${missing.length} Runs stat(s) on the Runs point scale (20 points per star), randomised inside each star band: ${missing
+            .map((k) => `${k}=${runStats[k]}`)
+            .join(", ")}.`,
+          { severity: "info", path: `${path}.run_stats` },
+        ),
+      );
+    }
+  }
+
+  // 3. run_rating is the mean of the nine Runs stats.
+  const runRating = runRatingFromStats(runStats);
+  if (runRating !== null) {
+    if (item.run_rating === undefined || item.run_rating === null || item.run_rating === "") {
+      item.run_rating = runRating;
+      warnings.push(
+        apiWarning("RUN_RATING_DERIVED", `run_rating derived from the nine Runs stats as ${runRating}.`, {
+          severity: "info",
+          path: `${path}.run_rating`,
+        }),
+      );
+    } else {
+      let supplied: number;
+      try {
+        supplied = scaled(item.run_rating as number, 2);
+      } catch {
+        errors.push(
+          apiError("NOT_A_NUMBER", "run_rating must be numeric.", { path: `${path}.run_rating`, received: item.run_rating }),
+        );
+        return;
+      }
+      if (Math.abs(supplied - scaled(runRating, 2)) > 100) {
+        errors.push(
+          apiError("RUN_RATING_MISMATCH", `run_rating must be the mean of the nine Runs stats (${runRating}).`, {
+            path: `${path}.run_rating`,
+            expected: runRating,
+            received: item.run_rating,
+            remediation: "Omit run_rating so it is derived, or send the Runs-stat mean (within 1 point).",
+          }),
+        );
+      }
+    }
+  }
+}
+
+/** Range-checks a stat map without float comparison. */
+function validateStatRange(
+  stats: Record<string, unknown>,
+  path: string,
+  errors: AdminApiError[],
+  scale: "base" | "run" = "base",
+) {
+  const max = scale === "run" ? RUN_STAT_RANGE.max : 99;
   for (const [key, value] of Object.entries(stats)) {
     if (value === undefined || value === null || value === "") continue;
     let units: number;
@@ -761,17 +887,19 @@ function validateStatRange(stats: Record<string, unknown>, path: string, errors:
       errors.push(apiError("NOT_A_NUMBER", `${key} must be numeric.`, { path: `${path}.${key}`, received: value }));
       continue;
     }
-    if (units < 0 || units > 9900) {
+    if (units < 0 || units > max * 100) {
       errors.push(
-        apiError("STAT_OUT_OF_RANGE", `${key} must be between 0 and 99.`, {
+        apiError("STAT_OUT_OF_RANGE", `${key} must be between 0 and ${max}.`, {
           path: `${path}.${key}`,
-          expected: "0 through 99",
+          expected: `0 through ${max}`,
           received: value,
+          ...(scale === "run" ? { remediation: RUN_SCALE_DOC } : {}),
         }),
       );
     }
   }
 }
+
 
 /**
  * Badge / trait replacement validation shared by player cards and evo versions.
