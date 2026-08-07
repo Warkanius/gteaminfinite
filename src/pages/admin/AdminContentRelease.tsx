@@ -17,6 +17,7 @@ import {
   type ContentReleaseInput,
   type ValidationResult,
 } from "@/lib/contentRelease";
+import EvoRunsAuditPanel from "@/components/admin/EvoRunsAuditPanel";
 
 // Deliberately uses raw import spellings ("Hall of Fame", "3PT") to show normalization.
 const SAMPLE = {
@@ -383,6 +384,8 @@ export default function AdminContentRelease() {
           </CardContent>
         </Card>
       </div>
+
+      <EvoRunsAuditPanel />
     </div>
   );
 }
