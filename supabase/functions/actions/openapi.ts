@@ -8,8 +8,25 @@ const RUN_STATS = STATS.map((s) => s.replace("stat_", "run_stat_"));
 const intProp = (description: string) => ({ type: "integer", description });
 const strProp = (description: string) => ({ type: "string", description });
 
+const RUN_SCALE_NOTE =
+  "Runs point scale: each star of the matching base stat is worth 20 points (star 0 = 0-19, star 1 = 20-39 … star 6 = 120-139). " +
+  "A Runs stat must fall inside the band of its base stat. Omit it and the backend derives it, randomised inside that band.";
+
 const statProps = (keys: string[], label: string) =>
-  Object.fromEntries(keys.map((k) => [k, { type: "integer", minimum: 0, maximum: 150, description: `${label} ${k}` }]));
+  Object.fromEntries(
+    keys.map((k) => {
+      const isRun = k.startsWith("run_stat_");
+      return [
+        k,
+        {
+          type: "integer",
+          minimum: 0,
+          maximum: isRun ? 139 : 99,
+          description: isRun ? `${label} ${k}. ${RUN_SCALE_NOTE}` : `${label} ${k} (star scale, 0-99).`,
+        },
+      ];
+    }),
+  );
 
 const PlanResponse = {
   type: "object",
@@ -41,7 +58,7 @@ const PlayerInput = {
     position1: strProp("Primary position, e.g. PG / SG / SF / PF / C."),
     position2: strProp("Secondary position or null."),
     rating: { type: "number", description: "Overall rating; decimals are preserved, e.g. 87.4." },
-    run_rating: { type: "number", description: "Overall rating used in 3v3 Runs; decimals are preserved." },
+    run_rating: { type: "number", description: "Runs rating: mean of the nine run_stat_* values on the Runs point scale (0-139). Derived when omitted." },
     ...statProps(STATS, "Base"),
     ...statProps(RUN_STATS, "Runs-mode"),
     market_value: intProp("Coin market value."),
@@ -510,7 +527,7 @@ export function buildOpenApi(baseUrl: string) {
             team: { type: "string" },
             is_collection_reward: { type: "boolean" },
             stats: { type: "object", additionalProperties: { type: "number" }, description: "Base stats block: stat_3pt, stat_mid, stat_fin, stat_dnk, stat_ast, stat_stl, stat_reb, stat_blk, stat_int (0-99)." },
-            run_stats: { type: "object", additionalProperties: { type: "number" }, description: "Runs-mode stats block: run_stat_3pt … run_stat_int (0-99)." },
+            run_stats: { type: "object", additionalProperties: { type: "number" }, description: `Runs-mode stats block: run_stat_3pt … run_stat_int. ${RUN_SCALE_NOTE}` },
             ...statProps(STATS, "Base (flat alternative to stats)"),
             ...statProps(RUN_STATS, "Runs-mode (flat alternative to run_stats)"),
             badges: { type: "array", items: Assignment, description: "REPLACES every current badge assignment on the card." },
@@ -601,7 +618,7 @@ export function buildOpenApi(baseUrl: string) {
                       run_rating: { type: "number" },
                       gem_name: strProp("Gem tier of the unlocked version."),
                       stats: { type: "object", additionalProperties: { type: "number" } },
-                      run_stats: { type: "object", additionalProperties: { type: "number" }, description: "Runs-mode stats for this version (run_stat_3pt … run_stat_int)." },
+                      run_stats: { type: "object", additionalProperties: { type: "number" }, description: `Runs-mode stats for this version (run_stat_3pt … run_stat_int). ${RUN_SCALE_NOTE}` },
                       ...statProps(STATS, "Base (flat alternative to stats)"),
                       ...statProps(RUN_STATS, "Runs-mode (flat alternative to run_stats)"),
                       badges: { type: "array", items: Assignment },
@@ -892,7 +909,7 @@ export function buildOpenApi(baseUrl: string) {
   const bulkStatProps = Object.fromEntries(
     ["stat_3pt", "stat_mid", "stat_fin", "stat_dnk", "stat_ast", "stat_stl", "stat_reb", "stat_blk", "stat_int"].flatMap((s) => [
       [s, num(`Base stat ${s.replace("stat_", "")} (0-99).`)],
-      [s.replace("stat_", "run_stat_"), num(`Runs-mode stat ${s.replace("stat_", "")} (0-99).`)],
+      [s.replace("stat_", "run_stat_"), num(`Runs-mode stat ${s.replace("stat_", "")} (0-139). ${RUN_SCALE_NOTE}`)],
     ]),
   );
   const tierEnum = ["base", "gold", "hof", "diamond", "actolytrene"];

@@ -35,7 +35,15 @@ const statProps = Object.fromEntries(
     const short = s.replace("stat_", "");
     return [
       [s, { type: "number", description: `Base stat ${short}.` }],
-      [`run_stat_${short}`, { type: "number", description: `Runs stat ${short}.` }],
+      [
+        `run_stat_${short}`,
+        {
+          type: "number",
+          description:
+            `Runs stat ${short} on the Runs point scale (0-139): each star of base stat_${short} is worth 20 points ` +
+            `(star 0 = 0-19, star 1 = 20-39 … star 6 = 120-139). Must sit inside the band of the base stat; omit it and the backend derives it.`,
+        },
+      ],
     ];
   }),
 );
