@@ -54,7 +54,7 @@ describe("runs point scale", () => {
     expect(res.errors).toEqual([]);
     const player = (res.canonical.players as Record<string, unknown>[])[0];
     for (const key of Object.keys(statsFor(1))) {
-      const run = player[key.replace("stat_", "run_stat_")] as number;
+      const run = Number(player[key.replace("stat_", "run_stat_")]);
       expect(run).toBeGreaterThanOrEqual(20);
       expect(run).toBeLessThanOrEqual(39);
     }
