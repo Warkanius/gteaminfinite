@@ -80,13 +80,13 @@ describe("evo card versions are complete playable cards", () => {
     const version: any = normalized.evo_paths![0].steps[0].resulting_version;
     expect(version.run_stats).toEqual(runStats);
     const { validations } = prepareRelease(release({ version: { run_stats: runStats } }), tiers);
-    expect(validations.some((v) => v.code === "RUN_STAT_OUT_OF_BAND")).toBe(false);
+    expect(validations.some((v) => v.code === "RUN_STAT_SCALE_MISMATCH")).toBe(false);
   });
 
   it("rejects star-scale Runs values on a version", () => {
     const runStats = Object.fromEntries(RUN_STAT_KEYS.map((k) => [k, 2.2]));
     const { validations } = prepareRelease(release({ version: { run_stats: runStats } }), tiers);
-    expect(validations.map((v) => v.code)).toContain("RUN_STAT_OUT_OF_BAND");
+    expect(validations.map((v) => v.code)).toContain("RUN_STAT_SCALE_MISMATCH");
   });
 
   it("rejects a run_rating that is not the mean of the nine Runs stats", () => {
