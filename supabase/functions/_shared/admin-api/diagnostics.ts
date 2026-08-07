@@ -132,9 +132,10 @@ async function runDiagnosticsAll(client: Client): Promise<{ ok: boolean; checked
     rows("pack_odds", "pack_id,result_slot,percentage"),
     rows("collections", "id,name,status"),
     rows("collection_requirements", "collection_id,player_card_id,is_reward,sort_order"),
-    rows("evo_paths", "id,player_card_id,status"),
-    rows("evo_objectives", "id,evo_path_id,stat,amount,step_order"),
-    rows("evo_card_versions", "id,evo_path_id,version_number,gem_tier_id,rating,from_tier,to_tier"),
+    rows("evo_paths", "id,player_card_id,step_order,from_tier_id,to_tier_id,tier_progression_override,status"),
+    rows("evo_objectives", "id,evo_path_id,group_key,objective_type,stat_key,scope,target,sort_order"),
+    rows("evo_card_versions", "id,evo_path_id,version_order,gem_tier_id,gem_name,rating"),
+
     rows("domination_roads", "id,name"),
     rows("domination_games", "id,road_id,game_order,opponent_name,pack_reward"),
     rows("domination_game_players", "domination_game_id,player_card_id"),
