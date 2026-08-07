@@ -4,6 +4,7 @@
 import { API_VERSION } from "./errors.ts";
 import { GROUPS, ENTITY_TO_GROUP, EVO_OBJECTIVE_KEYS } from "./normalize.ts";
 import { GEM_TIER_BANDS, STAT_KEYS, bandLabel } from "./decimal.ts";
+import { RUN_SCALE_DOC } from "./runScale.ts";
 
 export const LIMITS = {
   max_items_per_group: 500,
@@ -116,7 +117,8 @@ export function capabilities(base: string) {
         badge_semantics: "full replacement when present; [] clears; omit to leave untouched",
         trait_semantics: "full replacement when present; [] clears; omit to leave untouched; target_stat validated",
         rating_precision: "decimal, up to 10 places, preserved exactly through hashing and commit",
-        stat_range: "0-99 for the nine base stats and the nine run_stat_* stats",
+        stat_range: "0-99 (star scale) for the nine base stats; 0-139 (Runs point scale) for the nine run_stat_* stats",
+        run_stat_scale: RUN_SCALE_DOC,
         ovr_tolerance: "|rating - stat_total/9| <= 0.0000001 using exact integer arithmetic",
         gem_tier_bands: GEM_TIER_BANDS.map((b) => ({ tier: b.tier, ovr_band: bandLabel(b) })),
         atomicity: "all listed cards, badges and traits commit in one Postgres transaction or none do",
@@ -131,6 +133,7 @@ export function capabilities(base: string) {
         commit_path: `POST ${base}/admin-api/${API_VERSION}/bulk/commit`,
         sections: ["release", "players", "collection", "collection membership", "collection reward", "team", "team roster", "pack", "pack pool", "pack odds", "evo_paths", "evo objectives", "playable resulting evo versions", "badges", "traits"],
         player_stat_support: "all nine base stats and all nine run_stat_* stats, identical to bulk_players",
+        run_stat_scale: RUN_SCALE_DOC,
         evo_path_semantics: REPLACEMENT_SEMANTICS["evo_paths[].steps"],
         evo_source_identifiers: ["player_card_id", "card_key", "player_name"],
         evo_objective_stats: EVO_OBJECTIVE_KEYS,
