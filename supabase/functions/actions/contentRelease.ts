@@ -67,6 +67,8 @@ export interface ReleaseStepInput {
   from_tier: string;
   to_tier: string;
   step_order: number;
+  /** Immutable id of an existing step to update in place (optional, authoritative). */
+  evo_path_id?: string;
   objectives: Array<{ stat: string; amount: number; description?: string }>;
   resulting_version: {
     rating?: number;
@@ -95,6 +97,14 @@ export interface ReleaseEvoPathInput {
   card_variant?: string;
   evo_stage?: number;
   status?: "draft" | "published";
+  /**
+   * Whole-path replacement (default). `steps` is the complete, authoritative
+   * step list for this card: matching steps are updated in place by immutable
+   * id, missing steps are created, and leftover steps are deleted together with
+   * their objectives and playable versions.
+   * Set false to only add/update the listed steps and leave the rest alone.
+   */
+  replace_existing_path?: boolean;
   steps: ReleaseStepInput[];
 }
 
@@ -1033,39 +1043,59 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
   }
 
   if (release.evo_paths?.length) {
-    payload.evo_paths = release.evo_paths.flatMap((path) => {
+    // Every path is submitted as ONE item so the database applies explicit
+    // whole-path replacement semantics in a single transaction. `replace_path`
+    // updates existing steps in place by immutable id and deletes leftovers;
+    // replace_existing_path: false falls back to per-step upserts that never
+    // delete anything.
+    const stepItem = (path: ReleaseEvoPathInput, step: ReleaseStepInput) => ({
+      from_tier: step.from_tier,
+      to_tier: step.to_tier,
+      step_order: step.step_order,
+      ...(step.evo_path_id ? { evo_path_id: step.evo_path_id } : {}),
+      status: path.status === "published" ? "active" : "draft",
+      objectives: step.objectives.map((o, i) => ({
+        key: o.stat,
+        ...EVO_OBJECTIVES[o.stat as EvoObjectiveKey],
+        target: o.amount,
+        description: o.description ?? null,
+        sort_order: i + 1,
+      })),
+      resulting_version: {
+        rating: step.resulting_version.rating ?? null,
+        ...(step.resulting_version.run_rating != null ? { run_rating: step.resulting_version.run_rating } : {}),
+        gem_name: step.resulting_version.gem_name ?? step.to_tier,
+        stats: step.resulting_version.stats,
+        ...(Object.keys(step.resulting_version.run_stats ?? {}).length
+          ? { run_stats: step.resulting_version.run_stats }
+          : {}),
+        badges: step.resulting_version.badges ?? [],
+        traits: step.resulting_version.traits ?? [],
+        status: "draft",
+      },
+    });
+
+    payload.evo_paths = release.evo_paths.flatMap((path): Record<string, unknown>[] => {
       const source = evoSourceFields(release, path);
-      return [...(path.steps ?? [])]
+      const steps = [...(path.steps ?? [])]
         .sort((a, b) => a.step_order - b.step_order)
-        .map((step) => ({
+        .map((step) => stepItem(path, step));
+      if (path.replace_existing_path === false) {
+        return steps.map((step) => ({
           action: "upsert",
           ...source,
-
-          from_tier: step.from_tier,
-          to_tier: step.to_tier,
-          step_order: step.step_order,
-          status: path.status === "published" ? "active" : "draft",
-          objectives: step.objectives.map((o, i) => ({
-            key: o.stat,
-            ...EVO_OBJECTIVES[o.stat as EvoObjectiveKey],
-            target: o.amount,
-            description: o.description ?? null,
-            sort_order: i + 1,
-          })),
-          resulting_version: {
-            rating: step.resulting_version.rating ?? null,
-            ...(step.resulting_version.run_rating != null ? { run_rating: step.resulting_version.run_rating } : {}),
-            gem_name: step.resulting_version.gem_name ?? step.to_tier,
-            stats: step.resulting_version.stats,
-            ...(Object.keys(step.resulting_version.run_stats ?? {}).length
-              ? { run_stats: step.resulting_version.run_stats }
-              : {}),
-            badges: step.resulting_version.badges ?? [],
-            traits: step.resulting_version.traits ?? [],
-            status: "draft",
-          },
+          ...step,
           release_bundle_ref: RELEASE_REF,
         }));
+      }
+      return [
+        {
+          action: "replace_path",
+          ...source,
+          steps,
+          release_bundle_ref: RELEASE_REF,
+        },
+      ];
     });
   }
 
