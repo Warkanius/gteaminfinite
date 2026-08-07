@@ -1226,6 +1226,16 @@ export type Database = {
           gem_tier_id: string | null
           id: string
           rating: number | null
+          run_rating: number | null
+          run_stat_3pt: number
+          run_stat_ast: number
+          run_stat_blk: number
+          run_stat_dnk: number
+          run_stat_fin: number
+          run_stat_int: number
+          run_stat_mid: number
+          run_stat_reb: number
+          run_stat_stl: number
           stat_3pt: number
           stat_ast: number
           stat_blk: number
@@ -1247,6 +1257,16 @@ export type Database = {
           gem_tier_id?: string | null
           id?: string
           rating?: number | null
+          run_rating?: number | null
+          run_stat_3pt?: number
+          run_stat_ast?: number
+          run_stat_blk?: number
+          run_stat_dnk?: number
+          run_stat_fin?: number
+          run_stat_int?: number
+          run_stat_mid?: number
+          run_stat_reb?: number
+          run_stat_stl?: number
           stat_3pt?: number
           stat_ast?: number
           stat_blk?: number
@@ -1268,6 +1288,16 @@ export type Database = {
           gem_tier_id?: string | null
           id?: string
           rating?: number | null
+          run_rating?: number | null
+          run_stat_3pt?: number
+          run_stat_ast?: number
+          run_stat_blk?: number
+          run_stat_dnk?: number
+          run_stat_fin?: number
+          run_stat_int?: number
+          run_stat_mid?: number
+          run_stat_reb?: number
+          run_stat_stl?: number
           stat_3pt?: number
           stat_ast?: number
           stat_blk?: number
@@ -3918,6 +3948,10 @@ export type Database = {
         Args: { p_commit?: boolean; p_payload: Json }
         Returns: Json
       }
+      admin_assert_castable: {
+        Args: { p_fields: Json; p_table: string }
+        Returns: undefined
+      }
       admin_audit_write: {
         Args: {
           p_after: Json
@@ -4130,6 +4164,14 @@ export type Database = {
         Returns: Json
       }
       content_release_verify: { Args: { p_result: Json }; Returns: Json }
+      evo_seed_objectives_from_legacy: {
+        Args: { p_path: string }
+        Returns: number
+      }
+      evo_sync_legacy_from_objectives: {
+        Args: { p_path: string }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
