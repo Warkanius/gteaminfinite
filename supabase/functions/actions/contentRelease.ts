@@ -10,6 +10,16 @@
  * which re-validates and is the single source of truth.
  */
 
+import {
+  deriveRunStats,
+  runBandForBase,
+  runBandLabel,
+  runRatingFromStats,
+  runStatMatchesBase,
+  RUN_STAT_RANGE,
+  RUN_SCALE_DOC,
+} from "../_shared/admin-api/runScale.ts";
+
 export const STAT_KEYS = [
   "stat_3pt",
   "stat_mid",
@@ -350,15 +360,70 @@ function normalizeAssignments(list: unknown, kind: "badge" | "trait"): Assignmen
   });
 }
 
+/**
+ * Runs stats sit on their own point scale: every star of a base stat is worth
+ * twenty Runs points (star 0 = 0-19, star 1 = 20-39, ... star 6 = 120-139).
+ * Missing values are derived from the base stats, correlated with the star value
+ * and its decimals and randomised deterministically inside the band.
+ */
+function completeRunStats(
+  stats: Record<string, unknown>,
+  runStats: Record<string, unknown>,
+  seed: string,
+): RunStatBlock {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(runStats)) if (v !== undefined && v !== null) out[k] = Number(v);
+  const baseComplete = STAT_KEYS.every((k) => stats[k] !== undefined && stats[k] !== null);
+  if (baseComplete) {
+    const derived = deriveRunStats(stats, seed || "release");
+    for (const key of RUN_STAT_KEYS) if (out[key] === undefined) out[key] = derived[key];
+  }
+  return out as RunStatBlock;
+}
+
+/** Validates supplied Runs stats against the Runs point scale and their bands. */
+function validateRunStats(
+  stats: Record<string, unknown>,
+  runStats: Record<string, unknown>,
+  scope: string,
+  err: (code: string, message: string, path: string) => void,
+) {
+  for (const [stat, value] of Object.entries(runStats)) {
+    if (!(RUN_STAT_KEYS as readonly string[]).includes(stat)) {
+      err("UNKNOWN_RUN_STAT_KEY", `"${stat}" is not a supported Runs stat.`, scope);
+      continue;
+    }
+    if (typeof value !== "number" || Number.isNaN(value) || value < RUN_STAT_RANGE.min || value > RUN_STAT_RANGE.max) {
+      err(
+        "STAT_OUT_OF_RANGE",
+        `${stat} must be between ${RUN_STAT_RANGE.min} and ${RUN_STAT_RANGE.max} on the Runs point scale.`,
+        scope,
+      );
+      continue;
+    }
+    const base = stats[stat.replace("run_", "")];
+    if (base === undefined || base === null) continue;
+    if (!runStatMatchesBase(base as number, value)) {
+      const band = runBandForBase(base as number);
+      err(
+        "RUN_STAT_SCALE_MISMATCH",
+        `${stat} must sit inside ${runBandLabel(band)} for a base value of ${String(base)}. ${RUN_SCALE_DOC}`,
+        scope,
+      );
+    }
+  }
+}
+
 /** Normalizes an imported release document. Never writes anything. */
 export function normalizeRelease(input: ContentReleaseInput): ContentReleaseInput {
   const out: ContentReleaseInput = JSON.parse(JSON.stringify(input ?? {}));
   out.players = (out.players ?? []).map((p) => {
     const { rest, stats, runStats } = splitStatFields(p as unknown as Record<string, unknown>);
+    const seed = String(p.player_card_id ?? p.name ?? "");
     return {
       ...(rest as unknown as ReleasePlayerInput),
       stats,
-      run_stats: runStats,
+      run_stats: completeRunStats(stats, runStats, seed),
       badges: normalizeAssignments(p.badges, "badge"),
       traits: normalizeAssignments(p.traits, "trait"),
     };
@@ -380,7 +445,7 @@ export function normalizeRelease(input: ContentReleaseInput): ContentReleaseInpu
           resulting_version: {
             ...(rest as ReleaseStepInput["resulting_version"]),
             stats,
-            run_stats: runStats,
+            run_stats: completeRunStats(stats, runStats, `${path.player_name ?? path.player_card_id ?? ""}|step${step.step_order}`),
             badges: normalizeAssignments(version.badges, "badge"),
             traits: normalizeAssignments(version.traits, "trait"),
           },
@@ -483,11 +548,15 @@ export function validateRelease(
         err("STAT_OUT_OF_RANGE", `${stat} must be between ${STAT_RANGE.min} and ${STAT_RANGE.max}.`, `${scope}.stats`);
       }
     }
-    for (const [stat, value] of Object.entries(p.run_stats ?? {})) {
-      if (!(RUN_STAT_KEYS as readonly string[]).includes(stat)) {
-        err("UNKNOWN_RUN_STAT_KEY", `"${stat}" is not a supported Runs stat.`, `${scope}.run_stats`);
-      } else if (typeof value !== "number" || Number.isNaN(value) || value < STAT_RANGE.min || value > STAT_RANGE.max) {
-        err("STAT_OUT_OF_RANGE", `${stat} must be between ${STAT_RANGE.min} and ${STAT_RANGE.max}.`, `${scope}.run_stats`);
+    validateRunStats(p.stats ?? {}, p.run_stats ?? {}, `${scope}.run_stats`, err);
+    if (p.run_rating !== undefined && p.run_rating !== null) {
+      const expected = runRatingFromStats((p.run_stats ?? {}) as Record<string, unknown>);
+      if (expected !== null && Math.abs(Number(p.run_rating) - Number(expected)) > 1) {
+        err(
+          "RUN_RATING_MISMATCH",
+          `run_rating must be the mean of the nine Runs stats (${expected}). ${RUN_SCALE_DOC}`,
+          `${scope}.run_rating`,
+        );
       }
     }
     validateAssignments(p.badges, p.traits, scope, err);
@@ -748,17 +817,12 @@ export function validateRelease(
             );
           }
         }
-        for (const [stat, value] of Object.entries(version.run_stats ?? {})) {
-          if (!(RUN_STAT_KEYS as readonly string[]).includes(stat)) {
-            err("UNKNOWN_RUN_STAT_KEY", `"${stat}" is not a supported Runs stat.`, `${sScope}.resulting_version.run_stats`);
-          } else if (typeof value !== "number" || Number.isNaN(value) || value < STAT_RANGE.min || value > STAT_RANGE.max) {
-            err(
-              "STAT_OUT_OF_RANGE",
-              `${stat} must be between ${STAT_RANGE.min} and ${STAT_RANGE.max}.`,
-              `${sScope}.resulting_version.run_stats`,
-            );
-          }
-        }
+        validateRunStats(
+          version.stats ?? {},
+          version.run_stats ?? {},
+          `${sScope}.resulting_version.run_stats`,
+          err,
+        );
         validateAssignments(version.badges, version.traits, `${sScope}.resulting_version`, err);
       }
     });
