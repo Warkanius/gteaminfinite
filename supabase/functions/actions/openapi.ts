@@ -41,7 +41,7 @@ const PlayerInput = {
     position1: strProp("Primary position, e.g. PG / SG / SF / PF / C."),
     position2: strProp("Secondary position or null."),
     rating: { type: "number", description: "Overall rating; decimals are preserved, e.g. 87.4." },
-    run_rating: intProp("Overall rating used in 3v3 Runs."),
+    run_rating: { type: "number", description: "Overall rating used in 3v3 Runs; decimals are preserved." },
     ...statProps(STATS, "Base"),
     ...statProps(RUN_STATS, "Runs-mode"),
     market_value: intProp("Coin market value."),
