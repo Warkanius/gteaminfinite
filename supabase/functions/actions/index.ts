@@ -112,6 +112,27 @@ Deno.serve(async (req) => {
     if (path === "/diagnostics" && req.method === "GET") return json(await diagnostics(supabase));
     if (path === "/references" && req.method === "GET") return json(await references(supabase));
 
+    // ------------------------------------------- evo card version Runs audit
+    // Flags versions with missing or star-scale (out-of-band) Runs data.
+    if (path === "/evo/runs-audit" && req.method === "GET") {
+      const { data, error } = await supabase.rpc("admin_evo_version_audit");
+      if (error) return err(error.message, 400);
+      return json(data ?? {});
+    }
+
+    // Deterministic repair onto the 20-points-per-star scale. Defaults to a
+    // zero-write preview; pass { commit: true } to write.
+    if (path === "/evo/runs-repair" && req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const { data, error } = await supabase.rpc("admin_repair_evo_version_runs", {
+        p_commit: body.commit === true,
+        p_version_id: body.version_id ?? null,
+      });
+      if (error) return err(error.message, 400);
+      return json(data ?? {});
+    }
+
+
     if (path === "/list" && req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       const table = String(body.table ?? "");
