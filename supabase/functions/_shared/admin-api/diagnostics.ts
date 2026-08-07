@@ -123,7 +123,7 @@ async function runDiagnosticsAll(client: Client): Promise<{ ok: boolean; checked
     jobs,
     storylineEntities,
   ] = await Promise.all([
-    rows("player_cards", "id,name,card_key,gem_tier_id,rating,status," + STAT_KEYS.join(",")),
+    rows("player_cards", "id,name,card_key,gem_tier_id,gem_name,rating,run_rating,status," + STAT_KEYS.join(",")),
     rows("gem_tiers", "id,name"),
     rows("teams", "id,name"),
     rows("team_players", "team_id,player_card_id,slot"),
