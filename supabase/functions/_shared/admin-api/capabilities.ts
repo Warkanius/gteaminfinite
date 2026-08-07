@@ -137,7 +137,11 @@ export function capabilities(base: string) {
         evo_path_semantics: REPLACEMENT_SEMANTICS["evo_paths[].steps"],
         evo_source_identifiers: ["player_card_id", "card_key", "player_name"],
         evo_objective_stats: EVO_OBJECTIVE_KEYS,
-        resulting_version_fields: ["rating", "gem_name/tier", "nine base stats", "nine run stats", "positions", "presentation fields", "badges (replacement)", "traits (replacement + target_stat)", "evo stage", "status"],
+        resulting_version_fields: PLAYABLE_CARD_FIELDS,
+        resulting_version_contract:
+          "a resulting_version IS a complete playable card snapshot: it carries exactly the same playable fields as a player card (identity, positions, rating, run_rating, nine base stats, nine Runs stats, badges, traits). Omitted Runs stats are derived from the base stats on the Runs point scale and run_rating is their mean; supplied Runs stats must sit inside the band of their base star stat.",
+        runs_audit_operations: { audit: "auditEvoVersionRuns", repair: "repairEvoVersionRuns" },
+
         tier_order: GEM_TIER_BANDS.map((b) => b.tier),
         game_over_supported: true,
         collection_semantics: "ordered membership replacement, exactly one reward, reward never silently overwritten",
