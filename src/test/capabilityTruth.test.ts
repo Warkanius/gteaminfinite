@@ -19,8 +19,9 @@ const sql = readFileSync(join(process.cwd(), "src/test/sql/live-functions.sql"),
 /** The v_groups array literal inside admin_apply_batch, in declaration order. */
 function sqlGroupOrder(): string[] {
   const fn = sql.slice(sql.indexOf("FUNCTION public.admin_apply_batch"));
-  const decl = fn.slice(fn.indexOf("v_groups text[] := ARRAY["));
-  const literal = decl.slice(decl.indexOf("[") + 1, decl.indexOf("]"));
+  const marker = "v_groups text[] := ARRAY[";
+  const decl = fn.slice(fn.indexOf(marker) + marker.length);
+  const literal = decl.slice(0, decl.indexOf("]"));
   return literal
     .split(",")
     .map((s) => s.trim().replace(/^'|'$/g, ""))
