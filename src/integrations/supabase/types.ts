@@ -3927,6 +3927,10 @@ export type Database = {
         Args: { p_commit?: boolean; p_item: Json }
         Returns: Json
       }
+      admin_apply_evo_path: {
+        Args: { p_commit?: boolean; p_item: Json }
+        Returns: Json
+      }
       admin_apply_evo_version: {
         Args: {
           p_commit: boolean
@@ -4023,6 +4027,10 @@ export type Database = {
         Returns: boolean
       }
       admin_has_pending_ref: { Args: { p_item: Json }; Returns: boolean }
+      admin_identity_pending: {
+        Args: { p_group: string; p_item: Json }
+        Returns: boolean
+      }
       admin_install_lifecycle: { Args: { p_table: string }; Returns: undefined }
       admin_issue_preview_token: {
         Args: { p_fingerprint: string; p_kind: string; p_payload: Json }
@@ -4098,6 +4106,7 @@ export type Database = {
       }
       admin_slugify: { Args: { p_text: string }; Returns: string }
       admin_stat_keys: { Args: never; Returns: string[] }
+      admin_strip_pending: { Args: { p_item: Json }; Returns: Json }
       admin_substitute_refs: {
         Args: { p_item: Json; p_refs: Json }
         Returns: Json

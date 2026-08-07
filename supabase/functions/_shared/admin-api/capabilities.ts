@@ -24,7 +24,30 @@ const REPLACEMENT_SEMANTICS: Record<string, string> = {
   "runs[].roster": "full ordered opponent roster replacement",
   "runs[].rank_rewards": "GLOBAL ladder replacement shared by every Run",
   "domination_roads[].games": "merge by default; mode='replace' deletes unlisted games",
-  "evo_paths[].steps": "full path replacement including materialized versions",
+  "evo_paths[].steps": "action='replace_path': the submitted step list is authoritative — existing steps are updated in place by immutable evo_path_id, missing steps are created, leftover steps are DELETED with their objectives and playable versions. Send replace_existing_path:false for additive per-step upserts that never delete.",
+  "evo_paths[].steps[].objectives": "full replacement of that step's objectives",
+  "evo_paths[].steps[].resulting_version": "the single playable version of that step, replaced in place (badges and traits fully replaced)",
+};
+
+/**
+ * The exact order admin_apply_batch applies groups in: parents strictly before
+ * children, so a zero-write preview resolves real ids instead of guessing.
+ * Kept in sync with the SQL by src/test/capabilityTruth.test.ts.
+ */
+export const GROUP_APPLY_ORDER = [
+  "release_bundles", "gem_tiers", "badges", "signature_traits", "players",
+  "collections", "sub_collections", "collection_requirements", "teams", "packs", "evo_paths",
+  "gem_tasks", "runs", "domination_roads", "domination_games", "challenges", "locker_codes",
+  "dynamic_duos", "storylines", "location_accounts", "social_posts",
+] as const;
+
+/** How preview reports links that can only resolve inside the commit transaction. */
+export const DEFERRED_LINK_CONTRACT = {
+  identity_deferred:
+    "only when the pending reference decides WHICH record the item is (evo path source card, collection requirement parents) — the item is reported as a create with pending_references and validated on commit",
+  link_deferred:
+    "any other same-batch link (release bundle, team, collection, pack reward) is stripped for classification, the item is validated and classified as a real update or create, and the link is listed under deferred_references with warning DEFERRED_SAME_BATCH_LINK",
+  never: "preview never reports an update as a create just because the item carries a same-release link",
 };
 
 const PLAYER_FIELDS = [
@@ -108,6 +131,7 @@ export function capabilities(base: string) {
         commit_path: `POST ${base}/admin-api/${API_VERSION}/bulk/commit`,
         sections: ["release", "players", "collection", "collection membership", "collection reward", "team", "team roster", "pack", "pack pool", "pack odds", "evo_paths", "evo objectives", "playable resulting evo versions", "badges", "traits"],
         player_stat_support: "all nine base stats and all nine run_stat_* stats, identical to bulk_players",
+        evo_path_semantics: REPLACEMENT_SEMANTICS["evo_paths[].steps"],
         evo_source_identifiers: ["player_card_id", "card_key", "player_name"],
         evo_objective_stats: EVO_OBJECTIVE_KEYS,
         resulting_version_fields: ["rating", "gem_name/tier", "nine base stats", "nine run stats", "positions", "presentation fields", "badges (replacement)", "traits (replacement + target_stat)", "evo stage", "status"],
@@ -130,6 +154,8 @@ export function capabilities(base: string) {
       "POST schedule               -> approved preview executed later, revalidated at run time",
     ],
     groups: GROUPS,
+    group_apply_order: GROUP_APPLY_ORDER,
+    deferred_reference_contract: DEFERRED_LINK_CONTRACT,
     entities: Object.keys(ENTITY_TO_GROUP).sort(),
     single_and_bulk_share_schema: true,
     fields: {
