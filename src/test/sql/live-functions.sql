@@ -1524,7 +1524,7 @@ DECLARE
   v_existing jsonb := '[]'::jsonb; v_keep uuid[] := '{}'; v_orders int[] := '{}';
   v_ops jsonb := '[]'::jsonb; v_destr jsonb := '[]'::jsonb; v_warn jsonb := '[]'::jsonb;
   v_results jsonb := '[]'::jsonb; v_res jsonb; v_name text; v_idx int := 0;
-  v_stale record; v_before jsonb; v_step_ids jsonb := '[]'::jsonb;
+  v_stale record; v_new uuid; v_step_ids jsonb := '[]'::jsonb;
 BEGIN
   PERFORM public.admin_require_admin();
 
@@ -1547,7 +1547,6 @@ BEGIN
     RAISE EXCEPTION 'EMPTY_EVO_PATH: replace_path with zero steps would delete the whole path; use delete_entity explicitly instead';
   END IF;
 
-  -- current path, before anything changes
   SELECT coalesce(jsonb_agg(jsonb_build_object('id', id, 'step_order', step_order,
            'from_tier_id', from_tier_id, 'to_tier_id', to_tier_id,
            'objective_count', (SELECT count(*) FROM evo_objectives o WHERE o.evo_path_id = p.id),
@@ -1555,7 +1554,6 @@ BEGIN
            ORDER BY step_order), '[]'::jsonb)
     INTO v_existing FROM evo_paths p WHERE player_card_id = v_src;
 
-  -- classify + apply every submitted step
   FOR v_step IN SELECT * FROM jsonb_array_elements(v_steps) LOOP
     v_idx := v_idx + 1;
     v_order := coalesce((v_step->>'step_order')::int, v_idx);
@@ -1582,6 +1580,11 @@ BEGIN
         || CASE WHEN v_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('evo_path_id', v_id) END,
       p_commit);
 
+    -- A step created by this replacement is part of the authoritative path and
+    -- must survive the stale-step sweep below.
+    v_new := nullif(v_res->>'id','')::uuid;
+    IF v_id IS NULL AND v_new IS NOT NULL THEN v_keep := v_keep || v_new; END IF;
+
     v_results := v_results || jsonb_build_array(v_res);
     v_ops := v_ops || coalesce(v_res->'operations','[]'::jsonb);
     v_destr := v_destr || coalesce(v_res->'destructive','[]'::jsonb);
@@ -1592,7 +1595,6 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- stale steps: present in the database, absent from the authoritative payload
   FOR v_stale IN
     SELECT p.id, p.step_order,
            (SELECT count(*) FROM evo_objectives o WHERE o.evo_path_id = p.id) AS objectives,
@@ -1612,7 +1614,6 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- contiguity check on the final shape
   IF EXISTS (
     SELECT 1 FROM unnest(v_orders) o
      WHERE o <> ALL (SELECT generate_series(1, array_length(v_orders,1)))
