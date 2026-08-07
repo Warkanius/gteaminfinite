@@ -370,14 +370,31 @@ async function entity(supabase: ReturnType<typeof clientFor>, body: any) {
     if (!rows.length) return err(`No player card named "${name}".`, 404);
     if (rows.length > 1) return err(`Ambiguous player card name "${name}".`, 400);
     const card: any = rows[0];
-    const [badges, traits, tier, team] = await Promise.all([
+    const [badges, traits, tier, team, evoPaths] = await Promise.all([
       supabase.from("player_card_badges").select("tier, badges(name, abbreviation)").eq("player_card_id", card.id),
       supabase.from("player_card_traits").select("tier, target_stat, signature_traits(name, abbreviation)").eq("player_card_id", card.id),
       card.gem_tier_id ? supabase.from("gem_tiers").select("name, stars").eq("id", card.gem_tier_id).maybeSingle() : Promise.resolve({ data: null }),
       card.team_id ? supabase.from("teams").select("name").eq("id", card.team_id).maybeSingle() : Promise.resolve({ data: null }),
+      supabase.from("evo_paths").select("*").eq("player_card_id", card.id).order("step_order"),
     ]);
-    return json({ type, player: card, gem_tier: tier.data, team: team.data, badges: badges.data ?? [], traits: traits.data ?? [] });
+    // Evo versions are complete playable cards: return every column (including
+    // run_rating and run_stat_*) so the Commissioner can audit Runs data.
+    const pathIds = (evoPaths.data ?? []).map((p: any) => p.id);
+    const versions = pathIds.length
+      ? (await supabase.from("evo_card_versions").select("*").in("evo_path_id", pathIds).order("version_order")).data ?? []
+      : [];
+    return json({
+      type,
+      player: card,
+      gem_tier: tier.data,
+      team: team.data,
+      badges: badges.data ?? [],
+      traits: traits.data ?? [],
+      evo_paths: evoPaths.data ?? [],
+      evo_card_versions: versions,
+    });
   }
+
 
   if (type === "team") {
     const rows = await one("teams", "name", name);
