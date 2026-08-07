@@ -160,6 +160,19 @@ async function runDiagnosticsAll(client: Client): Promise<{ ok: boolean; checked
     const key = String(card.name ?? "").trim().toLowerCase();
     byName.set(key, [...(byName.get(key) ?? []), card]);
 
+    if (card.gem_name && !card.gem_tier_id) {
+      findings.push({
+        code: "GEM_NAME_WITHOUT_TIER",
+        entity_type: "player_card",
+        severity: "error",
+        entity_id: card.id,
+        label: card.name,
+        message: `Card shows gem name "${card.gem_name}" but has no gem tier, so the game renders no tier.`,
+        remediation: "Send gem_tier (a real tier name) for this player_card_id; gem_name is only a display label.",
+      });
+    }
+
+
     const statsPresent = STAT_KEYS.every((k) => card[k] !== null && card[k] !== undefined);
     if (!statsPresent) {
       findings.push({
