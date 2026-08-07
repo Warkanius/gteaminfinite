@@ -436,53 +436,92 @@ async function runDiagnosticsAll(client: Client): Promise<{ ok: boolean; checked
       });
       continue;
     }
-    const versions = evoVersions.filter((v) => v.evo_path_id === path.id).sort((a, b) => (a.version_number ?? 0) - (b.version_number ?? 0));
+    const label = `${cardById.get(path.player_card_id)?.name ?? "?"} step ${path.step_order ?? 1}`;
+    const versions = evoVersions
+      .filter((v) => v.evo_path_id === path.id)
+      .sort((a, b) => (a.version_order ?? 0) - (b.version_order ?? 0));
     const objectives = evoObjectives.filter((o) => o.evo_path_id === path.id);
-    const steps = new Set(objectives.map((o) => o.step_order));
-    for (const step of steps) {
-      if (!versions.some((v) => v.version_number === step)) {
-        findings.push({
-          code: "EVO_MISSING_VERSION",
-          entity_type: "evo_path",
-          severity: "error",
-          entity_id: path.id,
-          message: `Step ${step} has objectives but no playable resulting version.`,
-          remediation: "Resend the path with resulting_version on every step.",
-        });
-      }
+
+    if (!objectives.length) {
+      findings.push({
+        code: "EVO_MISSING_OBJECTIVES",
+        entity_type: "evo_path",
+        severity: "error",
+        entity_id: path.id,
+        label,
+        message: "Evo step has no objectives, so it can never be completed in game.",
+        remediation: "Resend the path with objectives[] through /admin-api/v1/content-release/preview.",
+      });
+    }
+    if (!versions.length) {
+      findings.push({
+        code: "EVO_MISSING_VERSION",
+        entity_type: "evo_path",
+        severity: "error",
+        entity_id: path.id,
+        label,
+        message: "Evo step has no playable resulting version, so the reward card state is undefined.",
+        remediation: "Resend the path with resulting_version on every step.",
+      });
     }
     for (const objective of objectives) {
-      if (!EVO_OBJECTIVE_KEYS.includes(String(objective.stat))) {
+      const key = String(objective.stat_key ?? objective.objective_type ?? "");
+      if (!EVO_OBJECTIVE_KEYS.includes(key) && !EVO_OBJECTIVE_KEYS.includes(String(objective.objective_type ?? ""))) {
         findings.push({
           code: "UNSUPPORTED_EVO_OBJECTIVE",
           entity_type: "evo_objective",
           severity: "error",
           entity_id: objective.id,
-          message: `"${objective.stat}" is not a supported objective statistic.`,
+          label,
+          message: `"${objective.objective_type}${objective.stat_key ? `/${objective.stat_key}` : ""}" is not a supported objective.`,
           detail: { supported: EVO_OBJECTIVE_KEYS },
-          remediation: "Use one of the supported objective statistics.",
+          remediation: "Use one of the supported objective types/statistics.",
+        });
+      }
+      if (objective.target === null || Number(objective.target) <= 0) {
+        findings.push({
+          code: "INVALID_EVO_TARGET",
+          entity_type: "evo_objective",
+          severity: "error",
+          entity_id: objective.id,
+          label,
+          message: "Objective target must be greater than zero.",
+          remediation: "Send a positive target for every objective.",
         });
       }
     }
-    let previous: string | null = tierKey(tierName.get(cardById.get(path.player_card_id)?.gem_tier_id));
+
+    // tier progression: each step must advance exactly one tier
+    const from = tierKey(tierName.get(path.from_tier_id) ?? tierName.get(cardById.get(path.player_card_id)?.gem_tier_id));
+    const to = tierKey(tierName.get(path.to_tier_id));
+    const fromIndex = EVO_ORDER.indexOf(from);
+    const toIndex = EVO_ORDER.indexOf(to);
+    if (fromIndex >= 0 && toIndex >= 0 && toIndex !== fromIndex + 1 && !path.tier_progression_override) {
+      findings.push({
+        code: "EVO_TIER_SKIP",
+        entity_type: "evo_path",
+        severity: "error",
+        entity_id: path.id,
+        label,
+        message: `Step moves ${from} -> ${to}, which is not a single-tier advance.`,
+        remediation: "Rebuild the path so each step advances exactly one tier, or set tier_progression_override.",
+      });
+    }
     for (const version of versions) {
-      const from = tierKey(version.from_tier ?? previous);
-      const to = tierKey(version.to_tier ?? tierName.get(version.gem_tier_id));
-      const fromIndex = EVO_ORDER.indexOf(from);
-      const toIndex = EVO_ORDER.indexOf(to);
-      if (fromIndex >= 0 && toIndex >= 0 && toIndex !== fromIndex + 1) {
+      if (version.gem_tier_id && path.to_tier_id && version.gem_tier_id !== path.to_tier_id) {
         findings.push({
-          code: "EVO_TIER_SKIP",
+          code: "EVO_VERSION_TIER_MISMATCH",
           entity_type: "evo_card_version",
           severity: "error",
           entity_id: version.id,
-          message: `Version ${version.version_number} moves ${from} -> ${to}.`,
-          remediation: "Rebuild the path so each step advances exactly one tier.",
+          label,
+          message: "Playable version tier does not match the step's target tier.",
+          remediation: "Set the version gem tier to the step's to_tier.",
         });
       }
-      previous = to || previous;
     }
   }
+
   const traitIds = new Set(traits.map((t) => t.id));
   for (const assignment of cardTraits) {
     if (!traitIds.has(assignment.signature_trait_id)) {
