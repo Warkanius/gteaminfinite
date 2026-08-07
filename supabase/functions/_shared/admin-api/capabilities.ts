@@ -5,6 +5,7 @@ import { API_VERSION } from "./errors.ts";
 import { GROUPS, ENTITY_TO_GROUP, EVO_OBJECTIVE_KEYS } from "./normalize.ts";
 import { GEM_TIER_BANDS, STAT_KEYS, bandLabel } from "./decimal.ts";
 import { RUN_SCALE_DOC } from "./runScale.ts";
+import { PLAYABLE_CARD_FIELDS } from "./playableCard.ts";
 
 export const LIMITS = {
   max_items_per_group: 500,
