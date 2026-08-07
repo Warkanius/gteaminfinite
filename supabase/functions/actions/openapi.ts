@@ -317,9 +317,12 @@ export const READ_TABLE_LIST = [
   "domination_roads", "domination_games", "domination_game_players", "challenges", "gem_tasks", "gem_tiers",
   "gem_market_listings", "dynamic_duos", "collections", "sub_collections", "badges",
   "signature_traits", "player_card_badges", "player_card_traits", "packs", "pack_odds",
-  "pack_players", "locker_codes", "evo_paths", "storylines", "storyline_entities",
+  "pack_players", "locker_codes", "evo_paths", "evo_objectives", "evo_card_versions",
+  "evo_objective_registry", "release_bundles", "release_bundle_entities",
+  "storylines", "storyline_entities",
   "social_creators", "social_posts", "location_accounts", "location_post_templates", "rule_config",
 ];
+
 
 export function buildOpenApi(baseUrl: string) {
   const paths: Record<string, unknown> = {};
