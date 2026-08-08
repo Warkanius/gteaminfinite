@@ -22,6 +22,7 @@ import {
   OVR_TOLERANCE,
 } from "./decimal.ts";
 import { normalizeRef, hasTarget, isUuid } from "./refs.ts";
+import { applyDominationSection } from "./domination.ts";
 import {
   deriveRunStats,
   runBandForBase,
