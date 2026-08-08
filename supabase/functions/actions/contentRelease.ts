@@ -199,8 +199,59 @@ export interface ContentReleaseInput {
     expires_at?: string | null;
     status?: "draft" | "published";
   }>;
+  /** Challenges shipped with the release, including same-release card/pack rewards. */
+  challenges?: ReleaseChallengeInput[];
   forbid_existing_links_to?: string[];
 }
+
+/** Challenge fields the release engine understands. */
+export interface ReleaseChallengeInput {
+  name: string;
+  challenge_id?: string;
+  description?: string;
+  challenge_type?: string;
+  win_condition?: string;
+  win_by_amount?: number;
+  series_length?: number;
+  series_win_coins?: number;
+  series_loss_coins?: number;
+  opponent_team?: string;
+  /** Set true to face the team created in this same release. */
+  opponent_release_team?: boolean;
+  coin_reward?: number;
+  gem_reward?: number;
+  /** Rewards a card: a name (resolved, including cards created in this release) or an id. */
+  card_reward?: string;
+  card_reward_id?: string;
+  /** Rewards the pack defined in this release. */
+  pack_reward?: string;
+  pack_release_reward?: boolean;
+  stat_limit_player?: string;
+  stat_limit_stat?: string;
+  stat_limit_value?: number;
+  prerequisite?: string;
+  spotlight_group?: string;
+  sort_order?: number;
+  conditions?: Record<string, unknown>;
+  reward_payload?: Record<string, unknown>;
+  lineup_restrictions?: Record<string, unknown>;
+  is_repeatable?: boolean;
+  expires_at?: string | null;
+  status?: "draft" | "published";
+}
+
+/** Every top-level section a release document may contain. */
+export const RELEASE_SECTIONS = [
+  "release",
+  "collection",
+  "players",
+  "team",
+  "pack",
+  "evo_paths",
+  "locker_codes",
+  "challenges",
+  "forbid_existing_links_to",
+] as const;
 
 export interface ValidationResult {
   code: string;
