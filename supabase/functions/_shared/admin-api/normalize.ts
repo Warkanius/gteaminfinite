@@ -5,7 +5,7 @@
 // the matching group array, so no schema can drift between the two shapes.
 
 import { apiError, apiWarning, type AdminApiError, type AdminApiWarning } from "./errors.ts";
-import { ASSIGNMENT_RULE_DOC, checkAssignmentLimits } from "./assignmentRules.ts";
+import { checkAssignmentLimits } from "./assignmentRules.ts";
 import { canonicalize, compact } from "./canonical.ts";
 import {
   checkOvr,
