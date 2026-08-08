@@ -1925,6 +1925,8 @@ function unscaled(units, places = 2) {
   return neg ? `-${out}` : out;
 }
 var GEM_TIER_BANDS = [
+  // Gold is a real, playable star-0 tier and a legitimate evolution SOURCE.
+  { tier: "gold", min: 0, max: 99 },
   { tier: "emerald", min: 100, max: 199 },
   { tier: "amethyst", min: 200, max: 299 },
   { tier: "diamond", min: 300, max: 399 },
