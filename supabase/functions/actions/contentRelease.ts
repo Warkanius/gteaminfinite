@@ -24,7 +24,7 @@ import {
   completeRunStats as sharedCompleteRunStats,
   PLAYABLE_CARD_FIELDS,
 } from "../_shared/admin-api/playableCard.ts";
-import { assignmentAllowance, checkAssignmentLimits } from "../_shared/admin-api/assignmentRules.ts";
+import { checkAssignmentLimits } from "../_shared/admin-api/assignmentRules.ts";
 
 
 export const STAT_KEYS = [
