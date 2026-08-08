@@ -1044,6 +1044,11 @@ function validateAssignments(
       err("INVALID_TRAIT_TARGET_STAT", `"${t.target_stat}" is not a valid trait target stat.`, `${scope}.traits[${i}]`);
     }
   });
+
+  // Five badges and one signature trait, unless Mr. Versatile raises the caps.
+  for (const issue of checkAssignmentLimits(badges, traits)) {
+    err(issue.code, issue.message, `${scope}.${issue.field}`);
+  }
 }
 
 // ------------------------------------------------------------ payload builder

@@ -2038,6 +2038,75 @@ function completeRunRating(runStats, supplied) {
   return mean === null ? null : Number(mean);
 }
 
+// supabase/functions/_shared/admin-api/assignmentRules.ts
+var BASE_MAX_BADGES = 5;
+var BASE_MAX_TRAITS = 1;
+var MR_VERSATILE_SLOTS = {
+  base: 1,
+  gold: 2,
+  hof: 3,
+  diamond: 4,
+  actolytrene: 5
+};
+var MR_VERSATILE_NAMES = ["mr. versatile", "mr versatile", "mrversatile", "mv"];
+function label(row, kind) {
+  if (typeof row === "string") return row.trim().toLowerCase();
+  const value = row[kind] ?? row.name ?? row.abbreviation ?? "";
+  return String(value).trim().toLowerCase();
+}
+function tierOf(row) {
+  if (typeof row === "string") return "base";
+  return String(row.tier ?? "base").trim().toLowerCase();
+}
+function isMrVersatile(row, kind) {
+  return MR_VERSATILE_NAMES.includes(label(row, kind));
+}
+function assignmentAllowance(badges, traits) {
+  let tier = null;
+  let extra = 0;
+  const consider = (row, kind) => {
+    if (!isMrVersatile(row, kind)) return;
+    const slots = MR_VERSATILE_SLOTS[tierOf(row)] ?? 0;
+    if (slots > extra) {
+      extra = slots;
+      tier = tierOf(row);
+    }
+  };
+  (badges ?? []).forEach((b) => consider(b, "badge"));
+  (traits ?? []).forEach((t) => consider(t, "trait"));
+  return {
+    max_badges: BASE_MAX_BADGES + extra,
+    max_traits: BASE_MAX_TRAITS + extra,
+    mr_versatile_tier: tier,
+    extra_slots: extra
+  };
+}
+function checkAssignmentLimits(badges, traits) {
+  const allowance = assignmentAllowance(badges, traits);
+  const issues = [];
+  const explain = allowance.extra_slots ? ` (${BASE_MAX_BADGES} base + ${allowance.extra_slots} from the ${allowance.mr_versatile_tier} Mr. Versatile)` : " \u2014 add Mr. Versatile to raise the cap";
+  if (badges && badges.length > allowance.max_badges) {
+    issues.push({
+      code: "TOO_MANY_BADGES",
+      field: "badges",
+      message: `A card may hold ${allowance.max_badges} badge(s)${explain}, received ${badges.length}.`,
+      allowed: allowance.max_badges,
+      received: badges.length
+    });
+  }
+  if (traits && traits.length > allowance.max_traits) {
+    issues.push({
+      code: "TOO_MANY_TRAITS",
+      field: "traits",
+      message: `A card may hold ${allowance.max_traits} signature trait(s)${allowance.extra_slots ? ` (${BASE_MAX_TRAITS} base + ${allowance.extra_slots} from the ${allowance.mr_versatile_tier} Mr. Versatile)` : " \u2014 add Mr. Versatile to raise the cap"}, received ${traits.length}.`,
+      allowed: allowance.max_traits,
+      received: traits.length
+    });
+  }
+  return issues;
+}
+var ASSIGNMENT_RULE_DOC = `A card holds up to ${BASE_MAX_BADGES} badges and ${BASE_MAX_TRAITS} signature trait. Mr. Versatile (available as a badge or a signature trait) raises both caps by its tier: ` + Object.entries(MR_VERSATILE_SLOTS).map(([tier, slots]) => `${tier} +${slots}`).join(", ") + `. Supplying badges or traits always replaces the whole set; [] clears it; omitting the field leaves existing assignments untouched.`;
+
 // supabase/functions/actions/contentRelease.ts
 var STAT_KEYS3 = [
   "stat_3pt",
@@ -2715,6 +2784,9 @@ function validateAssignments(badges, traits, scope, err) {
       err("INVALID_TRAIT_TARGET_STAT", `"${t.target_stat}" is not a valid trait target stat.`, `${scope}.traits[${i}]`);
     }
   });
+  for (const issue of checkAssignmentLimits(badges, traits)) {
+    err(issue.code, issue.message, `${scope}.${issue.field}`);
+  }
 }
 var slug = (value) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 var RELEASE_REF = "ref:release:main";
