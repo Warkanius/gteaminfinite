@@ -4059,6 +4059,7 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_normalize_evo_objective: { Args: { p_obj: Json }; Returns: Json }
       admin_pending_refs: { Args: { p_item: Json }; Returns: Json }
       admin_player_matches: { Args: { p_name: string }; Returns: Json }
       admin_player_usage: { Args: { p_card_id: string }; Returns: Json }
