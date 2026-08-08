@@ -1059,6 +1059,7 @@ const slug = (value: string) =>
 const RELEASE_REF = "ref:release:main";
 const COLLECTION_REF = "ref:collection:main";
 const PACK_REF = "ref:pack:main";
+const TEAM_REF = "ref:team:main";
 const cardRef = (name: string) => `ref:player:${slug(name)}`;
 
 /**
