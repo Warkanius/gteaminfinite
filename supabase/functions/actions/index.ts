@@ -132,6 +132,62 @@ Deno.serve(async (req) => {
       return json(data ?? {});
     }
 
+    // ------------------------------------- targeted evo version / step patches
+    // PATCH semantics: omitted fields are preserved, status is never forced to
+    // draft, and badge/trait lists are only replaced when explicitly supplied.
+    if (path === "/evo/versions" && req.method === "GET") {
+      const filters: Record<string, string> = {};
+      for (const k of ["player_card_id", "evo_path_id", "status"]) {
+        const v = url.searchParams.get(k);
+        if (v) filters[k] = v;
+      }
+      const { data, error } = await supabase.rpc("admin_evo_version_list", { p_filters: filters });
+      if (error) return rpcError(error);
+      return json(data ?? {});
+    }
+
+    if (path === "/evo/version/get" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!body.evo_version_id) return err("evo_version_id is required.", 400);
+      const { data, error } = await supabase.rpc("admin_evo_version_get", { p_id: body.evo_version_id });
+      if (error) return rpcError(error);
+      return json(data ?? {});
+    }
+
+    const evoPatch = path.match(/^\/evo\/(versions|steps|repair)\/(preview|commit)$/);
+    if (evoPatch && req.method === "POST") {
+      const [, kind, mode] = evoPatch;
+      const commit = mode === "commit";
+      const { preview_token, ...body } = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      if (commit && !preview_token) {
+        return err("preview_token is required to commit: preview the identical body first.", 400);
+      }
+      const payload: Record<string, unknown> = {};
+      if (kind === "versions") {
+        payload.evo_version_updates = body.evo_version_updates ?? body.versions ?? body.items;
+      } else if (kind === "steps") {
+        payload.evo_step_updates = body.evo_step_updates ?? body.steps ?? body.items;
+      } else {
+        if (body.evo_version_updates ?? body.versions) {
+          payload.evo_version_updates = body.evo_version_updates ?? body.versions;
+        }
+        if (body.evo_step_updates ?? body.steps) {
+          payload.evo_step_updates = body.evo_step_updates ?? body.steps;
+        }
+      }
+      if (!Object.keys(payload).length) {
+        return err("Nothing to do: send evo_version_updates and/or evo_step_updates.", 400);
+      }
+      return await rpcResult(
+        supabase.rpc("admin_apply_batch", {
+          p_payload: payload,
+          p_commit: commit,
+          p_preview_token: preview_token ?? null,
+          p_kind: "evo_patch",
+        }),
+      );
+    }
+
 
     if (path === "/list" && req.method === "POST") {
       const body = await req.json().catch(() => ({}));

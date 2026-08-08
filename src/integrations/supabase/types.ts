@@ -452,6 +452,7 @@ export type Database = {
           stat_limit_stat: string | null
           stat_limit_value: number | null
           status: Database["public"]["Enums"]["content_status"]
+          target_value: number | null
           win_by_amount: number | null
           win_condition: string
         }
@@ -486,6 +487,7 @@ export type Database = {
           stat_limit_stat?: string | null
           stat_limit_value?: number | null
           status?: Database["public"]["Enums"]["content_status"]
+          target_value?: number | null
           win_by_amount?: number | null
           win_condition?: string
         }
@@ -520,6 +522,7 @@ export type Database = {
           stat_limit_stat?: string | null
           stat_limit_value?: number | null
           status?: Database["public"]["Enums"]["content_status"]
+          target_value?: number | null
           win_by_amount?: number | null
           win_condition?: string
         }
@@ -1430,6 +1433,7 @@ export type Database = {
           disabled_at: string | null
           ends_at: string | null
           evolves_to_card_id: string | null
+          evolves_to_version_id: string | null
           final_rating: number | null
           final_stats: Json | null
           from_tier_id: string | null
@@ -1469,6 +1473,7 @@ export type Database = {
           disabled_at?: string | null
           ends_at?: string | null
           evolves_to_card_id?: string | null
+          evolves_to_version_id?: string | null
           final_rating?: number | null
           final_stats?: Json | null
           from_tier_id?: string | null
@@ -1508,6 +1513,7 @@ export type Database = {
           disabled_at?: string | null
           ends_at?: string | null
           evolves_to_card_id?: string | null
+          evolves_to_version_id?: string | null
           final_rating?: number | null
           final_stats?: Json | null
           from_tier_id?: string | null
@@ -1536,6 +1542,13 @@ export type Database = {
             columns: ["evolves_to_card_id"]
             isOneToOne: false
             referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evo_paths_evolves_to_version_id_fkey"
+            columns: ["evolves_to_version_id"]
+            isOneToOne: false
+            referencedRelation: "evo_card_versions"
             referencedColumns: ["id"]
           },
           {
@@ -3917,6 +3930,10 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_apply_challenge: {
+        Args: { p_commit?: boolean; p_payload: Json }
+        Returns: Json
+      }
       admin_apply_content: {
         Args: { p_commit?: boolean; p_kind: string; p_payload: Json }
         Returns: Json
@@ -4034,6 +4051,8 @@ export type Database = {
       }
       admin_evo_objective_keys: { Args: never; Returns: string[] }
       admin_evo_version_audit: { Args: never; Returns: Json }
+      admin_evo_version_get: { Args: { p_id: string }; Returns: Json }
+      admin_evo_version_list: { Args: { p_filters?: Json }; Returns: Json }
       admin_has_column: {
         Args: { p_column: string; p_table: string }
         Returns: boolean
@@ -4060,6 +4079,14 @@ export type Database = {
         Returns: Json
       }
       admin_normalize_evo_objective: { Args: { p_obj: Json }; Returns: Json }
+      admin_patch_evo_step: {
+        Args: { p_commit?: boolean; p_item: Json }
+        Returns: Json
+      }
+      admin_patch_evo_version: {
+        Args: { p_commit?: boolean; p_item: Json }
+        Returns: Json
+      }
       admin_pending_refs: { Args: { p_item: Json }; Returns: Json }
       admin_player_matches: { Args: { p_name: string }; Returns: Json }
       admin_player_usage: { Args: { p_card_id: string }; Returns: Json }

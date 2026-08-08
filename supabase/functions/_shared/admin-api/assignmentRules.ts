@@ -24,17 +24,25 @@ export const MR_VERSATILE_SLOTS: Record<string, number> = {
 
 const MR_VERSATILE_NAMES = ["mr. versatile", "mr versatile", "mrversatile", "mv"];
 
-type Row = Record<string, unknown> | string;
+/**
+ * Any assignment shape accepted by the write surfaces: a bare name, or a row
+ * carrying badge/trait/name/abbreviation plus an optional tier. Kept structurally
+ * loose on purpose so the bulk normalizer, the release engine and the admin UI
+ * can all hand their own row types to the same rule check.
+ */
+type Row = string | Record<string, unknown> | object;
+
+const field = (row: object, key: string): unknown => (row as Record<string, unknown>)[key];
 
 function label(row: Row, kind: "badge" | "trait"): string {
   if (typeof row === "string") return row.trim().toLowerCase();
-  const value = (row[kind] ?? row.name ?? row.abbreviation ?? "") as string;
+  const value = field(row, kind) ?? field(row, "name") ?? field(row, "abbreviation") ?? "";
   return String(value).trim().toLowerCase();
 }
 
 function tierOf(row: Row): string {
   if (typeof row === "string") return "base";
-  return String(row.tier ?? "base").trim().toLowerCase();
+  return String(field(row, "tier") ?? "base").trim().toLowerCase();
 }
 
 /** True when this assignment is Mr. Versatile (badge or signature trait). */
@@ -55,8 +63,8 @@ export interface AssignmentAllowance {
  * actolytrene badge may hold 5 + 5 = 10 badges in total.
  */
 export function assignmentAllowance(
-  badges: Row[] | undefined,
-  traits: Row[] | undefined,
+  badges: readonly Row[] | undefined,
+  traits: readonly Row[] | undefined,
 ): AssignmentAllowance {
   let tier: string | null = null;
   let extra = 0;
@@ -88,8 +96,8 @@ export interface AssignmentLimitIssue {
 
 /** Limit check shared by every write surface. Returns [] when the card is legal. */
 export function checkAssignmentLimits(
-  badges: Row[] | undefined,
-  traits: Row[] | undefined,
+  badges: readonly Row[] | undefined,
+  traits: readonly Row[] | undefined,
 ): AssignmentLimitIssue[] {
   const allowance = assignmentAllowance(badges, traits);
   const issues: AssignmentLimitIssue[] = [];
