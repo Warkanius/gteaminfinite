@@ -182,6 +182,147 @@ export function buildCompactOpenApi(baseUrl: string) {
     },
   };
 
+  const evoVersionPatchItem = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      evo_version_id: str("Immutable evo_card_versions id to patch. Required."),
+      status: str("draft | scheduled | active | disabled | archived. Set 'active' to publish the version; an omitted status is preserved."),
+      rating: { type: "number", description: "Star-scale OVR (mean of the nine base stats)." },
+      run_rating: { type: "number", description: "Runs point-scale rating (0-139)." },
+      gem_name: str("Gem tier name of this version."),
+      position1: str("Primary position."),
+      position2: str("Secondary position."),
+      evo_stage: { type: "integer", description: "Version order inside the path." },
+      ...statProps,
+      badges: {
+        type: "array",
+        description: "Full replacement of this version's badges when supplied; omit to keep them.",
+        items: { type: "object", properties: { badge: str("Badge name."), tier: { type: "string", enum: tierEnum } } },
+      },
+      traits: {
+        type: "array",
+        description: "Full replacement of this version's traits when supplied; omit to keep them.",
+        items: {
+          type: "object",
+          properties: { trait: str("Trait name."), tier: { type: "string", enum: tierEnum }, target_stat: str("Stat the trait boosts.") },
+        },
+      },
+    },
+    required: ["evo_version_id"],
+  };
+
+  const evoStepPatchItem = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      evo_step_id: str("Immutable evo_paths (step) id to patch. Required."),
+      evolves_to_version_id: str("Publish this step by linking it to an existing evo_card_versions id."),
+      evolves_to_card_id: str("Link the step to a real player card instead; send null to clear."),
+      status: str("draft | scheduled | active | disabled | archived. Omitted keeps the current status."),
+      step_order: { type: "integer", description: "Position of the step in the path." },
+    },
+    required: ["evo_step_id"],
+  };
+
+  const evoPatchBody = (versions: boolean, steps: boolean) => ({
+    required: true,
+    content: {
+      "application/json": {
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            ...(versions ? { evo_version_updates: { type: "array", items: evoVersionPatchItem } } : {}),
+            ...(steps ? { evo_step_updates: { type: "array", items: evoStepPatchItem } } : {}),
+            preview_token: str("Required on commit: the preview_token returned by the identical preview."),
+          },
+        },
+      },
+    },
+  });
+
+  paths["/evo/versions"] = {
+    get: {
+      operationId: "listEvoVersions",
+      summary: "List evo card versions",
+      description:
+        "Lists evo card versions with their id, path, order, tier, both ratings, status and the id of the step that publishes them (linked_step_id). Filter with player_card_id, evo_path_id or status.",
+      "x-openai-isConsequential": false,
+      parameters: [
+        { name: "player_card_id", in: "query", required: false, schema: { type: "string" } },
+        { name: "evo_path_id", in: "query", required: false, schema: { type: "string" } },
+        { name: "status", in: "query", required: false, schema: { type: "string" } },
+      ],
+      responses: okJson("Evo versions"),
+    },
+  };
+
+  paths["/evo/version/get"] = {
+    post: {
+      operationId: "getEvoVersion",
+      summary: "Read one evo card version",
+      description:
+        "Full playable snapshot of one evo card version: identity, both ratings, base stats, Runs stats, badges, traits and the step it is linked to.",
+      "x-openai-isConsequential": false,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: { type: "object", properties: { evo_version_id: str("Evo card version id.") }, required: ["evo_version_id"] },
+          },
+        },
+      },
+      responses: okJson("Evo version"),
+    },
+  };
+
+  paths["/evo/versions/preview"] = {
+    post: {
+      operationId: "previewEvoVersionUpdates",
+      summary: "Preview targeted evo version patches (zero writes)",
+      description:
+        "PATCH semantics: only the submitted fields change, omitted fields are preserved, and status is never forced back to draft. Nothing is written. Show the plan, get approval, then call commitEvoVersionUpdates with the identical body plus the preview_token.",
+      "x-openai-isConsequential": false,
+      requestBody: evoPatchBody(true, false),
+      responses: okJson("Patch plan"),
+    },
+  };
+
+  paths["/evo/versions/commit"] = {
+    post: {
+      operationId: "commitEvoVersionUpdates",
+      summary: "Commit approved evo version patches",
+      description: "Applies the approved evo version patches atomically. Requires the single-use preview_token from the matching preview.",
+      "x-openai-isConsequential": true,
+      requestBody: evoPatchBody(true, false),
+      responses: okJson("Patch result"),
+    },
+  };
+
+  paths["/evo/steps/preview"] = {
+    post: {
+      operationId: "previewEvoStepUpdates",
+      summary: "Preview targeted evo step patches (zero writes)",
+      description:
+        "Publishes or relinks individual evo steps without rebuilding the path. Only the submitted fields change. Nothing is written.",
+      "x-openai-isConsequential": false,
+      requestBody: evoPatchBody(false, true),
+      responses: okJson("Patch plan"),
+    },
+  };
+
+  paths["/evo/steps/commit"] = {
+    post: {
+      operationId: "commitEvoStepUpdates",
+      summary: "Commit approved evo step patches",
+      description: "Applies the approved evo step patches atomically. Requires the single-use preview_token from the matching preview.",
+      "x-openai-isConsequential": true,
+      requestBody: evoPatchBody(false, true),
+      responses: okJson("Patch result"),
+    },
+  };
+
   paths["/evo/runs-audit"] = {
     get: {
       operationId: "auditEvoVersionRuns",

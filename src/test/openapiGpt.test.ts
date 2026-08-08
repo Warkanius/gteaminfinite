@@ -28,6 +28,12 @@ const EXPECTED = [
   "exportDominationRoad",
   "previewDominationRoad",
   "commitDominationRoad",
+  "listEvoVersions",
+  "getEvoVersion",
+  "previewEvoVersionUpdates",
+  "commitEvoVersionUpdates",
+  "previewEvoStepUpdates",
+  "commitEvoStepUpdates",
   "auditEvoVersionRuns",
   "repairEvoVersionRuns",
 ];
