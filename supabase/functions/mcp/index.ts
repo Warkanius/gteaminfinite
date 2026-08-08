@@ -3096,6 +3096,13 @@ function buildReleasePayload(input) {
       };
     });
   }
+  if (release.domination) {
+    const { domination_roads } = expandDominationSection(release.domination);
+    if (domination_roads.length) {
+      const existing = Array.isArray(payload.domination_roads) ? payload.domination_roads : [];
+      payload.domination_roads = [...existing, ...domination_roads];
+    }
+  }
   for (const group of RELEASE_PASSTHROUGH_GROUPS) {
     const items = release[group];
     if (!Array.isArray(items) || items.length === 0) continue;

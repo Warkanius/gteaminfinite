@@ -1484,6 +1484,16 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
     });
   }
 
+  // Singular `domination` road object -> domination_roads group, so the GPT
+  // shape reaches the batch writer instead of being dropped.
+  if (release.domination) {
+    const { domination_roads } = expandDominationSection(release.domination);
+    if (domination_roads.length) {
+      const existing = Array.isArray(payload.domination_roads) ? (payload.domination_roads as unknown[]) : [];
+      payload.domination_roads = [...existing, ...domination_roads];
+    }
+  }
+
   // Forwarded groups (duos, runs, domination, storylines, ...) travel verbatim so
   // a release never quietly does less than the document asked for.
   for (const group of RELEASE_PASSTHROUGH_GROUPS) {
