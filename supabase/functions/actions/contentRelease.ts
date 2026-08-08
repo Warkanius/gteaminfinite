@@ -286,6 +286,9 @@ export const RELEASE_SECTIONS = [
   "evo_paths",
   "locker_codes",
   "challenges",
+  // Singular Domination road object (GPT Actions shape); forwarded to the
+  // domination_roads batch group.
+  "domination",
   "forbid_existing_links_to",
 ] as const;
 
