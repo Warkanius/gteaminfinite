@@ -2366,6 +2366,13 @@ function normalizeRelease(input) {
       reward_type: c.reward_type ?? (c.reward_release_pack ? "pack" : "coins")
     }));
   }
+  if (out.challenges?.length) {
+    out.challenges = out.challenges.map((c) => ({
+      ...c,
+      name: String(c.name ?? "").trim(),
+      ...c.stat_limit_stat ? { stat_limit_stat: normalizeStatKey(c.stat_limit_stat) } : {}
+    }));
+  }
   if (out.team) out.team.roster = [...out.team.roster ?? []].sort((a, b) => a.slot - b.slot);
   return out;
 }
