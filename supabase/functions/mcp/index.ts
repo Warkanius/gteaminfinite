@@ -2065,6 +2065,17 @@ var EVO_OBJECTIVES = {
   games_won: { objective_type: "games_won", stat_key: null, label: "Games won" }
 };
 var SPECIAL_ODDS_SLOTS = ["player_choice"];
+var RELEASE_SECTIONS = [
+  "release",
+  "collection",
+  "players",
+  "team",
+  "pack",
+  "evo_paths",
+  "locker_codes",
+  "challenges",
+  "forbid_existing_links_to"
+];
 var BADGE_TIER_ALIASES = {
   base: "base",
   bronze: "base",
@@ -2315,6 +2326,15 @@ function validateRelease(input, options = {}) {
   const err = (code, message, entity) => out.push({ code, severity: "error", message, entity });
   const warn = (code, message, entity) => out.push({ code, severity: "warning", message, entity });
   if (!release.release?.name?.trim()) err("RELEASE_NAME_REQUIRED", "Release name is required.", "release");
+  for (const key of Object.keys(input ?? {})) {
+    if (!RELEASE_SECTIONS.includes(key)) {
+      err(
+        "UNKNOWN_RELEASE_SECTION",
+        `"${key}" is not a release section. Supported sections: ${RELEASE_SECTIONS.join(", ")}.`,
+        key
+      );
+    }
+  }
   const players = release.players ?? [];
   const known = (ref) => players.some(
     (p) => ref.player_card_id && p.player_card_id === ref.player_card_id || sameRef(p.name, ref.player_name) || sameRef(p.new_name, ref.player_name)

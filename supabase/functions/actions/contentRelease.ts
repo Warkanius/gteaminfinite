@@ -595,6 +595,18 @@ export function validateRelease(
 
   if (!release.release?.name?.trim()) err("RELEASE_NAME_REQUIRED", "Release name is required.", "release");
 
+  // No section is ever silently dropped: an unknown top-level key is an error
+  // naming every supported section instead of a release that quietly does less.
+  for (const key of Object.keys((input ?? {}) as Record<string, unknown>)) {
+    if (!(RELEASE_SECTIONS as readonly string[]).includes(key)) {
+      err(
+        "UNKNOWN_RELEASE_SECTION",
+        `"${key}" is not a release section. Supported sections: ${RELEASE_SECTIONS.join(", ")}.`,
+        key,
+      );
+    }
+  }
+
   const players = release.players ?? [];
   const known = (ref: { player_name?: string; player_card_id?: string }) =>
     players.some(
