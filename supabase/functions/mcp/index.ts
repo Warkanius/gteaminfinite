@@ -3059,6 +3059,12 @@ function buildReleasePayload(input) {
       };
     });
   }
+  for (const group of RELEASE_PASSTHROUGH_GROUPS) {
+    const items = release[group];
+    if (!Array.isArray(items) || items.length === 0) continue;
+    const existing = Array.isArray(payload[group]) ? payload[group] : [];
+    payload[group] = [...existing, ...items];
+  }
   return payload;
 }
 function prepareRelease(input, options = {}) {

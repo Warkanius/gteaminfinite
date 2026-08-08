@@ -1417,6 +1417,15 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
     });
   }
 
+  // Forwarded groups (duos, runs, domination, storylines, ...) travel verbatim so
+  // a release never quietly does less than the document asked for.
+  for (const group of RELEASE_PASSTHROUGH_GROUPS) {
+    const items = (release as unknown as Record<string, unknown>)[group];
+    if (!Array.isArray(items) || items.length === 0) continue;
+    const existing = Array.isArray(payload[group]) ? (payload[group] as unknown[]) : [];
+    payload[group] = [...existing, ...items];
+  }
+
   return payload;
 }
 
