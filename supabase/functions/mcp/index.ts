@@ -2145,6 +2145,21 @@ var RELEASE_SECTIONS = [
   "challenges",
   "forbid_existing_links_to"
 ];
+var RELEASE_PASSTHROUGH_GROUPS = [
+  "gem_tiers",
+  "badges",
+  "signature_traits",
+  "sub_collections",
+  "collection_requirements",
+  "gem_tasks",
+  "runs",
+  "domination_roads",
+  "domination_games",
+  "dynamic_duos",
+  "storylines",
+  "location_accounts",
+  "social_posts"
+];
 var BADGE_TIER_ALIASES = {
   base: "base",
   bronze: "base",
@@ -2402,14 +2417,19 @@ function validateRelease(input, options = {}) {
   const err = (code, message, entity) => out.push({ code, severity: "error", message, entity });
   const warn = (code, message, entity) => out.push({ code, severity: "warning", message, entity });
   if (!release.release?.name?.trim()) err("RELEASE_NAME_REQUIRED", "Release name is required.", "release");
-  for (const key of Object.keys(input ?? {})) {
-    if (!RELEASE_SECTIONS.includes(key)) {
-      err(
-        "UNKNOWN_RELEASE_SECTION",
-        `"${key}" is not a release section. Supported sections: ${RELEASE_SECTIONS.join(", ")}.`,
-        key
-      );
+  for (const [key, value] of Object.entries(input ?? {})) {
+    if (RELEASE_SECTIONS.includes(key)) continue;
+    if (RELEASE_PASSTHROUGH_GROUPS.includes(key)) {
+      if (!Array.isArray(value)) {
+        err("INVALID_RELEASE_GROUP", `"${key}" must be an array of items.`, key);
+      }
+      continue;
     }
+    err(
+      "UNKNOWN_RELEASE_SECTION",
+      `"${key}" is not a release section. Sections: ${RELEASE_SECTIONS.join(", ")}. Forwarded groups: ${RELEASE_PASSTHROUGH_GROUPS.join(", ")}.`,
+      key
+    );
   }
   const players = release.players ?? [];
   const known = (ref) => players.some(

@@ -622,16 +622,21 @@ export function validateRelease(
 
   if (!release.release?.name?.trim()) err("RELEASE_NAME_REQUIRED", "Release name is required.", "release");
 
-  // No section is ever silently dropped: an unknown top-level key is an error
-  // naming every supported section instead of a release that quietly does less.
-  for (const key of Object.keys((input ?? {}) as Record<string, unknown>)) {
-    if (!(RELEASE_SECTIONS as readonly string[]).includes(key)) {
-      err(
-        "UNKNOWN_RELEASE_SECTION",
-        `"${key}" is not a release section. Supported sections: ${RELEASE_SECTIONS.join(", ")}.`,
-        key,
-      );
+  // No section is ever silently dropped: a key is either a release section, a
+  // forwarded batch group, or an explicit UNKNOWN_RELEASE_SECTION error.
+  for (const [key, value] of Object.entries((input ?? {}) as Record<string, unknown>)) {
+    if ((RELEASE_SECTIONS as readonly string[]).includes(key)) continue;
+    if ((RELEASE_PASSTHROUGH_GROUPS as readonly string[]).includes(key)) {
+      if (!Array.isArray(value)) {
+        err("INVALID_RELEASE_GROUP", `"${key}" must be an array of items.`, key);
+      }
+      continue;
     }
+    err(
+      "UNKNOWN_RELEASE_SECTION",
+      `"${key}" is not a release section. Sections: ${RELEASE_SECTIONS.join(", ")}. Forwarded groups: ${RELEASE_PASSTHROUGH_GROUPS.join(", ")}.`,
+      key,
+    );
   }
 
   const players = release.players ?? [];
