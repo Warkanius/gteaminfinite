@@ -2,7 +2,13 @@
 // backend by trial and error.
 
 import { API_VERSION } from "./errors.ts";
-import { GROUPS, ENTITY_TO_GROUP, EVO_OBJECTIVE_KEYS } from "./normalize.ts";
+import {
+  GROUPS,
+  ENTITY_TO_GROUP,
+  EVO_OBJECTIVE_KEYS,
+  EVO_VERSION_MUTABLE_FIELDS,
+  EVO_STEP_MUTABLE_FIELDS,
+} from "./normalize.ts";
 import { GEM_TIER_BANDS, STAT_KEYS, bandLabel } from "./decimal.ts";
 import { RUN_SCALE_DOC } from "./runScale.ts";
 import { PLAYABLE_CARD_FIELDS } from "./playableCard.ts";
@@ -31,6 +37,10 @@ const REPLACEMENT_SEMANTICS: Record<string, string> = {
   "evo_paths[].steps": "action='replace_path': the submitted step list is authoritative — existing steps are updated in place by immutable evo_path_id, missing steps are created, leftover steps are DELETED with their objectives and playable versions. Send replace_existing_path:false for additive per-step upserts that never delete.",
   "evo_paths[].steps[].objectives": "full replacement of that step's objectives",
   "evo_paths[].steps[].resulting_version": "the single playable version of that step, replaced in place (badges and traits fully replaced)",
+  evo_version_updates:
+    "targeted PATCH by evo_version_id: only the submitted fields are written, omitted fields are preserved, status is never forced back to draft, and badges/traits are replaced only when explicitly supplied",
+  evo_step_updates:
+    "targeted PATCH by evo_step_id: publishes or relinks one existing evo step (evolves_to_version_id / evolves_to_card_id / status / step_order) without touching the rest of the path",
 };
 
 /**
@@ -41,7 +51,7 @@ const REPLACEMENT_SEMANTICS: Record<string, string> = {
 export const GROUP_APPLY_ORDER = [
   "release_bundles", "gem_tiers", "badges", "signature_traits", "players",
   "collections", "sub_collections", "collection_requirements", "teams", "packs", "evo_paths",
-  "gem_tasks", "runs", "domination_roads", "domination_games", "challenges", "locker_codes",
+  "evo_version_updates", "evo_step_updates", "gem_tasks", "runs", "domination_roads", "domination_games", "challenges", "locker_codes",
   "dynamic_duos", "storylines", "location_accounts", "social_posts",
 ] as const;
 
@@ -141,6 +151,10 @@ export function capabilities(base: string) {
         run_stat_scale: RUN_SCALE_DOC,
         assignment_rules: ASSIGNMENT_RULE_DOC,
         evo_path_semantics: REPLACEMENT_SEMANTICS["evo_paths[].steps"],
+        evo_version_patch_fields: [...EVO_VERSION_MUTABLE_FIELDS],
+        evo_step_patch_fields: [...EVO_STEP_MUTABLE_FIELDS],
+        challenge_patch_semantics:
+          "challenges are PATCHed by challenge_id or exact name: omitted fields keep their current values and an existing status is never downgraded to draft",
         evo_source_identifiers: ["player_card_id", "card_key", "player_name"],
         evo_source_tiers: GEM_TIER_BANDS.map((b) => b.tier),
         evo_objective_schema:
@@ -185,7 +199,9 @@ export function capabilities(base: string) {
       evo_paths: ["player_card_id (canonical source)", "card_key", "player_name", "source_gem_tier", "status", "steps[] {from_tier, to_tier, step_order, objectives[], resulting_version{rating, gem_name, stats, badges[], traits[]}}"],
       domination_roads: ["road_id", "name", "new_name", "mode (merge|replace)", "description", "sort_order", "games[]"],
       domination_games: ["domination_game_id", "road_id | road_name", "game_order (required target)", "opponent_name", "difficulty", "coin_reward", "gem_reward", "pack_reward", "roster[]"],
-      challenges: ["challenge_id", "name", "challenge_type", "target_value", "series_length", "win_by", "stat_limits", "spotlight_player", "rewards", "prerequisite_challenge", "repeatable", "expires_at", "sort_order", "status"],
+      challenges: ["challenge_id", "name", "description", "challenge_type", "win_condition", "target_value", "win_by_amount (alias win_by)", "series_length", "series_win_coins", "series_loss_coins", "opponent_team", "coin_reward", "gem_reward", "card_reward", "pack_reward", "stat_limit_player", "stat_limit_stat", "stat_limit_value", "prerequisite", "spotlight_group", "lineup_restrictions", "is_repeatable (alias repeatable)", "expires_at", "sort_order", "status"],
+      evo_version_updates: [...EVO_VERSION_MUTABLE_FIELDS],
+      evo_step_updates: [...EVO_STEP_MUTABLE_FIELDS],
       locker_codes: ["code (upper-cased)", "reward_type", "reward_payload", "max_redemptions", "expires_at", "activates_at", "status"],
       dynamic_duos: ["name", "player_a", "player_b", "description", "is_active", "boost"],
       runs: ["run_id", "name", "target_score", "team", "milestones[]", "roster[]", "rank_rewards[] (GLOBAL)"],

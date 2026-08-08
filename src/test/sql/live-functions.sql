@@ -79,7 +79,7 @@ DECLARE
   -- guessing. release_bundles is first because every content item links to it.
   v_groups text[] := ARRAY['release_bundles','gem_tiers','badges','signature_traits','players',
     'collections','sub_collections','collection_requirements','teams','packs','evo_paths',
-    'gem_tasks','runs','domination_roads','domination_games','challenges','locker_codes',
+    'evo_version_updates','evo_step_updates','gem_tasks','runs','domination_roads','domination_games','challenges','locker_codes',
     'dynamic_duos','storylines','location_accounts','social_posts'];
   v_group text; v_item jsonb; v_items jsonb; v_res jsonb; v_op jsonb;
   v_refs jsonb := '{}'::jsonb;
@@ -228,6 +228,12 @@ BEGIN
           WHEN 'gem_tasks' THEN 'gem_task' WHEN 'location_accounts' THEN 'location_account'
           WHEN 'social_posts' THEN 'social_post' ELSE 'release_bundle' END;
         v_res := public.admin_apply_entity(v_kind, v_item || jsonb_build_object('action', v_action), p_commit);
+      ELSIF v_group = 'evo_version_updates' THEN
+        v_res := public.admin_patch_evo_version(v_item, p_commit);
+      ELSIF v_group = 'evo_step_updates' THEN
+        v_res := public.admin_patch_evo_step(v_item, p_commit);
+      ELSIF v_group = 'challenges' THEN
+        v_res := public.admin_apply_challenge(v_item, p_commit);
       ELSE
         v_kind := CASE v_group
           WHEN 'teams' THEN 'team' WHEN 'runs' THEN 'run' WHEN 'domination_games' THEN 'domination_game'
@@ -307,6 +313,199 @@ BEGIN
     'created_ids', v_ids, 'temp_refs', v_refs, 'results', v_results,
     'audit_operation_id', v_audit,
     'normalized_payload', p_payload, 'payload_hash', v_hash, 'preview_token', v_token);
+END $function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_apply_challenge(p_payload jsonb, p_commit boolean DEFAULT false)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_id uuid; v_name text; v_key text; v_fields jsonb := '{}'::jsonb; v_rw jsonb;
+  v_team uuid; v_card uuid; v_pack text; v_prereq uuid; v_stat_player uuid;
+  v_status text; v_games jsonb; v_g jsonb; v_cond jsonb; v_res jsonb; v_ids uuid[];
+  v_match text; v_row public.challenges%ROWTYPE; v_r uuid;
+  v_allowed text[] := ARRAY['challenge_id','id','name','description','challenge_type','status',
+    'target_value','win_by','win_condition','win_by_amount','repeatable','is_repeatable','sort_order',
+    'series_length','series_win_coins','series_loss_coins','coin_reward','gem_reward','pack_reward',
+    'pack_reward_id','card_reward','card_reward_id','rewards','reward_payload','prerequisite',
+    'opponent_team','opponent_team_id','stat_limit_player','stat_limit_stat','stat_limit_value',
+    'lineup_restrictions','spotlight_group','expires_at','games','conditions'];
+BEGIN
+  FOR v_key IN SELECT jsonb_object_keys(p_payload) LOOP
+    IF NOT (v_key = ANY(v_allowed)) THEN
+      RAISE EXCEPTION 'UNSUPPORTED_FIELD: "%" is not a challenge field detail=%', v_key,
+        jsonb_build_object('mutable_fields', to_jsonb(v_allowed))::text;
+    END IF;
+  END LOOP;
+
+  v_id := nullif(coalesce(p_payload->>'challenge_id', p_payload->>'id'), '')::uuid;
+  IF v_id IS NOT NULL THEN
+    SELECT * INTO v_row FROM public.challenges WHERE id = v_id;
+    IF v_row.id IS NULL THEN RAISE EXCEPTION 'UNKNOWN_CHALLENGE_ID: %', v_id; END IF;
+    v_name := coalesce(nullif(btrim(coalesce(p_payload->>'name','')),''), v_row.name);
+  ELSE
+    v_name := btrim(coalesce(p_payload->>'name',''));
+    IF v_name = '' THEN RAISE EXCEPTION 'CHALLENGE_NAME_REQUIRED: name or challenge_id is required'; END IF;
+    SELECT id INTO v_id FROM public.challenges WHERE lower(name) = lower(v_name);
+  END IF;
+  v_match := v_name;
+
+  IF p_payload ? 'name' THEN v_fields := v_fields || jsonb_build_object('name', v_name); END IF;
+  IF p_payload ? 'description' THEN v_fields := v_fields || jsonb_build_object('description', p_payload->>'description'); END IF;
+  IF p_payload ? 'challenge_type' THEN v_fields := v_fields || jsonb_build_object('challenge_type', p_payload->>'challenge_type'); END IF;
+  IF p_payload ? 'status' THEN
+    v_status := lower(btrim(p_payload->>'status'));
+    IF v_status = 'published' THEN v_status := 'active'; END IF;
+    IF v_status NOT IN ('draft','scheduled','active','disabled','archived') THEN
+      RAISE EXCEPTION 'INVALID_STATUS: "%" is not a content status', p_payload->>'status';
+    END IF;
+    v_fields := v_fields || jsonb_build_object('status', v_status);
+  END IF;
+  IF p_payload ? 'target_value' THEN v_fields := v_fields || jsonb_build_object('target_value', p_payload->'target_value'); END IF;
+  IF p_payload ? 'win_condition' THEN v_fields := v_fields || jsonb_build_object('win_condition', p_payload->>'win_condition');
+  ELSIF p_payload ? 'win_by' THEN v_fields := v_fields || jsonb_build_object('win_condition', p_payload->>'win_by'); END IF;
+  IF p_payload ? 'win_by_amount' THEN v_fields := v_fields || jsonb_build_object('win_by_amount', p_payload->'win_by_amount'); END IF;
+  IF p_payload ? 'is_repeatable' THEN v_fields := v_fields || jsonb_build_object('is_repeatable', p_payload->'is_repeatable');
+  ELSIF p_payload ? 'repeatable' THEN v_fields := v_fields || jsonb_build_object('is_repeatable', p_payload->'repeatable'); END IF;
+  IF p_payload ? 'sort_order' THEN v_fields := v_fields || jsonb_build_object('sort_order', p_payload->'sort_order'); END IF;
+  IF p_payload ? 'series_length' THEN v_fields := v_fields || jsonb_build_object('series_length', p_payload->'series_length'); END IF;
+  IF p_payload ? 'series_win_coins' THEN v_fields := v_fields || jsonb_build_object('series_win_coins', p_payload->'series_win_coins'); END IF;
+  IF p_payload ? 'series_loss_coins' THEN v_fields := v_fields || jsonb_build_object('series_loss_coins', p_payload->'series_loss_coins'); END IF;
+  IF p_payload ? 'spotlight_group' THEN v_fields := v_fields || jsonb_build_object('spotlight_group', p_payload->>'spotlight_group'); END IF;
+  IF p_payload ? 'expires_at' THEN v_fields := v_fields || jsonb_build_object('expires_at', p_payload->>'expires_at'); END IF;
+  IF p_payload ? 'lineup_restrictions' THEN v_fields := v_fields || jsonb_build_object('lineup_restrictions', p_payload->'lineup_restrictions'); END IF;
+  IF p_payload ? 'stat_limit_stat' THEN v_fields := v_fields || jsonb_build_object('stat_limit_stat', p_payload->>'stat_limit_stat'); END IF;
+  IF p_payload ? 'stat_limit_value' THEN v_fields := v_fields || jsonb_build_object('stat_limit_value', p_payload->'stat_limit_value'); END IF;
+  IF p_payload ? 'stat_limit_player' THEN
+    IF p_payload->>'stat_limit_player' IS NULL THEN
+      v_fields := v_fields || jsonb_build_object('stat_limit_player_id', NULL);
+    ELSE
+      v_ids := public.admin_resolve_player_ids(jsonb_build_array(p_payload->>'stat_limit_player'));
+      v_fields := v_fields || jsonb_build_object('stat_limit_player_id', v_ids[1]);
+    END IF;
+  END IF;
+  IF p_payload ? 'prerequisite' THEN
+    IF p_payload->>'prerequisite' IS NULL THEN
+      v_fields := v_fields || jsonb_build_object('prerequisite_id', NULL);
+    ELSE
+      SELECT id INTO v_prereq FROM public.challenges WHERE lower(name) = lower(btrim(p_payload->>'prerequisite'));
+      IF v_prereq IS NULL THEN RAISE EXCEPTION 'UNKNOWN_PREREQUISITE: "%"', p_payload->>'prerequisite'; END IF;
+      v_fields := v_fields || jsonb_build_object('prerequisite_id', v_prereq);
+    END IF;
+  END IF;
+
+  -- opponent
+  IF p_payload ? 'opponent_team_id' THEN
+    v_team := nullif(p_payload->>'opponent_team_id','')::uuid;
+    IF v_team IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.teams WHERE id = v_team) THEN
+      RAISE EXCEPTION 'UNKNOWN_TEAM_ID: %', v_team;
+    END IF;
+    v_fields := v_fields || jsonb_build_object('opponent_team_id', v_team);
+  ELSIF p_payload ? 'opponent_team' THEN
+    IF p_payload->>'opponent_team' IS NULL THEN
+      v_fields := v_fields || jsonb_build_object('opponent_team_id', NULL);
+    ELSE
+      SELECT id INTO v_team FROM public.teams WHERE lower(name) = lower(btrim(p_payload->>'opponent_team'));
+      IF v_team IS NULL THEN RAISE EXCEPTION 'UNKNOWN_TEAM: "%"', p_payload->>'opponent_team'; END IF;
+      v_fields := v_fields || jsonb_build_object('opponent_team_id', v_team);
+    END IF;
+  END IF;
+
+  -- rewards (object form) mapped onto the real columns
+  v_rw := coalesce(p_payload->'rewards','{}'::jsonb);
+  IF jsonb_typeof(v_rw) <> 'object' THEN RAISE EXCEPTION 'INVALID_REWARDS: rewards must be an object'; END IF;
+  FOR v_key IN SELECT jsonb_object_keys(v_rw) LOOP
+    IF NOT (v_key = ANY(ARRAY['coins','coin_reward','gems','gem_reward','player_card_id','card_reward_id',
+                              'player_card','card_reward','pack_reward','pack_reward_id','payload','reward_payload'])) THEN
+      RAISE EXCEPTION 'UNSUPPORTED_FIELD: rewards."%" is not a reward field', v_key;
+    END IF;
+  END LOOP;
+  IF v_rw ? 'coins' THEN v_fields := v_fields || jsonb_build_object('coin_reward', v_rw->'coins'); END IF;
+  IF v_rw ? 'coin_reward' THEN v_fields := v_fields || jsonb_build_object('coin_reward', v_rw->'coin_reward'); END IF;
+  IF p_payload ? 'coin_reward' THEN v_fields := v_fields || jsonb_build_object('coin_reward', p_payload->'coin_reward'); END IF;
+  IF v_rw ? 'gems' THEN v_fields := v_fields || jsonb_build_object('gem_reward', v_rw->'gems'); END IF;
+  IF v_rw ? 'gem_reward' THEN v_fields := v_fields || jsonb_build_object('gem_reward', v_rw->'gem_reward'); END IF;
+  IF p_payload ? 'gem_reward' THEN v_fields := v_fields || jsonb_build_object('gem_reward', p_payload->'gem_reward'); END IF;
+  IF v_rw ? 'payload' THEN v_fields := v_fields || jsonb_build_object('reward_payload', v_rw->'payload'); END IF;
+  IF v_rw ? 'reward_payload' THEN v_fields := v_fields || jsonb_build_object('reward_payload', v_rw->'reward_payload'); END IF;
+  IF p_payload ? 'reward_payload' THEN v_fields := v_fields || jsonb_build_object('reward_payload', p_payload->'reward_payload'); END IF;
+
+  IF (v_rw ? 'player_card_id') OR (v_rw ? 'card_reward_id') OR (p_payload ? 'card_reward_id') THEN
+    v_card := nullif(coalesce(v_rw->>'player_card_id', v_rw->>'card_reward_id', p_payload->>'card_reward_id'),'')::uuid;
+    IF v_card IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.player_cards WHERE id = v_card) THEN
+      RAISE EXCEPTION 'UNKNOWN_PLAYER_CARD_ID: %', v_card;
+    END IF;
+    v_fields := v_fields || jsonb_build_object('card_reward_id', v_card);
+  ELSIF (v_rw ? 'player_card') OR (v_rw ? 'card_reward') OR (p_payload ? 'card_reward') THEN
+    IF coalesce(v_rw->>'player_card', v_rw->>'card_reward', p_payload->>'card_reward') IS NULL THEN
+      v_fields := v_fields || jsonb_build_object('card_reward_id', NULL);
+    ELSE
+      v_ids := public.admin_resolve_player_ids(jsonb_build_array(
+        coalesce(v_rw->>'player_card', v_rw->>'card_reward', p_payload->>'card_reward')));
+      v_fields := v_fields || jsonb_build_object('card_reward_id', v_ids[1]);
+    END IF;
+  END IF;
+
+  IF (v_rw ? 'pack_reward_id') OR (p_payload ? 'pack_reward_id') THEN
+    v_pack := nullif(coalesce(v_rw->>'pack_reward_id', p_payload->>'pack_reward_id'),'');
+    IF v_pack IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.packs WHERE id = v_pack::uuid) THEN
+      RAISE EXCEPTION 'UNKNOWN_PACK_ID: %', v_pack;
+    END IF;
+    v_fields := v_fields || jsonb_build_object('pack_reward', v_pack);
+  ELSIF (v_rw ? 'pack_reward') OR (p_payload ? 'pack_reward') THEN
+    IF coalesce(v_rw->>'pack_reward', p_payload->>'pack_reward') IS NULL THEN
+      v_fields := v_fields || jsonb_build_object('pack_reward', NULL);
+    ELSE
+      SELECT id::text INTO v_pack FROM public.packs
+       WHERE lower(name) = lower(btrim(coalesce(v_rw->>'pack_reward', p_payload->>'pack_reward')));
+      IF v_pack IS NULL THEN v_pack := coalesce(v_rw->>'pack_reward', p_payload->>'pack_reward'); END IF;
+      v_fields := v_fields || jsonb_build_object('pack_reward', v_pack);
+    END IF;
+  END IF;
+
+  -- game configuration lives in conditions.games
+  IF p_payload ? 'conditions' THEN v_cond := p_payload->'conditions'; ELSE v_cond := coalesce(v_row.conditions, '{}'::jsonb); END IF;
+  IF p_payload ? 'games' THEN
+    v_games := coalesce(p_payload->'games','[]'::jsonb);
+    IF jsonb_typeof(v_games) <> 'array' THEN RAISE EXCEPTION 'INVALID_GAMES: games must be an array'; END IF;
+    FOR v_g IN SELECT * FROM jsonb_array_elements(v_games) LOOP
+      IF NOT (v_g ? 'game_order') THEN RAISE EXCEPTION 'GAME_ORDER_REQUIRED: every challenge game needs game_order'; END IF;
+      FOR v_r IN SELECT (e #>> '{}')::uuid FROM jsonb_array_elements(coalesce(v_g->'roster','[]'::jsonb)) e LOOP
+        IF NOT EXISTS (SELECT 1 FROM public.player_cards WHERE id = v_r) THEN
+          RAISE EXCEPTION 'UNKNOWN_PLAYER_CARD_ID: % in challenge game roster', v_r;
+        END IF;
+      END LOOP;
+    END LOOP;
+    v_cond := coalesce(v_cond,'{}'::jsonb) || jsonb_build_object('games', v_games);
+  END IF;
+  IF (p_payload ? 'games') OR (p_payload ? 'conditions') THEN
+    v_fields := v_fields || jsonb_build_object('conditions', v_cond);
+  END IF;
+
+  IF v_fields = '{}'::jsonb THEN
+    RAISE EXCEPTION 'EMPTY_UPDATE: no challenge fields were supplied for "%"', v_name;
+  END IF;
+  IF v_id IS NULL AND NOT (v_fields ? 'name') THEN
+    v_fields := v_fields || jsonb_build_object('name', v_name);
+  END IF;
+
+  v_res := public.admin_upsert_row('challenges', v_id, v_fields, v_match, p_commit,
+    CASE WHEN v_id IS NULL THEN 'create' ELSE 'update' END);
+  v_id := coalesce((v_res->>'id')::uuid, v_id);
+
+  RETURN jsonb_build_object('kind','challenge','entity','challenge','id', v_id, 'match', v_match,
+    'applied', p_commit, 'operations', coalesce(v_res->'operations','[]'::jsonb),
+    'destructive', '[]'::jsonb, 'fields', v_fields,
+    'verification', CASE WHEN p_commit THEN (
+      SELECT jsonb_build_object('challenge_id', c.id, 'name', c.name, 'challenge_type', c.challenge_type,
+        'status', c.status, 'target_value', c.target_value, 'win_condition', c.win_condition,
+        'is_repeatable', c.is_repeatable, 'coin_reward', c.coin_reward, 'gem_reward', c.gem_reward,
+        'card_reward_id', c.card_reward_id, 'pack_reward', c.pack_reward,
+        'opponent_team_id', c.opponent_team_id)
+      FROM public.challenges c WHERE c.id = v_id) ELSE NULL END);
 END $function$
 ;
 
@@ -712,13 +911,23 @@ BEGIN
     SELECT id INTO v_id FROM challenges WHERE lower(name) = lower(v_name);
 
     v_other := NULL;
-    IF p_payload->>'opponent_team' IS NOT NULL THEN
+    IF p_payload->>'opponent_team_id' IS NOT NULL THEN
+      SELECT id INTO v_other FROM teams WHERE id = (p_payload->>'opponent_team_id')::uuid;
+      IF v_other IS NULL THEN
+        RAISE EXCEPTION 'UNKNOWN_TEAM_ID: opponent_team_id % does not exist', p_payload->>'opponent_team_id';
+      END IF;
+    ELSIF p_payload->>'opponent_team' IS NOT NULL THEN
       SELECT id INTO v_other FROM teams WHERE lower(name) = lower(btrim(p_payload->>'opponent_team'));
       IF v_other IS NULL THEN RAISE EXCEPTION 'Unknown team: "%"', p_payload->>'opponent_team'; END IF;
     END IF;
 
     v_card := NULL;
-    IF p_payload->>'card_reward' IS NOT NULL THEN
+    IF p_payload->>'card_reward_id' IS NOT NULL THEN
+      v_card := (p_payload->>'card_reward_id')::uuid;
+      IF NOT EXISTS (SELECT 1 FROM player_cards WHERE id = v_card) THEN
+        RAISE EXCEPTION 'UNKNOWN_PLAYER_CARD_ID: card_reward_id % does not exist', v_card;
+      END IF;
+    ELSIF p_payload->>'card_reward' IS NOT NULL THEN
       v_ids := public.admin_resolve_player_ids(jsonb_build_array(p_payload->>'card_reward'));
       v_card := v_ids[1];
     END IF;
@@ -736,7 +945,12 @@ BEGIN
     END IF;
 
     v_pack_reward := NULL;
-    IF p_payload->>'pack_reward' IS NOT NULL THEN
+    IF p_payload->>'pack_reward_id' IS NOT NULL THEN
+      SELECT id::text INTO v_pack_reward FROM packs WHERE id = (p_payload->>'pack_reward_id')::uuid;
+      IF v_pack_reward IS NULL THEN
+        RAISE EXCEPTION 'UNKNOWN_PACK_ID: pack_reward_id % does not exist', p_payload->>'pack_reward_id';
+      END IF;
+    ELSIF p_payload->>'pack_reward' IS NOT NULL THEN
       SELECT id::text INTO v_pack_reward FROM packs WHERE lower(name) = lower(btrim(p_payload->>'pack_reward'));
       IF v_pack_reward IS NULL THEN v_pack_reward := p_payload->>'pack_reward'; END IF;
     END IF;
@@ -753,6 +967,8 @@ BEGIN
         'gem_reward', p_payload->'gem_reward',
         'pack_reward', v_pack_reward,
         'card_reward_id', v_card,
+        'conditions', p_payload->'conditions',
+        'reward_payload', p_payload->'reward_payload',
         'stat_limit_player_id', v_stat_player,
         'prerequisite_id', v_prereq,
         'lineup_restrictions', p_payload->'lineup_restrictions',
@@ -764,7 +980,8 @@ BEGIN
           name, description, challenge_type, opponent_team_id, win_condition, win_by_amount,
           series_length, series_win_coins, series_loss_coins, stat_limit_player_id, stat_limit_stat,
           stat_limit_value, coin_reward, gem_reward, pack_reward, card_reward_id, prerequisite_id,
-          spotlight_group, sort_order, lineup_restrictions, is_repeatable, expires_at)
+          spotlight_group, sort_order, lineup_restrictions, is_repeatable, expires_at,
+          conditions, reward_payload, status)
         VALUES (
           v_name, p_payload->>'description', coalesce(p_payload->>'challenge_type','single'), v_other,
           coalesce(p_payload->>'win_condition','win'), (p_payload->>'win_by_amount')::int,
@@ -779,7 +996,9 @@ BEGIN
           coalesce((p_payload->>'sort_order')::int, 0),
           p_payload->'lineup_restrictions',
           coalesce((p_payload->>'is_repeatable')::boolean, true),
-          (p_payload->>'expires_at')::timestamptz)
+          (p_payload->>'expires_at')::timestamptz,
+          p_payload->'conditions', p_payload->'reward_payload',
+          coalesce(nullif(p_payload->>'status',''), 'active')::content_status)
         RETURNING id INTO v_id;
       ELSE
         UPDATE challenges SET
@@ -796,8 +1015,11 @@ BEGIN
           stat_limit_value = CASE WHEN p_payload ? 'stat_limit_value' THEN (p_payload->>'stat_limit_value')::int ELSE stat_limit_value END,
           coin_reward = coalesce((p_payload->>'coin_reward')::int, coin_reward),
           gem_reward = coalesce((p_payload->>'gem_reward')::int, gem_reward),
-          pack_reward = CASE WHEN p_payload ? 'pack_reward' THEN v_pack_reward ELSE pack_reward END,
-          card_reward_id = CASE WHEN p_payload ? 'card_reward' THEN v_card ELSE card_reward_id END,
+          pack_reward = CASE WHEN p_payload ? 'pack_reward' OR p_payload ? 'pack_reward_id' THEN v_pack_reward ELSE pack_reward END,
+          card_reward_id = CASE WHEN p_payload ? 'card_reward' OR p_payload ? 'card_reward_id' THEN v_card ELSE card_reward_id END,
+          conditions = CASE WHEN p_payload ? 'conditions' THEN p_payload->'conditions' ELSE conditions END,
+          reward_payload = CASE WHEN p_payload ? 'reward_payload' THEN p_payload->'reward_payload' ELSE reward_payload END,
+          status = CASE WHEN nullif(p_payload->>'status','') IS NOT NULL THEN (p_payload->>'status')::content_status ELSE status END,
           prerequisite_id = CASE WHEN p_payload ? 'prerequisite' THEN v_prereq ELSE prerequisite_id END,
           spotlight_group = CASE WHEN p_payload ? 'spotlight_group' THEN p_payload->>'spotlight_group' ELSE spotlight_group END,
           sort_order = coalesce((p_payload->>'sort_order')::int, sort_order),
@@ -1402,7 +1624,7 @@ BEGIN
     IF jsonb_typeof(v_item->'objectives') <> 'array' THEN RAISE EXCEPTION 'INVALID_PAYLOAD: objectives must be an array'; END IF;
     FOR v_obj IN SELECT * FROM jsonb_array_elements(v_item->'objectives') LOOP
       v_idx := v_idx + 1;
-      IF v_obj->>'objective_type' IS NULL THEN RAISE EXCEPTION 'INVALID_OBJECTIVE: objective_type is required'; END IF;
+      v_obj := public.admin_normalize_evo_objective(v_obj);
       IF (v_obj->>'target') IS NULL OR (v_obj->>'target')::numeric <= 0 THEN
         RAISE EXCEPTION 'INVALID_OBJECTIVE: target must be greater than 0 (objective %)', v_idx;
       END IF;
@@ -1651,7 +1873,9 @@ AS $function$
 DECLARE
   v_card uuid; v_to uuid; v_to_name text; v_order int; v_id uuid;
   v_stats jsonb := coalesce(p_version->'stats', '{}'::jsonb);
-  v_key text; v_val numeric;
+  v_run jsonb := '{}'::jsonb;
+  v_key text; v_run_key text; v_val numeric; v_base numeric; v_band int[];
+  v_rating numeric; v_expected numeric;
   v_badges jsonb := '[]'::jsonb; v_traits jsonb := '[]'::jsonb;
   v_b jsonb; v_bid uuid; v_needs boolean;
   v_before jsonb; v_ops jsonb := '[]'::jsonb; v_destr jsonb := '[]'::jsonb; v_warn jsonb := '[]'::jsonb;
@@ -1671,17 +1895,85 @@ BEGIN
     SELECT name INTO v_to_name FROM public.gem_tiers WHERE id = v_to;
   END IF;
 
-  -- stats
+  -- Runs stats: accepted nested (run_stats) or flat (run_stat_*), including
+  -- run_stat_* keys mistakenly nested inside stats.
+  v_run := coalesce(p_version->'run_stats', p_version->'runs_stats', '{}'::jsonb);
+  IF jsonb_typeof(v_run) <> 'object' THEN
+    RAISE EXCEPTION 'INVALID_PAYLOAD: resulting_version.run_stats must be an object mapping run_stat_* keys to numbers';
+  END IF;
+  FOR v_key IN SELECT jsonb_object_keys(v_run) LOOP
+    IF v_key IN ('run_stats','runs_stats','stats') AND jsonb_typeof(v_run->v_key) = 'object' THEN
+      v_run := (v_run - v_key) || (v_run->v_key);
+    END IF;
+  END LOOP;
+  FOR v_key IN SELECT jsonb_object_keys(p_version) LOOP
+    IF v_key = ANY(public.admin_run_stat_keys()) THEN v_run := v_run || jsonb_build_object(v_key, p_version->v_key); END IF;
+  END LOOP;
   FOR v_key IN SELECT jsonb_object_keys(v_stats) LOOP
-    IF NOT (v_key = ANY(public.admin_stat_keys())) THEN
-      RAISE EXCEPTION 'UNKNOWN_STAT_KEY: resulting_version.stats."%" is not a stat detail=%', v_key,
-        jsonb_build_object('supported', public.admin_stat_keys())::text;
+    IF v_key IN ('run_stats','runs_stats') AND jsonb_typeof(v_stats->v_key) = 'object' THEN
+      v_run := v_run || (v_stats->v_key);
+      v_stats := v_stats - v_key;
+    ELSIF v_key = ANY(public.admin_run_stat_keys()) THEN
+      v_run := v_run || jsonb_build_object(v_key, v_stats->v_key);
+      v_stats := v_stats - v_key;
+    END IF;
+  END LOOP;
+
+  -- base stats
+  FOR v_key IN SELECT jsonb_object_keys(v_stats) LOOP
+    IF NOT (v_key = ANY(public.admin_base_stat_keys())) THEN
+      RAISE EXCEPTION 'UNKNOWN_STAT_KEY: resulting_version.stats."%" is not a base stat detail=%', v_key,
+        jsonb_build_object('supported', public.admin_base_stat_keys())::text;
     END IF;
     v_val := (v_stats->>v_key)::numeric;
     IF v_val < 0 OR v_val > 99 THEN
       RAISE EXCEPTION 'STAT_OUT_OF_RANGE: resulting_version.stats.% = % must be between 0 and 99', v_key, v_val;
     END IF;
   END LOOP;
+
+  -- supplied Runs stats are validated, never silently dropped
+  FOR v_key IN SELECT jsonb_object_keys(v_run) LOOP
+    IF NOT (v_key = ANY(public.admin_run_stat_keys())) THEN
+      RAISE EXCEPTION 'UNKNOWN_RUN_STAT_KEY: resulting_version."%" is not a Runs stat detail=%', v_key,
+        jsonb_build_object('supported', public.admin_run_stat_keys())::text;
+    END IF;
+    IF v_run->>v_key IS NULL THEN v_run := v_run - v_key; CONTINUE; END IF;
+    v_val := (v_run->>v_key)::numeric;
+    IF v_val < 0 OR v_val > 139 THEN
+      RAISE EXCEPTION 'STAT_OUT_OF_RANGE: resulting_version.% = % must be between 0 and 139 on the Runs point scale (20 points per star)', v_key, v_val;
+    END IF;
+    v_base := nullif(v_stats->>replace(v_key, 'run_', ''), '')::numeric;
+    IF v_base IS NOT NULL THEN
+      v_band := public.admin_run_band(v_base);
+      IF v_val < v_band[1] OR v_val > v_band[2] THEN
+        RAISE EXCEPTION 'RUN_STAT_SCALE_MISMATCH: resulting_version.% = % must sit inside %-% (star %) for a base value of %',
+          v_key, v_val, v_band[1], v_band[2], (v_band[1] / 20), v_base;
+      END IF;
+    END IF;
+  END LOOP;
+
+  -- derive omitted Runs stats from the base stats (same 20-points-per-star rule)
+  FOREACH v_key IN ARRAY public.admin_base_stat_keys() LOOP
+    v_run_key := replace(v_key, 'stat_', 'run_stat_');
+    IF (v_run ? v_run_key) THEN CONTINUE; END IF;
+    v_base := nullif(v_stats->>v_key, '')::numeric;
+    IF v_base IS NULL THEN CONTINUE; END IF;
+    v_run := v_run || jsonb_build_object(v_run_key,
+      public.admin_derive_run_stat(v_base, format('%s|step%s|%s', coalesce(v_card::text,'?'), coalesce(v_order,1), v_key)));
+  END LOOP;
+
+  v_expected := public.admin_run_rating(v_run);
+  IF p_version ? 'run_rating' AND p_version->>'run_rating' IS NOT NULL THEN
+    v_rating := (p_version->>'run_rating')::numeric;
+    IF v_rating < 0 OR v_rating > 139 THEN
+      RAISE EXCEPTION 'STAT_OUT_OF_RANGE: resulting_version.run_rating = % must be between 0 and 139', v_rating;
+    END IF;
+    IF v_expected IS NOT NULL AND abs(v_rating - v_expected) > 1 THEN
+      RAISE EXCEPTION 'RUN_RATING_MISMATCH: resulting_version.run_rating = % must be the mean of the nine Runs stats (%)', v_rating, v_expected;
+    END IF;
+  ELSE
+    v_rating := v_expected;
+  END IF;
 
   -- badges (full replacement)
   FOR v_b IN SELECT * FROM jsonb_array_elements(coalesce(p_version->'badges','[]'::jsonb)) LOOP
@@ -1741,8 +2033,12 @@ BEGIN
     'version_order', v_order, 'gem_tier_id', v_to,
     'gem_name', coalesce(p_version->>'gem_name', v_to_name),
     'rating', p_version->'rating',
+    'run_rating', to_jsonb(v_rating),
     'status', coalesce(p_version->>'status','draft')
-  ) || v_stats;
+  ) || v_stats || v_run;
+
+  IF p_version ? 'position1' THEN v_fields := v_fields || jsonb_build_object('position1', p_version->>'position1'); END IF;
+  IF p_version ? 'position2' THEN v_fields := v_fields || jsonb_build_object('position2', p_version->>'position2'); END IF;
 
   IF p_evo_path_id IS NOT NULL THEN
     v_res := public.admin_upsert_row('evo_card_versions', v_id, v_fields, v_match, p_commit, v_action);
@@ -1789,10 +2085,14 @@ BEGIN
     v_warn := v_warn || jsonb_build_object('code','EVO_VERSION_NO_STATS',
       'message', format('%s has no resulting stats: the version inherits zeros', v_match));
   END IF;
+  IF v_rating IS NULL THEN
+    v_warn := v_warn || jsonb_build_object('code','EVO_VERSION_NO_RUN_STATS',
+      'message', format('%s has no complete Runs stat line, so run_rating stays null', v_match));
+  END IF;
 
   RETURN jsonb_build_object('kind','evo_card_version','id', v_id, 'match', v_match,
     'version_order', v_order, 'to_tier', v_to_name, 'base_player_card_id', v_card,
-    'badges', v_badges, 'traits', v_traits,
+    'badges', v_badges, 'traits', v_traits, 'run_stats', v_run, 'run_rating', v_rating,
     'applied', p_commit, 'operations', v_ops, 'destructive', v_destr, 'warnings', v_warn);
 END $function$
 ;
@@ -2946,7 +3246,8 @@ BEGIN
     END LOOP;
     RETURN v_out;
   END IF;
-  IF p_table NOT IN ('player_cards','teams','runs','domination_games','packs','locker_codes','challenges','dynamic_duos','evo_paths','storylines') THEN
+  IF p_table NOT IN ('player_cards','teams','runs','domination_games','packs','locker_codes','challenges',
+                     'dynamic_duos','evo_paths','storylines','evo_card_versions') THEN
     RETURN v_out;
   END IF;
   EXECUTE format('SELECT to_jsonb(t) FROM public.%I t WHERE t.id = $1', p_table) INTO v_row USING p_id;
@@ -3040,6 +3341,66 @@ CREATE OR REPLACE FUNCTION public.admin_error(p_code text, p_message text, p_ext
 AS $function$
 BEGIN
   RAISE EXCEPTION '%: % detail=%', p_code, p_message, coalesce(p_extra, '{}'::jsonb)::text;
+END $function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_evo_version_audit()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  r record; v_row jsonb; v_issues jsonb; v_out jsonb := '[]'::jsonb;
+  v_key text; v_run_key text; v_base numeric; v_val numeric; v_band int[];
+  v_present int; v_zero int; v_base_sum numeric; v_mean numeric;
+BEGIN
+  PERFORM public.admin_require_admin();
+  FOR r IN SELECT * FROM public.evo_card_versions ORDER BY base_player_card_id, version_order LOOP
+    v_row := to_jsonb(r); v_issues := '[]'::jsonb;
+    v_present := 0; v_zero := 0; v_base_sum := 0;
+    FOREACH v_key IN ARRAY public.admin_base_stat_keys() LOOP
+      v_run_key := replace(v_key, 'stat_', 'run_stat_');
+      v_base := coalesce((v_row->>v_key)::numeric, 0);
+      v_base_sum := v_base_sum + v_base;
+      IF v_row->>v_run_key IS NULL THEN CONTINUE; END IF;
+      v_present := v_present + 1;
+      v_val := (v_row->>v_run_key)::numeric;
+      IF v_val = 0 THEN v_zero := v_zero + 1; END IF;
+      v_band := public.admin_run_band(v_base);
+      IF v_val < v_band[1] OR v_val > v_band[2] THEN
+        v_issues := v_issues || jsonb_build_array(jsonb_build_object(
+          'code','RUN_STAT_OUT_OF_BAND','field', v_run_key, 'value', v_val,
+          'expected_band', jsonb_build_array(v_band[1], v_band[2]), 'base', v_base));
+      END IF;
+    END LOOP;
+    IF v_present < 9 THEN
+      v_issues := v_issues || jsonb_build_array(jsonb_build_object(
+        'code','RUN_STATS_INCOMPLETE','present', v_present));
+    ELSIF v_zero = 9 AND v_base_sum > 0 THEN
+      v_issues := v_issues || jsonb_build_array(jsonb_build_object('code','RUN_STATS_ALL_ZERO'));
+    END IF;
+    v_mean := public.admin_run_rating(v_row);
+    IF r.run_rating IS NULL THEN
+      v_issues := v_issues || jsonb_build_array(jsonb_build_object('code','RUN_RATING_NULL'));
+    ELSIF v_mean IS NOT NULL AND abs(r.run_rating - v_mean) > 1 THEN
+      v_issues := v_issues || jsonb_build_array(jsonb_build_object(
+        'code','RUN_RATING_MISMATCH','value', r.run_rating, 'expected', v_mean));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.evo_paths p WHERE p.id = r.evo_path_id) THEN
+      v_issues := v_issues || jsonb_build_array(jsonb_build_object('code','EVO_PATH_MISSING'));
+    END IF;
+    IF v_issues <> '[]'::jsonb THEN
+      v_out := v_out || jsonb_build_array(jsonb_build_object(
+        'evo_card_version_id', r.id, 'evo_path_id', r.evo_path_id,
+        'base_player_card_id', r.base_player_card_id,
+        'player_name', (SELECT name FROM public.player_cards WHERE id = r.base_player_card_id),
+        'version_order', r.version_order, 'gem_name', r.gem_name,
+        'issues', v_issues));
+    END IF;
+  END LOOP;
+  RETURN jsonb_build_object('checked', (SELECT count(*) FROM public.evo_card_versions),
+    'flagged', jsonb_array_length(v_out), 'versions', v_out);
 END $function$
 ;
 
@@ -3155,6 +3516,300 @@ BEGIN
     'applied', p_commit, 'warnings', v_warn,
     'operations', jsonb_build_array(jsonb_build_object('action','update','table',v_tbl,'id',p_entity_id,
       'match', v_name, 'fields', jsonb_build_object('status', coalesce(p_status, v_from)) || coalesce(p_dates,'{}'::jsonb))));
+END $function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_normalize_evo_objective(p_obj jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_key text; v_type text; v_stat text; v_target numeric;
+  v_reg_type text; v_reg_stat text;
+BEGIN
+  IF p_obj IS NULL OR jsonb_typeof(p_obj) <> 'object' THEN
+    RAISE EXCEPTION 'INVALID_OBJECTIVE: each objective must be an object such as {"stat":"points","amount":250} detail=%',
+      jsonb_build_object('supported_stats', public.admin_evo_objective_keys())::text;
+  END IF;
+  v_key := lower(btrim(coalesce(p_obj->>'key', p_obj->>'stat', p_obj->>'statistic', p_obj->>'objective', '')));
+  v_key := regexp_replace(v_key, '[[:space:]-]+', '_', 'g');
+  v_type := nullif(btrim(coalesce(p_obj->>'objective_type','')), '');
+  v_stat := nullif(btrim(coalesce(p_obj->>'stat_key','')), '');
+  v_target := nullif(btrim(coalesce(p_obj->>'target', p_obj->>'amount', p_obj->>'target_value', p_obj->>'value', '')), '')::numeric;
+
+  IF v_key <> '' THEN
+    SELECT objective_type, stat_key INTO v_reg_type, v_reg_stat
+      FROM public.evo_objective_registry WHERE key = v_key;
+    IF v_reg_type IS NULL AND v_type IS NULL THEN
+      RAISE EXCEPTION 'UNSUPPORTED_EVO_OBJECTIVE: "%" is not a tracked objective detail=%', v_key,
+        jsonb_build_object('field','objectives[].stat','supported', public.admin_evo_objective_keys(),
+          'remediation','Use one of the supported objective stats, or send objective_type/stat_key explicitly.')::text;
+    END IF;
+    v_type := coalesce(v_type, v_reg_type);
+    v_stat := coalesce(v_stat, v_reg_stat);
+  END IF;
+
+  IF v_type IS NULL THEN
+    RAISE EXCEPTION 'INVALID_OBJECTIVE: supply stat (one of %) or an explicit objective_type detail=%',
+      array_to_string(public.admin_evo_objective_keys(), ', '),
+      jsonb_build_object('field','objectives[].stat','supported', public.admin_evo_objective_keys())::text;
+  END IF;
+  IF v_target IS NULL OR v_target <= 0 THEN
+    RAISE EXCEPTION 'INVALID_OBJECTIVE: amount must be greater than 0 for objective "%" detail=%',
+      coalesce(nullif(v_key,''), v_type),
+      jsonb_build_object('field','objectives[].amount','received', coalesce(p_obj->>'amount', p_obj->>'target'))::text;
+  END IF;
+
+  RETURN (p_obj - 'stat' - 'amount' - 'statistic' - 'objective' - 'target_value' - 'value')
+    || jsonb_strip_nulls(jsonb_build_object(
+         'objective_type', v_type,
+         'stat_key', v_stat,
+         'target', v_target,
+         'key', nullif(v_key,'')));
+END
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_patch_evo_step(p_item jsonb, p_commit boolean DEFAULT false)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_id uuid; v_row public.evo_paths%ROWTYPE; v_fields jsonb := '{}'::jsonb;
+  v_key text; v_target uuid; v_status text; v_match text; v_res jsonb; v_ops jsonb := '[]'::jsonb;
+  v_allowed text[] := ARRAY['evo_step_id','evo_path_id','id','evolves_to_card_id','evolves_to_version_id',
+    'status','step_order','sort_order'];
+BEGIN
+  v_id := nullif(coalesce(p_item->>'evo_step_id', p_item->>'evo_path_id', p_item->>'id'), '')::uuid;
+  IF v_id IS NULL THEN RAISE EXCEPTION 'EVO_STEP_ID_REQUIRED: evo_step_id is required for a targeted evo step update'; END IF;
+  SELECT * INTO v_row FROM public.evo_paths WHERE id = v_id;
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'UNKNOWN_EVO_STEP_ID: %', v_id; END IF;
+
+  FOR v_key IN SELECT jsonb_object_keys(p_item) LOOP
+    IF NOT (v_key = ANY(v_allowed)) THEN
+      RAISE EXCEPTION 'UNSUPPORTED_FIELD: "%" cannot be set on an evo step detail=%', v_key,
+        jsonb_build_object('mutable_fields', to_jsonb(v_allowed))::text;
+    END IF;
+  END LOOP;
+
+  -- Canonical link: evolves_to_version_id -> evo_card_versions.
+  -- evolves_to_card_id is accepted and auto-routed when the id is a version id.
+  IF p_item ? 'evolves_to_version_id' THEN
+    v_target := nullif(p_item->>'evolves_to_version_id','')::uuid;
+    IF v_target IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.evo_card_versions WHERE id = v_target) THEN
+      RAISE EXCEPTION 'UNKNOWN_EVO_VERSION_ID: %', v_target;
+    END IF;
+    v_fields := v_fields || jsonb_build_object('evolves_to_version_id', v_target);
+  END IF;
+  IF p_item ? 'evolves_to_card_id' THEN
+    v_target := nullif(p_item->>'evolves_to_card_id','')::uuid;
+    IF v_target IS NULL THEN
+      v_fields := v_fields || jsonb_build_object('evolves_to_card_id', NULL);
+    ELSIF EXISTS (SELECT 1 FROM public.evo_card_versions WHERE id = v_target) THEN
+      v_fields := v_fields || jsonb_build_object('evolves_to_version_id', v_target);
+    ELSIF EXISTS (SELECT 1 FROM public.player_cards WHERE id = v_target) THEN
+      v_fields := v_fields || jsonb_build_object('evolves_to_card_id', v_target);
+    ELSE
+      RAISE EXCEPTION 'UNKNOWN_EVO_TARGET: % is neither an evo_card_version nor a player_card', v_target;
+    END IF;
+  END IF;
+  IF p_item ? 'status' THEN
+    v_status := lower(btrim(p_item->>'status'));
+    IF v_status = 'published' THEN v_status := 'active'; END IF;
+    IF v_status NOT IN ('draft','scheduled','active','disabled','archived') THEN
+      RAISE EXCEPTION 'INVALID_STATUS: "%" is not a content status', p_item->>'status';
+    END IF;
+    v_fields := v_fields || jsonb_build_object('status', v_status);
+  END IF;
+  IF p_item ? 'step_order' THEN v_fields := v_fields || jsonb_build_object('step_order', (p_item->>'step_order')::int); END IF;
+  IF p_item ? 'sort_order' THEN v_fields := v_fields || jsonb_build_object('sort_order', (p_item->>'sort_order')::int); END IF;
+
+  IF v_fields = '{}'::jsonb THEN
+    RAISE EXCEPTION 'EMPTY_UPDATE: supply at least one mutable field for evo step %', v_id;
+  END IF;
+
+  v_match := format('%s step %s',
+    (SELECT name FROM public.player_cards WHERE id = v_row.player_card_id), v_row.step_order);
+  v_res := public.admin_upsert_row('evo_paths', v_id, v_fields, v_match, p_commit, 'update');
+  v_ops := coalesce(v_res->'operations','[]'::jsonb);
+
+  RETURN jsonb_build_object('kind','evo_step','entity','evo_step','id', v_id, 'match', v_match,
+    'applied', p_commit, 'operations', v_ops, 'destructive', '[]'::jsonb, 'fields', v_fields);
+END $function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_patch_evo_version(p_item jsonb, p_commit boolean DEFAULT false)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_id uuid; v_row public.evo_card_versions%ROWTYPE;
+  v_fields jsonb := '{}'::jsonb; v_key text; v_num numeric; v_tier uuid; v_status text;
+  v_match text; v_res jsonb; v_ops jsonb := '[]'::jsonb; v_destr jsonb := '[]'::jsonb;
+  v_badges jsonb := '[]'::jsonb; v_traits jsonb := '[]'::jsonb; v_before jsonb;
+  v_b jsonb; v_bid uuid; v_needs boolean; v_stats jsonb; v_run jsonb; v_k text;
+  v_base text[] := public.admin_base_stat_keys();
+  v_runk text[] := public.admin_run_stat_keys();
+  v_allowed text[] := ARRAY['evo_version_id','id','status','gem_name','gem_tier','gem_tier_id','rating',
+    'run_rating','version_order','evo_stage','position1','position2','stats','run_stats','badges','traits'];
+BEGIN
+  v_id := nullif(coalesce(p_item->>'evo_version_id', p_item->>'id'), '')::uuid;
+  IF v_id IS NULL THEN
+    RAISE EXCEPTION 'EVO_VERSION_ID_REQUIRED: evo_version_id is required for a targeted evo version update';
+  END IF;
+  SELECT * INTO v_row FROM public.evo_card_versions WHERE id = v_id;
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'UNKNOWN_EVO_VERSION_ID: %', v_id; END IF;
+
+  FOR v_key IN SELECT jsonb_object_keys(p_item) LOOP
+    IF NOT (v_key = ANY(v_allowed)) AND NOT (v_key = ANY(v_base)) AND NOT (v_key = ANY(v_runk)) THEN
+      RAISE EXCEPTION 'UNSUPPORTED_FIELD: "%" cannot be set on an evo version detail=%', v_key,
+        jsonb_build_object('mutable_fields', to_jsonb(v_allowed))::text;
+    END IF;
+  END LOOP;
+
+  IF p_item ? 'status' THEN
+    v_status := lower(btrim(p_item->>'status'));
+    IF v_status = 'published' THEN v_status := 'active'; END IF;
+    IF v_status NOT IN ('draft','scheduled','active','disabled','archived') THEN
+      RAISE EXCEPTION 'INVALID_STATUS: "%" is not a content status', p_item->>'status';
+    END IF;
+    v_fields := v_fields || jsonb_build_object('status', v_status);
+  END IF;
+  IF p_item ? 'gem_name' THEN v_fields := v_fields || jsonb_build_object('gem_name', p_item->>'gem_name'); END IF;
+  IF p_item ? 'gem_tier_id' THEN
+    SELECT id INTO v_tier FROM public.gem_tiers WHERE id = (p_item->>'gem_tier_id')::uuid;
+    IF v_tier IS NULL THEN RAISE EXCEPTION 'UNKNOWN_GEM_TIER_ID: %', p_item->>'gem_tier_id'; END IF;
+    v_fields := v_fields || jsonb_build_object('gem_tier_id', v_tier);
+  ELSIF p_item ? 'gem_tier' THEN
+    SELECT id INTO v_tier FROM public.gem_tiers WHERE lower(name) = lower(btrim(p_item->>'gem_tier'));
+    IF v_tier IS NULL THEN RAISE EXCEPTION 'UNKNOWN_GEM_TIER: "%"', p_item->>'gem_tier'; END IF;
+    v_fields := v_fields || jsonb_build_object('gem_tier_id', v_tier);
+  END IF;
+  IF p_item ? 'rating' THEN v_fields := v_fields || jsonb_build_object('rating', p_item->'rating'); END IF;
+  IF p_item ? 'run_rating' THEN v_fields := v_fields || jsonb_build_object('run_rating', p_item->'run_rating'); END IF;
+  IF p_item ? 'position1' THEN v_fields := v_fields || jsonb_build_object('position1', p_item->>'position1'); END IF;
+  IF p_item ? 'position2' THEN v_fields := v_fields || jsonb_build_object('position2', p_item->>'position2'); END IF;
+  IF p_item ? 'version_order' OR p_item ? 'evo_stage' THEN
+    v_fields := v_fields || jsonb_build_object('version_order',
+      coalesce((p_item->>'version_order')::int, (p_item->>'evo_stage')::int));
+  END IF;
+
+  -- base stats: nested stats{} and/or flat stat_* keys, star point scale 0..99
+  v_stats := coalesce(p_item->'stats', '{}'::jsonb);
+  FOREACH v_k IN ARRAY v_base LOOP
+    IF p_item ? v_k THEN v_stats := v_stats || jsonb_build_object(v_k, p_item->v_k); END IF;
+  END LOOP;
+  FOR v_k IN SELECT jsonb_object_keys(v_stats) LOOP
+    IF NOT (v_k = ANY(v_base)) THEN
+      RAISE EXCEPTION 'UNKNOWN_STAT_KEY: "%" detail=%', v_k, jsonb_build_object('supported', v_base)::text;
+    END IF;
+    v_num := (v_stats->>v_k)::numeric;
+    IF v_num < 0 OR v_num > 99 THEN RAISE EXCEPTION 'STAT_OUT_OF_RANGE: % = % must be 0..99', v_k, v_num; END IF;
+    v_fields := v_fields || jsonb_build_object(v_k, v_stats->v_k);
+  END LOOP;
+
+  -- Runs stats: nested run_stats{} (bare or prefixed) and/or flat run_stat_* keys, 0..139
+  v_run := '{}'::jsonb;
+  FOR v_k IN SELECT jsonb_object_keys(coalesce(p_item->'run_stats','{}'::jsonb)) LOOP
+    IF v_k = ANY(v_runk) THEN
+      v_run := v_run || jsonb_build_object(v_k, p_item->'run_stats'->v_k);
+    ELSIF ('run_' || v_k) = ANY(v_runk) THEN
+      v_run := v_run || jsonb_build_object('run_' || v_k, p_item->'run_stats'->v_k);
+    ELSE
+      RAISE EXCEPTION 'UNKNOWN_RUN_STAT_KEY: "%" detail=%', v_k, jsonb_build_object('supported', v_runk)::text;
+    END IF;
+  END LOOP;
+  FOREACH v_k IN ARRAY v_runk LOOP
+    IF p_item ? v_k THEN v_run := v_run || jsonb_build_object(v_k, p_item->v_k); END IF;
+  END LOOP;
+  FOR v_k IN SELECT jsonb_object_keys(v_run) LOOP
+    v_num := (v_run->>v_k)::numeric;
+    IF v_num < 0 OR v_num > 139 THEN RAISE EXCEPTION 'RUN_STAT_OUT_OF_RANGE: % = % must be 0..139', v_k, v_num; END IF;
+    v_fields := v_fields || jsonb_build_object(v_k, v_run->v_k);
+  END LOOP;
+
+  v_match := format('%s evo v%s',
+    (SELECT name FROM public.player_cards WHERE id = v_row.base_player_card_id), v_row.version_order);
+
+  IF v_fields <> '{}'::jsonb THEN
+    v_res := public.admin_upsert_row('evo_card_versions', v_id, v_fields, v_match, p_commit, 'update');
+    v_ops := v_ops || coalesce(v_res->'operations','[]'::jsonb);
+  END IF;
+
+  IF p_item ? 'badges' THEN
+    FOR v_b IN SELECT * FROM jsonb_array_elements(coalesce(p_item->'badges','[]'::jsonb)) LOOP
+      IF jsonb_typeof(v_b) = 'string' THEN v_b := jsonb_build_object('badge', v_b #>> '{}'); END IF;
+      IF v_b ? 'badge_id' THEN
+        SELECT id INTO v_bid FROM public.badges WHERE id = (v_b->>'badge_id')::uuid;
+      ELSE
+        SELECT id INTO v_bid FROM public.badges
+         WHERE lower(name) = lower(coalesce(v_b->>'badge', v_b->>'name'))
+            OR lower(abbreviation) = lower(coalesce(v_b->>'badge', v_b->>'name'));
+      END IF;
+      IF v_bid IS NULL THEN RAISE EXCEPTION 'UNKNOWN_BADGE: "%"', coalesce(v_b->>'badge', v_b->>'name', v_b->>'badge_id'); END IF;
+      v_badges := v_badges || jsonb_build_array(jsonb_build_object('badge_id', v_bid,
+        'name', coalesce(v_b->>'badge', v_b->>'name'), 'tier', coalesce(v_b->>'tier','base')));
+    END LOOP;
+    SELECT coalesce(jsonb_agg(jsonb_build_object('badge_id', b.badge_id, 'name', bg.name, 'tier', b.tier)), '[]'::jsonb)
+      INTO v_before FROM public.evo_card_version_badges b
+      JOIN public.badges bg ON bg.id = b.badge_id WHERE b.evo_card_version_id = v_id;
+    IF coalesce(v_before,'[]'::jsonb) <> v_badges THEN
+      v_destr := v_destr || jsonb_build_object('action','replace','label','DESTRUCTIVE_REPLACEMENT',
+        'table','evo_card_version_badges','id',v_id,'match',v_match,
+        'message','this evo version badge list is fully replaced',
+        'before', coalesce(v_before,'[]'::jsonb), 'after', v_badges);
+    END IF;
+    IF p_commit THEN
+      DELETE FROM public.evo_card_version_badges WHERE evo_card_version_id = v_id;
+      INSERT INTO public.evo_card_version_badges (evo_card_version_id, badge_id, tier)
+        SELECT v_id, (e->>'badge_id')::uuid, e->>'tier' FROM jsonb_array_elements(v_badges) e;
+    END IF;
+  END IF;
+
+  IF p_item ? 'traits' THEN
+    FOR v_b IN SELECT * FROM jsonb_array_elements(coalesce(p_item->'traits','[]'::jsonb)) LOOP
+      IF jsonb_typeof(v_b) = 'string' THEN v_b := jsonb_build_object('trait', v_b #>> '{}'); END IF;
+      IF v_b ? 'trait_id' THEN
+        SELECT id, coalesce(requires_target_stat,false) INTO v_bid, v_needs
+          FROM public.signature_traits WHERE id = (v_b->>'trait_id')::uuid;
+      ELSE
+        SELECT id, coalesce(requires_target_stat,false) INTO v_bid, v_needs FROM public.signature_traits
+         WHERE lower(name) = lower(coalesce(v_b->>'trait', v_b->>'name'))
+            OR lower(abbreviation) = lower(coalesce(v_b->>'trait', v_b->>'name'));
+      END IF;
+      IF v_bid IS NULL THEN RAISE EXCEPTION 'UNKNOWN_TRAIT: "%"', coalesce(v_b->>'trait', v_b->>'name', v_b->>'trait_id'); END IF;
+      IF v_needs AND nullif(btrim(coalesce(v_b->>'target_stat','')),'') IS NULL THEN
+        RAISE EXCEPTION 'TRAIT_TARGET_STAT_REQUIRED: trait "%" needs target_stat', coalesce(v_b->>'trait', v_b->>'name');
+      END IF;
+      v_traits := v_traits || jsonb_build_array(jsonb_build_object('trait_id', v_bid,
+        'name', coalesce(v_b->>'trait', v_b->>'name'), 'tier', coalesce(v_b->>'tier','base'),
+        'target_stat', v_b->>'target_stat'));
+    END LOOP;
+    SELECT coalesce(jsonb_agg(jsonb_build_object('trait_id', t.trait_id, 'name', st.name, 'tier', t.tier, 'target_stat', t.target_stat)), '[]'::jsonb)
+      INTO v_before FROM public.evo_card_version_traits t
+      JOIN public.signature_traits st ON st.id = t.trait_id WHERE t.evo_card_version_id = v_id;
+    IF coalesce(v_before,'[]'::jsonb) <> v_traits THEN
+      v_destr := v_destr || jsonb_build_object('action','replace','label','DESTRUCTIVE_REPLACEMENT',
+        'table','evo_card_version_traits','id',v_id,'match',v_match,
+        'message','this evo version trait list is fully replaced',
+        'before', coalesce(v_before,'[]'::jsonb), 'after', v_traits);
+    END IF;
+    IF p_commit THEN
+      DELETE FROM public.evo_card_version_traits WHERE evo_card_version_id = v_id;
+      INSERT INTO public.evo_card_version_traits (evo_card_version_id, trait_id, tier, target_stat)
+        SELECT v_id, (e->>'trait_id')::uuid, e->>'tier', e->>'target_stat' FROM jsonb_array_elements(v_traits) e;
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object('kind','evo_version','entity','evo_version','id', v_id, 'match', v_match,
+    'applied', p_commit, 'operations', v_ops, 'destructive', v_destr,
+    'fields', v_fields, 'warnings', '[]'::jsonb);
 END $function$
 ;
 
@@ -3315,6 +3970,69 @@ BEGIN
     'old_opponent_name', v_old, 'new_opponent_name', p_new_name, 'applied', p_commit, 'scope','single_game',
     'operations', jsonb_build_array(jsonb_build_object('action','update','table','domination_games','id',v_id,
       'match', format('%s game %s', v_road, v_order), 'fields', jsonb_build_object('opponent_name', p_new_name))));
+END $function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_repair_evo_version_runs(p_commit boolean DEFAULT false, p_version_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  r record; v_row jsonb; v_run jsonb; v_key text; v_run_key text;
+  v_base numeric; v_val numeric; v_band int[]; v_rating numeric;
+  v_changed boolean; v_out jsonb := '[]'::jsonb; v_fixed int := 0;
+BEGIN
+  PERFORM public.admin_require_admin();
+  FOR r IN SELECT * FROM public.evo_card_versions
+            WHERE (p_version_id IS NULL OR id = p_version_id)
+            ORDER BY base_player_card_id, version_order LOOP
+    v_row := to_jsonb(r); v_run := '{}'::jsonb; v_changed := false;
+    FOREACH v_key IN ARRAY public.admin_base_stat_keys() LOOP
+      v_run_key := replace(v_key, 'stat_', 'run_stat_');
+      v_base := coalesce((v_row->>v_key)::numeric, 0);
+      v_val := nullif(v_row->>v_run_key, '')::numeric;
+      v_band := public.admin_run_band(v_base);
+      IF v_val IS NULL OR v_val < v_band[1] OR v_val > v_band[2]
+         OR (v_val = 0 AND v_base > 0) THEN
+        v_run := v_run || jsonb_build_object(v_run_key,
+          public.admin_derive_run_stat(v_base, format('%s|step%s|%s', r.base_player_card_id, r.version_order, v_key)));
+        v_changed := true;
+      ELSE
+        v_run := v_run || jsonb_build_object(v_run_key, v_val);
+      END IF;
+    END LOOP;
+    v_rating := public.admin_run_rating(v_run);
+    IF r.run_rating IS NULL OR (v_rating IS NOT NULL AND abs(r.run_rating - v_rating) > 1) THEN
+      v_changed := true;
+    END IF;
+    IF NOT v_changed THEN CONTINUE; END IF;
+    v_fixed := v_fixed + 1;
+    v_out := v_out || jsonb_build_array(jsonb_build_object(
+      'evo_card_version_id', r.id, 'evo_path_id', r.evo_path_id,
+      'player_name', (SELECT name FROM public.player_cards WHERE id = r.base_player_card_id),
+      'version_order', r.version_order, 'gem_name', r.gem_name,
+      'before', jsonb_build_object('run_rating', r.run_rating) ||
+        (SELECT coalesce(jsonb_object_agg(k, v_row->k), '{}'::jsonb) FROM unnest(public.admin_run_stat_keys()) k),
+      'after', jsonb_build_object('run_rating', v_rating) || v_run));
+    IF p_commit THEN
+      UPDATE public.evo_card_versions SET
+        run_stat_3pt = (v_run->>'run_stat_3pt')::int,
+        run_stat_mid = (v_run->>'run_stat_mid')::int,
+        run_stat_fin = (v_run->>'run_stat_fin')::int,
+        run_stat_dnk = (v_run->>'run_stat_dnk')::int,
+        run_stat_ast = (v_run->>'run_stat_ast')::int,
+        run_stat_stl = (v_run->>'run_stat_stl')::int,
+        run_stat_reb = (v_run->>'run_stat_reb')::int,
+        run_stat_blk = (v_run->>'run_stat_blk')::int,
+        run_stat_int = (v_run->>'run_stat_int')::int,
+        run_rating = v_rating,
+        updated_at = now()
+      WHERE id = r.id;
+    END IF;
+  END LOOP;
+  RETURN jsonb_build_object('committed', p_commit, 'repaired', v_fixed, 'versions', v_out);
 END $function$
 ;
 
@@ -3965,6 +4683,22 @@ BEGIN
 END $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.admin_run_rating(p_run jsonb)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+DECLARE k text; v_total numeric := 0;
+BEGIN
+  FOREACH k IN ARRAY public.admin_run_stat_keys() LOOP
+    IF NOT (p_run ? k) OR p_run->>k IS NULL THEN RETURN NULL; END IF;
+    v_total := v_total + (p_run->>k)::numeric;
+  END LOOP;
+  RETURN round(v_total / 9.0, 2);
+END $function$
+;
+
 CREATE OR REPLACE FUNCTION public.admin_strip_pending(p_item jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4428,6 +5162,24 @@ END $function$
 CREATE OR REPLACE FUNCTION public.content_release_verify(p_result jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_out jsonb; v_extra jsonb; v_errors jsonb;
+BEGIN
+  v_out := public.content_release_verify_base(p_result);
+  v_extra := public.content_release_verify_evo(p_result);
+  v_errors := coalesce(v_out->'verification_errors', '[]'::jsonb) || coalesce(v_extra, '[]'::jsonb);
+  RETURN v_out
+    || jsonb_build_object('verification_errors', v_errors)
+    || jsonb_build_object('verified', jsonb_array_length(v_errors) = 0);
+END $function$
+;
+
+CREATE OR REPLACE FUNCTION public.content_release_verify_base(p_result jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
@@ -4570,6 +5322,117 @@ BEGIN
     'evo_objective_ids', v_objectives,
     'locker_code_id', v_code,
     'verification_errors', v_errors);
+END $function$
+;
+
+CREATE OR REPLACE FUNCTION public.content_release_verify_evo(p_result jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_rec record; v_row jsonb; v_errors jsonb := '[]'::jsonb; v_seen jsonb := '{}'::jsonb;
+  v_key text; v_cols text[]; v_expected jsonb; v_found jsonb; v_bad text[];
+  v_exp_num numeric; v_got_num numeric; v_dupes int; v_path record;
+BEGIN
+  FOR v_rec IN
+    SELECT DISTINCT op->>'id' AS id, op->'fields' AS fields
+      FROM jsonb_array_elements(coalesce(p_result->'results','[]'::jsonb)) r,
+           jsonb_array_elements(coalesce(r.value->'result'->'operations','[]'::jsonb)) op
+     WHERE op->>'table' = 'evo_card_versions' AND op->>'id' IS NOT NULL
+  LOOP
+    IF v_seen ? v_rec.id THEN CONTINUE; END IF;
+    v_seen := v_seen || jsonb_build_object(v_rec.id, true);
+
+    SELECT to_jsonb(t) INTO v_row FROM public.evo_card_versions t WHERE t.id = v_rec.id::uuid;
+    IF v_row IS NULL THEN
+      v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+        'code','VERIFICATION_ROW_MISSING','stage','verification_query','table','evo_card_versions',
+        'expected_id', v_rec.id, 'found_id', NULL,
+        'message','evo card version row is missing after commit'));
+      CONTINUE;
+    END IF;
+
+    v_cols := ARRAY['rating','run_rating','gem_name','position1','position2','status','version_order','evo_path_id','base_player_card_id']
+              || public.admin_base_stat_keys() || public.admin_run_stat_keys();
+    v_bad := '{}'; v_expected := '{}'::jsonb; v_found := '{}'::jsonb;
+    FOREACH v_key IN ARRAY v_cols LOOP
+      IF v_rec.fields IS NULL OR NOT (v_rec.fields ? v_key) THEN CONTINUE; END IF;
+      IF v_rec.fields->>v_key IS NULL THEN
+        IF v_row->>v_key IS NOT NULL AND v_key IN ('rating','run_rating') THEN
+          v_bad := v_bad || v_key;
+          v_expected := v_expected || jsonb_build_object(v_key, NULL);
+          v_found := v_found || jsonb_build_object(v_key, v_row->v_key);
+        END IF;
+        CONTINUE;
+      END IF;
+      IF v_key = ANY(ARRAY['rating','run_rating','version_order'] || public.admin_base_stat_keys() || public.admin_run_stat_keys()) THEN
+        v_exp_num := (v_rec.fields->>v_key)::numeric;
+        v_got_num := nullif(v_row->>v_key,'')::numeric;
+        IF v_got_num IS NULL OR abs(v_got_num - v_exp_num) > 0.0000001 THEN
+          v_bad := v_bad || v_key;
+          v_expected := v_expected || jsonb_build_object(v_key, v_exp_num);
+          v_found := v_found || jsonb_build_object(v_key, v_got_num);
+        END IF;
+      ELSIF coalesce(v_row->>v_key,'') <> coalesce(v_rec.fields->>v_key,'') THEN
+        v_bad := v_bad || v_key;
+        v_expected := v_expected || jsonb_build_object(v_key, v_rec.fields->>v_key);
+        v_found := v_found || jsonb_build_object(v_key, v_row->>v_key);
+      END IF;
+    END LOOP;
+
+    IF array_length(v_bad,1) > 0 THEN
+      v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+        'code','VERIFICATION_MISMATCH','stage','verification_compare','table','evo_card_versions',
+        'columns', to_jsonb(v_bad), 'expected_id', v_rec.id, 'found_id', v_rec.id,
+        'expected', v_expected, 'found', v_found,
+        'message','evo card version values differ from the committed plan'));
+      CONTINUE;
+    END IF;
+
+    -- parent evo step relationship and duplicate protection
+    SELECT * INTO v_path FROM public.evo_paths WHERE id = (v_row->>'evo_path_id')::uuid;
+    IF NOT FOUND THEN
+      v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+        'code','VERIFICATION_PARENT_MISSING','stage','verification_compare','table','evo_card_versions',
+        'expected_id', v_rec.id, 'expected_parent_id', v_row->'evo_path_id',
+        'message','evo card version points at an evo step that does not exist'));
+      CONTINUE;
+    END IF;
+    IF v_path.player_card_id::text <> (v_row->>'base_player_card_id') THEN
+      v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+        'code','VERIFICATION_PARENT_MISMATCH','stage','verification_compare','table','evo_card_versions',
+        'expected_id', v_rec.id, 'expected_parent_id', v_path.id,
+        'expected', to_jsonb(v_path.player_card_id), 'found', v_row->'base_player_card_id',
+        'message','evo card version belongs to a different player than its evo step'));
+      CONTINUE;
+    END IF;
+    SELECT count(*) INTO v_dupes FROM public.evo_card_versions WHERE evo_path_id = v_path.id;
+    IF v_dupes > 1 THEN
+      v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+        'code','VERIFICATION_DUPLICATE_VERSION','stage','verification_count','table','evo_card_versions',
+        'expected_id', v_rec.id, 'expected_parent_id', v_path.id,
+        'expected_count', 1, 'found_count', v_dupes,
+        'message','more than one evo card version exists for this evo step'));
+      CONTINUE;
+    END IF;
+
+    -- Runs data must be complete and consistent with the stored gameplay stats.
+    IF public.admin_run_rating(v_row) IS NULL THEN
+      v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+        'code','VERIFICATION_RUN_STATS_INCOMPLETE','stage','verification_compare','table','evo_card_versions',
+        'expected_id', v_rec.id, 'message','evo card version does not have all nine Runs stats after commit'));
+    ELSIF (v_row->>'run_rating') IS NULL
+       OR abs((v_row->>'run_rating')::numeric - public.admin_run_rating(v_row)) > 1 THEN
+      v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+        'code','VERIFICATION_RUN_RATING_MISMATCH','stage','verification_compare','table','evo_card_versions',
+        'expected_id', v_rec.id, 'expected', public.admin_run_rating(v_row), 'found', v_row->'run_rating',
+        'message','stored run_rating is not the mean of the stored Runs stats'));
+    END IF;
+  END LOOP;
+
+  RETURN v_errors;
 END $function$
 ;
 
@@ -4744,6 +5607,16 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.admin_base_stat_keys()
+ RETURNS text[]
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  SELECT ARRAY['stat_3pt','stat_mid','stat_fin','stat_dnk','stat_ast','stat_stl','stat_reb','stat_blk','stat_int'];
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.admin_canonical_json(p jsonb)
  RETURNS jsonb
  LANGUAGE sql
@@ -4783,6 +5656,60 @@ CREATE OR REPLACE FUNCTION public.admin_evo_objective_keys()
  SET search_path TO 'public'
 AS $function$
   SELECT coalesce(array_agg(key ORDER BY key), ARRAY[]::text[]) FROM public.evo_objective_registry
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_evo_version_get(p_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT jsonb_build_object(
+    'entity','evo_version',
+    'version', to_jsonb(v),
+    'player_card', (SELECT jsonb_build_object('id', pc.id, 'name', pc.name) FROM player_cards pc WHERE pc.id = v.base_player_card_id),
+    'evo_step', (SELECT jsonb_build_object('id', ep.id, 'step_order', ep.step_order, 'status', ep.status,
+                        'evolves_to_version_id', ep.evolves_to_version_id, 'evolves_to_card_id', ep.evolves_to_card_id)
+                 FROM evo_paths ep WHERE ep.id = v.evo_path_id),
+    'badges', (SELECT coalesce(jsonb_agg(jsonb_build_object('badge_id', b.badge_id, 'name', bg.name, 'tier', b.tier)),'[]'::jsonb)
+               FROM evo_card_version_badges b JOIN badges bg ON bg.id = b.badge_id WHERE b.evo_card_version_id = v.id),
+    'traits', (SELECT coalesce(jsonb_agg(jsonb_build_object('trait_id', t.trait_id, 'name', st.name, 'tier', t.tier, 'target_stat', t.target_stat)),'[]'::jsonb)
+               FROM evo_card_version_traits t JOIN signature_traits st ON st.id = t.trait_id WHERE t.evo_card_version_id = v.id))
+  FROM evo_card_versions v WHERE v.id = p_id;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_evo_version_list(p_filters jsonb DEFAULT '{}'::jsonb)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT jsonb_build_object(
+    'entity','evo_version',
+    'filters', coalesce(p_filters,'{}'::jsonb),
+    'total', (SELECT count(*) FROM evo_card_versions v
+               WHERE (p_filters->>'player_card_id' IS NULL OR v.base_player_card_id = (p_filters->>'player_card_id')::uuid)
+                 AND (p_filters->>'evo_stage' IS NULL OR v.version_order = (p_filters->>'evo_stage')::int)
+                 AND (p_filters->>'gem_tier_id' IS NULL OR v.gem_tier_id = (p_filters->>'gem_tier_id')::uuid)
+                 AND (p_filters->>'status' IS NULL OR v.status::text = p_filters->>'status')),
+    'items', coalesce((
+      SELECT jsonb_agg(x ORDER BY x->>'version_order')
+      FROM (
+        SELECT jsonb_build_object('id', v.id, 'evo_path_id', v.evo_path_id,
+          'base_player_card_id', v.base_player_card_id, 'player_name', pc.name,
+          'version_order', v.version_order, 'gem_name', v.gem_name, 'gem_tier_id', v.gem_tier_id,
+          'rating', v.rating, 'run_rating', v.run_rating, 'status', v.status,
+          'linked_step_id', (SELECT ep.id FROM evo_paths ep WHERE ep.evolves_to_version_id = v.id LIMIT 1)) AS x
+        FROM evo_card_versions v LEFT JOIN player_cards pc ON pc.id = v.base_player_card_id
+        WHERE (p_filters->>'player_card_id' IS NULL OR v.base_player_card_id = (p_filters->>'player_card_id')::uuid)
+          AND (p_filters->>'evo_stage' IS NULL OR v.version_order = (p_filters->>'evo_stage')::int)
+          AND (p_filters->>'gem_tier_id' IS NULL OR v.gem_tier_id = (p_filters->>'gem_tier_id')::uuid)
+          AND (p_filters->>'status' IS NULL OR v.status::text = p_filters->>'status')
+        LIMIT coalesce((p_filters->>'limit')::int, 200)
+        OFFSET coalesce((p_filters->>'offset')::int, 0)
+      ) s), '[]'::jsonb));
 $function$
 ;
 
@@ -4847,6 +5774,28 @@ AS $function$
                        FROM public.domination_game_players p WHERE p.domination_game_id = g.id), '') AS x
       FROM public.domination_games g
       WHERE p_road_id IS NULL OR g.road_id IS DISTINCT FROM p_road_id) s), 'none'))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_run_band(p_base numeric)
+ RETURNS integer[]
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  SELECT ARRAY[s * 20, s * 20 + 19]
+  FROM (SELECT least(greatest(floor(coalesce(p_base, 0))::int, 0), 6) AS s) q;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_run_stat_keys()
+ RETURNS text[]
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  SELECT ARRAY['run_stat_3pt','run_stat_mid','run_stat_fin','run_stat_dnk','run_stat_ast',
+               'run_stat_stl','run_stat_reb','run_stat_blk','run_stat_int'];
 $function$
 ;
 
@@ -4923,6 +5872,21 @@ CREATE OR REPLACE FUNCTION public.admin_canonical_hash(p jsonb)
  SET search_path TO 'public'
 AS $function$
   SELECT md5(public.admin_canonical_json(coalesce(p, '{}'::jsonb))::text)
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_derive_run_stat(p_base numeric, p_seed text)
+ RETURNS integer
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  SELECT b[1] + least(greatest(round(centre + jitter)::int, 0), 19)
+  FROM (
+    SELECT public.admin_run_band(p_base) AS b,
+           (least(greatest((coalesce(p_base, 0) - floor(coalesce(p_base, 0))) * 100, 0), 99) / 99.0) * 19 AS centre,
+           ((((('x' || substr(md5(coalesce(p_seed, '')), 1, 8))::bit(32)::bigint) % 1201)::numeric) / 100.0) - 6 AS jitter
+  ) q;
 $function$
 ;
 
