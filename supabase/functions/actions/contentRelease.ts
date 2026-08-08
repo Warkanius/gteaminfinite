@@ -1325,6 +1325,65 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
     });
   }
 
+  if (release.challenges?.length) {
+    payload.challenges = release.challenges.map((c) => {
+      const rewardCard = c.card_reward_id
+        ? { card_reward_id: c.card_reward_id }
+        : c.card_reward
+          ? (() => {
+              const fields = cardRefFields(release, { player_name: c.card_reward });
+              if (fields.player_card_id) return { card_reward_id: fields.player_card_id };
+              if (fields.player_ref) return { card_reward_ref: fields.player_ref };
+              return { card_reward: c.card_reward };
+            })()
+          : {};
+      const rewardPack = c.pack_release_reward
+        ? { pack_reward_ref: PACK_REF }
+        : c.pack_reward
+          ? { pack_reward: c.pack_reward }
+          : {};
+      const opponent = c.opponent_release_team
+        ? { opponent_team_ref: TEAM_REF }
+        : c.opponent_team
+          ? { opponent_team: c.opponent_team }
+          : {};
+      const scalars: Record<string, unknown> = {};
+      for (const key of [
+        "description",
+        "challenge_type",
+        "win_condition",
+        "win_by_amount",
+        "series_length",
+        "series_win_coins",
+        "series_loss_coins",
+        "coin_reward",
+        "gem_reward",
+        "stat_limit_player",
+        "stat_limit_value",
+        "prerequisite",
+        "spotlight_group",
+        "sort_order",
+        "conditions",
+        "reward_payload",
+        "lineup_restrictions",
+        "is_repeatable",
+        "expires_at",
+      ] as const) {
+        if (c[key] !== undefined) scalars[key] = c[key];
+      }
+      if (c.stat_limit_stat) scalars.stat_limit_stat = normalizeStatKey(c.stat_limit_stat);
+      return {
+        action: "upsert",
+        ...(c.challenge_id ? { challenge_id: c.challenge_id } : {}),
+        name: String(c.name ?? "").trim(),
+        ...scalars,
+        ...rewardCard,
+        ...rewardPack,
+        ...opponent,
+        ...(c.status ? { status: c.status === "published" ? "active" : "draft" } : {}),
+      };
+    });
+  }
 
   return payload;
 }
