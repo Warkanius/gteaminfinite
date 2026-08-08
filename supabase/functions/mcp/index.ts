@@ -2049,14 +2049,15 @@ var MR_VERSATILE_SLOTS = {
   actolytrene: 5
 };
 var MR_VERSATILE_NAMES = ["mr. versatile", "mr versatile", "mrversatile", "mv"];
+var field = (row, key) => row[key];
 function label(row, kind) {
   if (typeof row === "string") return row.trim().toLowerCase();
-  const value = row[kind] ?? row.name ?? row.abbreviation ?? "";
+  const value = field(row, kind) ?? field(row, "name") ?? field(row, "abbreviation") ?? "";
   return String(value).trim().toLowerCase();
 }
 function tierOf(row) {
   if (typeof row === "string") return "base";
-  return String(row.tier ?? "base").trim().toLowerCase();
+  return String(field(row, "tier") ?? "base").trim().toLowerCase();
 }
 function isMrVersatile(row, kind) {
   return MR_VERSATILE_NAMES.includes(label(row, kind));
@@ -2774,10 +2775,10 @@ function validateRelease(input, options = {}) {
     if (c.stat_limit_stat && !STAT_KEYS3.includes(normalizeStatKey(c.stat_limit_stat))) {
       err("INVALID_CHALLENGE_STAT", `"${c.stat_limit_stat}" is not one of the nine base stats.`, `${scope}.stat_limit_stat`);
     }
-    for (const field of ["coin_reward", "gem_reward", "sort_order", "win_by_amount", "series_length"]) {
-      const value = c[field];
+    for (const field2 of ["coin_reward", "gem_reward", "sort_order", "win_by_amount", "series_length"]) {
+      const value = c[field2];
       if (value !== void 0 && value !== null && !Number.isFinite(Number(value))) {
-        err("INVALID_CHALLENGE_NUMBER", `${field} must be a number.`, `${scope}.${field}`);
+        err("INVALID_CHALLENGE_NUMBER", `${field2} must be a number.`, `${scope}.${field2}`);
       }
     }
   });
