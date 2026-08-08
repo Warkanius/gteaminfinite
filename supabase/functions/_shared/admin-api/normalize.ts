@@ -45,6 +45,8 @@ export const GROUPS = [
   "packs",
   "collection_requirements",
   "evo_paths",
+  "evo_version_updates",
+  "evo_step_updates",
   "gem_tasks",
   "runs",
   "domination_roads",
@@ -84,6 +86,10 @@ export const ENTITY_TO_GROUP: Record<string, Group> = {
   "gem-tasks": "gem_tasks",
   "evo-path": "evo_paths",
   "evo-paths": "evo_paths",
+  "evo-version": "evo_version_updates",
+  "evo-versions": "evo_version_updates",
+  "evo-step": "evo_step_updates",
+  "evo-steps": "evo_step_updates",
   run: "runs",
   runs: "runs",
   "domination-road": "domination_roads",
@@ -313,6 +319,15 @@ function normalizeItem(
     out.player_name = out.name;
     delete out.name;
   }
+  // A challenge item IS the challenge: `name` stays canonical. challenge_name is
+  // only a reference alias used when OTHER entities point at a challenge, so it
+  // must never leak into the challenge write payload (the writer rejects it).
+  if (group === "challenges") {
+    if (out.challenge_name !== undefined) {
+      if (out.name === undefined) out.name = out.challenge_name;
+      delete out.challenge_name;
+    }
+  }
 
   for (const listField of PLAYER_LISTS[group] ?? []) {
     const list = out[listField];
@@ -351,6 +366,8 @@ function normalizeItem(
   if (group === "collections" || group === "sub_collections") validateCollection(out, path, errors);
   if (group === "evo_paths") validateEvoPath(out, path, errors, warnings, destructive);
   if (group === "dynamic_duos") validateDuo(out, path, errors);
+  if (group === "evo_version_updates") validateEvoVersionUpdate(out, path, errors);
+  if (group === "evo_step_updates") validateEvoStepUpdate(out, path, errors);
   if (group === "locker_codes" && typeof out.code === "string") out.code = out.code.trim().toUpperCase();
   if (group === "runs" && Array.isArray(out.rank_rewards)) {
     destructive.push(
@@ -998,4 +1015,107 @@ export function documentForEntity(entity: string, body: Record<string, unknown>)
   const group = ENTITY_TO_GROUP[entity];
   if (!group) return null;
   return { [group]: [body] } as Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Targeted PATCH surfaces. Both groups are pure PATCHes: only the submitted
+// fields are written, omitted fields are preserved, and status is never forced
+// back to draft. The mutable field lists are the executable truth advertised by
+// GET /admin-api/v1/capabilities.
+// ---------------------------------------------------------------------------
+
+export const EVO_VERSION_MUTABLE_FIELDS = [
+  "evo_version_id",
+  "id",
+  "status",
+  "rating",
+  "run_rating",
+  "gem_name",
+  "gem_tier",
+  "evo_stage",
+  "position1",
+  "position2",
+  "stats",
+  "run_stats",
+  ...STAT_KEYS,
+  ...RUN_STAT_KEYS,
+  "badges",
+  "traits",
+] as const;
+
+export const EVO_STEP_MUTABLE_FIELDS = [
+  "evo_step_id",
+  "evo_path_id",
+  "id",
+  "evolves_to_version_id",
+  "evolves_to_card_id",
+  "status",
+  "step_order",
+  "sort_order",
+] as const;
+
+const CONTENT_STATUSES = ["draft", "scheduled", "active", "disabled", "archived", "published"];
+
+function checkStatus(item: Record<string, unknown>, path: string, errors: AdminApiError[]) {
+  if (item.status === undefined || item.status === null) return;
+  const value = String(item.status).trim().toLowerCase();
+  if (!CONTENT_STATUSES.includes(value)) {
+    errors.push(
+      apiError("INVALID_STATUS", `"${String(item.status)}" is not a content status.`, {
+        path: `${path}.status`,
+        expected: CONTENT_STATUSES,
+        received: item.status,
+      }),
+    );
+    return;
+  }
+  // published is the release-document wording for active; nothing is downgraded.
+  item.status = value === "published" ? "active" : value;
+}
+
+function validateTargeted(
+  item: Record<string, unknown>,
+  path: string,
+  errors: AdminApiError[],
+  allowed: readonly string[],
+  idFields: string[],
+  entity: string,
+) {
+  for (const key of Object.keys(item)) {
+    if (!allowed.includes(key)) {
+      errors.push(
+        apiError("UNSUPPORTED_FIELD", `"${key}" cannot be set on a ${entity}.`, {
+          path: `${path}.${key}`,
+          entity_type: entity,
+          expected: allowed,
+          remediation: `Remove the field; GET /admin-api/v1/capabilities lists every mutable ${entity} field.`,
+        }),
+      );
+    }
+  }
+  const id = idFields.map((f) => item[f]).find((v) => typeof v === "string" && v);
+  if (!id || !isUuid(id)) {
+    errors.push(
+      apiError("MISSING_TARGET_ID", `A targeted ${entity} update needs an immutable id.`, {
+        path,
+        entity_type: entity,
+        expected: idFields.join(" or "),
+      }),
+    );
+  }
+  checkStatus(item, path, errors);
+  const mutable = Object.keys(item).filter((k) => !idFields.includes(k));
+  if (!mutable.length) {
+    errors.push(
+      apiError("EMPTY_UPDATE", `Supply at least one field to change on this ${entity}.`, { path, entity_type: entity }),
+    );
+  }
+}
+
+function validateEvoVersionUpdate(item: Record<string, unknown>, path: string, errors: AdminApiError[]) {
+  validateTargeted(item, path, errors, EVO_VERSION_MUTABLE_FIELDS, ["evo_version_id", "id"], "evo_version");
+}
+
+function validateEvoStepUpdate(item: Record<string, unknown>, path: string, errors: AdminApiError[]) {
+  validateTargeted(item, path, errors, EVO_STEP_MUTABLE_FIELDS, ["evo_step_id", "evo_path_id", "id"], "evo_step");
 }

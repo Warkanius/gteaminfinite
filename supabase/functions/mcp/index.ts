@@ -2135,6 +2135,18 @@ var EVO_OBJECTIVES = {
   games_won: { objective_type: "games_won", stat_key: null, label: "Games won" }
 };
 var SPECIAL_ODDS_SLOTS = ["player_choice"];
+var CONTENT_STATUSES = ["draft", "scheduled", "active", "disabled", "archived"];
+function releaseStatus(value, fallback = "draft") {
+  if (value === void 0 || value === null || String(value).trim() === "") return fallback;
+  const v = String(value).trim().toLowerCase();
+  const mapped = v === "published" ? "active" : v;
+  if (!CONTENT_STATUSES.includes(mapped)) {
+    throw new Error(
+      `INVALID_STATUS: "${String(value)}" is not a content status. Use one of ${CONTENT_STATUSES.join(", ")} (or "published" for active).`
+    );
+  }
+  return mapped;
+}
 var RELEASE_SECTIONS = [
   "release",
   "collection",
@@ -2856,7 +2868,7 @@ function buildReleasePayload(input) {
         action: "upsert",
         name: release.release.name,
         notes: release.release.description ?? null,
-        status: release.release.status === "published" ? "active" : "draft"
+        status: releaseStatus(release.release.status)
       }
     ]
   };
@@ -2953,7 +2965,7 @@ function buildReleasePayload(input) {
       to_tier: step.to_tier,
       step_order: step.step_order,
       ...step.evo_path_id ? { evo_path_id: step.evo_path_id } : {},
-      status: path.status === "published" ? "active" : "draft",
+      status: releaseStatus(step.status ?? path.status),
       objectives: step.objectives.map((o, i) => ({
         key: o.stat,
         ...EVO_OBJECTIVES[o.stat],
@@ -2974,7 +2986,7 @@ function buildReleasePayload(input) {
         ...Object.keys(step.resulting_version.run_stats ?? {}).length ? { run_stats: step.resulting_version.run_stats } : {},
         badges: step.resulting_version.badges ?? [],
         traits: step.resulting_version.traits ?? [],
-        status: path.status === "published" ? "active" : "draft"
+        status: releaseStatus(step.resulting_version.status ?? step.status ?? path.status)
       }
     });
     payload.evo_paths = release.evo_paths.flatMap((path) => {
@@ -3009,12 +3021,31 @@ function buildReleasePayload(input) {
         reward_value: rewardValue,
         ...c.max_redemptions != null ? { max_redemptions: c.max_redemptions } : {},
         ...c.expires_at != null ? { expires_at: c.expires_at } : {},
-        ...c.status ? { status: c.status === "published" ? "active" : "draft" } : {}
+        ...c.status ? { status: releaseStatus(c.status) } : {}
       };
     });
   }
   if (release.challenges?.length) {
-    payload.challenges = release.challenges.map((c) => {
+    payload.challenges = release.challenges.map((raw) => {
+      const c = { ...raw };
+      const rewards = c.rewards ?? {};
+      if (c.coin_reward === void 0 && rewards.coins !== void 0) c.coin_reward = Number(rewards.coins);
+      if (c.gem_reward === void 0 && rewards.gems !== void 0) c.gem_reward = Number(rewards.gems);
+      if (!c.card_reward && typeof rewards.card === "string") c.card_reward = rewards.card;
+      if (!c.pack_reward && typeof rewards.pack === "string") c.pack_reward = rewards.pack;
+      if (c.win_by_amount === void 0 && c.win_by !== void 0) c.win_by_amount = c.win_by;
+      if (c.is_repeatable === void 0 && c.repeatable !== void 0) c.is_repeatable = c.repeatable;
+      if (c.target_value === void 0) c.target_value = c.target ?? c.goal;
+      const cond = c.conditions ?? {};
+      if (c.target_value === void 0 && cond.amount !== void 0) c.target_value = Number(cond.amount);
+      if (c.target_value === void 0 && cond.target !== void 0) c.target_value = Number(cond.target);
+      if (!c.challenge_type && typeof cond.type === "string") c.challenge_type = cond.type;
+      if (!c.target_stat && typeof cond.stat === "string") c.target_stat = cond.stat;
+      delete c.rewards;
+      delete c.win_by;
+      delete c.repeatable;
+      delete c.target;
+      delete c.goal;
       const rewardCard = c.card_reward_id ? { card_reward_id: c.card_reward_id } : c.card_reward ? (() => {
         const fields = cardRefFields(release, { player_name: c.card_reward });
         if (fields.player_card_id) return { card_reward_id: fields.player_card_id };
@@ -3043,11 +3074,13 @@ function buildReleasePayload(input) {
         "reward_payload",
         "lineup_restrictions",
         "is_repeatable",
+        "target_value",
         "expires_at"
       ]) {
         if (c[key] !== void 0) scalars[key] = c[key];
       }
       if (c.stat_limit_stat) scalars.stat_limit_stat = normalizeStatKey(c.stat_limit_stat);
+      if (c.target_stat) scalars.stat_limit_stat = normalizeStatKey(c.target_stat);
       return {
         action: "upsert",
         ...c.challenge_id ? { challenge_id: c.challenge_id } : {},
@@ -3056,7 +3089,7 @@ function buildReleasePayload(input) {
         ...rewardCard,
         ...rewardPack,
         ...opponent,
-        ...c.status ? { status: c.status === "published" ? "active" : "draft" } : {}
+        ...c.status ? { status: releaseStatus(c.status) } : {}
       };
     });
   }

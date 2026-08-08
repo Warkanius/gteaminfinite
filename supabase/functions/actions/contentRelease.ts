@@ -86,6 +86,8 @@ export interface ReleaseStepInput {
   step_order: number;
   /** Immutable id of an existing step to update in place (optional, authoritative). */
   evo_path_id?: string;
+  /** Step status. Omitted falls back to the path status; never forced to draft. */
+  status?: ContentStatus;
   objectives: Array<{ stat: string; amount: number; description?: string }>;
   /**
    * A complete playable card snapshot for this step (see PLAYABLE_CARD_FIELDS):
@@ -110,6 +112,27 @@ export interface ReleaseStepInput {
 }
 
 
+/**
+ * Content status is never silently downgraded. `published` is the release-document
+ * wording for the stored `active` status; every other supported status is passed
+ * through exactly as submitted, and an unknown value is a hard validation error.
+ */
+export type ContentStatus = "draft" | "scheduled" | "active" | "disabled" | "archived" | "published";
+
+export const CONTENT_STATUSES = ["draft", "scheduled", "active", "disabled", "archived"] as const;
+
+export function releaseStatus(value: unknown, fallback = "draft"): string {
+  if (value === undefined || value === null || String(value).trim() === "") return fallback;
+  const v = String(value).trim().toLowerCase();
+  const mapped = v === "published" ? "active" : v;
+  if (!(CONTENT_STATUSES as readonly string[]).includes(mapped)) {
+    throw new Error(
+      `INVALID_STATUS: "${String(value)}" is not a content status. Use one of ${CONTENT_STATUSES.join(", ")} (or "published" for active).`,
+    );
+  }
+  return mapped;
+}
+
 export interface ReleaseEvoPathInput {
   player_name?: string;
   /** Immutable target. Resolved directly against player_cards.id — never a temp ref. */
@@ -123,7 +146,7 @@ export interface ReleaseEvoPathInput {
   team?: string;
   card_variant?: string;
   evo_stage?: number;
-  status?: "draft" | "published";
+  status?: ContentStatus;
   /**
    * Whole-path replacement (default). `steps` is the complete, authoritative
    * step list for this card: matching steps are updated in place by immutable
@@ -160,7 +183,7 @@ export interface ReleasePlayerInput {
 }
 
 export interface ContentReleaseInput {
-  release: { name: string; slug?: string; status?: "draft" | "published"; description?: string };
+  release: { name: string; slug?: string; status?: ContentStatus; description?: string };
   collection?: {
     name: string;
     description?: string;
@@ -197,7 +220,7 @@ export interface ContentReleaseInput {
     reward_release_pack?: boolean;
     max_redemptions?: number | null;
     expires_at?: string | null;
-    status?: "draft" | "published";
+    status?: ContentStatus;
   }>;
   /** Challenges shipped with the release, including same-release card/pack rewards. */
   challenges?: ReleaseChallengeInput[];
@@ -236,8 +259,21 @@ export interface ReleaseChallengeInput {
   reward_payload?: Record<string, unknown>;
   lineup_restrictions?: Record<string, unknown>;
   is_repeatable?: boolean;
+  /** Alias of is_repeatable. */
+  repeatable?: boolean;
+  /** Numeric goal of the win condition (points scored, games won, stat total, ...). */
+  target_value?: number;
+  /** Aliases of target_value. */
+  target?: number;
+  goal?: number;
+  /** Alias of win_by_amount. */
+  win_by?: number;
+  /** Stat the target applies to, e.g. stat_3pt or "three pointers". */
+  target_stat?: string;
+  /** Grouped rewards: { coins, gems, card, pack }. Flattened onto the real columns. */
+  rewards?: { coins?: number; gems?: number; card?: string; pack?: string; [k: string]: unknown };
   expires_at?: string | null;
-  status?: "draft" | "published";
+  status?: ContentStatus;
 }
 
 /** Every top-level section a release document may contain. */
@@ -1156,7 +1192,7 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         action: "upsert",
         name: release.release.name,
         notes: release.release.description ?? null,
-        status: release.release.status === "published" ? "active" : "draft",
+        status: releaseStatus(release.release.status),
       },
     ],
   };
@@ -1286,7 +1322,7 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
       to_tier: step.to_tier,
       step_order: step.step_order,
       ...(step.evo_path_id ? { evo_path_id: step.evo_path_id } : {}),
-      status: path.status === "published" ? "active" : "draft",
+      status: releaseStatus(step.status ?? path.status),
       objectives: step.objectives.map((o, i) => ({
         key: o.stat,
         ...EVO_OBJECTIVES[o.stat as EvoObjectiveKey],
@@ -1309,7 +1345,7 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
           : {}),
         badges: step.resulting_version.badges ?? [],
         traits: step.resulting_version.traits ?? [],
-        status: path.status === "published" ? "active" : "draft",
+        status: releaseStatus(step.resulting_version.status ?? step.status ?? path.status),
       },
 
     });
@@ -1352,13 +1388,34 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         reward_value: rewardValue,
         ...(c.max_redemptions != null ? { max_redemptions: c.max_redemptions } : {}),
         ...(c.expires_at != null ? { expires_at: c.expires_at } : {}),
-        ...(c.status ? { status: c.status === "published" ? "active" : "draft" } : {}),
+        ...(c.status ? { status: releaseStatus(c.status) } : {}),
       };
     });
   }
 
   if (release.challenges?.length) {
-    payload.challenges = release.challenges.map((c) => {
+    payload.challenges = release.challenges.map((raw) => {
+      // Canonicalize the wording a Commissioner naturally uses onto the real
+      // challenge columns before anything is planned, so nothing is dropped.
+      const c: ReleaseChallengeInput = { ...raw };
+      const rewards = c.rewards ?? {};
+      if (c.coin_reward === undefined && rewards.coins !== undefined) c.coin_reward = Number(rewards.coins);
+      if (c.gem_reward === undefined && rewards.gems !== undefined) c.gem_reward = Number(rewards.gems);
+      if (!c.card_reward && typeof rewards.card === "string") c.card_reward = rewards.card;
+      if (!c.pack_reward && typeof rewards.pack === "string") c.pack_reward = rewards.pack;
+      if (c.win_by_amount === undefined && c.win_by !== undefined) c.win_by_amount = c.win_by;
+      if (c.is_repeatable === undefined && c.repeatable !== undefined) c.is_repeatable = c.repeatable;
+      if (c.target_value === undefined) c.target_value = c.target ?? c.goal;
+      const cond = (c.conditions ?? {}) as Record<string, unknown>;
+      if (c.target_value === undefined && cond.amount !== undefined) c.target_value = Number(cond.amount);
+      if (c.target_value === undefined && cond.target !== undefined) c.target_value = Number(cond.target);
+      if (!c.challenge_type && typeof cond.type === "string") c.challenge_type = cond.type;
+      if (!c.target_stat && typeof cond.stat === "string") c.target_stat = cond.stat;
+      delete c.rewards;
+      delete c.win_by;
+      delete c.repeatable;
+      delete c.target;
+      delete c.goal;
       const rewardCard = c.card_reward_id
         ? { card_reward_id: c.card_reward_id }
         : c.card_reward
@@ -1399,11 +1456,13 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         "reward_payload",
         "lineup_restrictions",
         "is_repeatable",
+        "target_value",
         "expires_at",
       ] as const) {
         if (c[key] !== undefined) scalars[key] = c[key];
       }
       if (c.stat_limit_stat) scalars.stat_limit_stat = normalizeStatKey(c.stat_limit_stat);
+      if (c.target_stat) scalars.stat_limit_stat = normalizeStatKey(c.target_stat);
       return {
         action: "upsert",
         ...(c.challenge_id ? { challenge_id: c.challenge_id } : {}),
@@ -1412,7 +1471,7 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         ...rewardCard,
         ...rewardPack,
         ...opponent,
-        ...(c.status ? { status: c.status === "published" ? "active" : "draft" } : {}),
+        ...(c.status ? { status: releaseStatus(c.status) } : {}),
       };
     });
   }
