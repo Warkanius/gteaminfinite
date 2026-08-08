@@ -1925,6 +1925,8 @@ function unscaled(units, places = 2) {
   return neg ? `-${out}` : out;
 }
 var GEM_TIER_BANDS = [
+  // Gold is a real, playable star-0 tier and a legitimate evolution SOURCE.
+  { tier: "gold", min: 0, max: 99 },
   { tier: "emerald", min: 100, max: 199 },
   { tier: "amethyst", min: 200, max: 299 },
   { tier: "diamond", min: 300, max: 399 },
@@ -2036,6 +2038,75 @@ function completeRunRating(runStats, supplied) {
   return mean === null ? null : Number(mean);
 }
 
+// supabase/functions/_shared/admin-api/assignmentRules.ts
+var BASE_MAX_BADGES = 5;
+var BASE_MAX_TRAITS = 1;
+var MR_VERSATILE_SLOTS = {
+  base: 1,
+  gold: 2,
+  hof: 3,
+  diamond: 4,
+  actolytrene: 5
+};
+var MR_VERSATILE_NAMES = ["mr. versatile", "mr versatile", "mrversatile", "mv"];
+function label(row, kind) {
+  if (typeof row === "string") return row.trim().toLowerCase();
+  const value = row[kind] ?? row.name ?? row.abbreviation ?? "";
+  return String(value).trim().toLowerCase();
+}
+function tierOf(row) {
+  if (typeof row === "string") return "base";
+  return String(row.tier ?? "base").trim().toLowerCase();
+}
+function isMrVersatile(row, kind) {
+  return MR_VERSATILE_NAMES.includes(label(row, kind));
+}
+function assignmentAllowance(badges, traits) {
+  let tier = null;
+  let extra = 0;
+  const consider = (row, kind) => {
+    if (!isMrVersatile(row, kind)) return;
+    const slots = MR_VERSATILE_SLOTS[tierOf(row)] ?? 0;
+    if (slots > extra) {
+      extra = slots;
+      tier = tierOf(row);
+    }
+  };
+  (badges ?? []).forEach((b) => consider(b, "badge"));
+  (traits ?? []).forEach((t) => consider(t, "trait"));
+  return {
+    max_badges: BASE_MAX_BADGES + extra,
+    max_traits: BASE_MAX_TRAITS + extra,
+    mr_versatile_tier: tier,
+    extra_slots: extra
+  };
+}
+function checkAssignmentLimits(badges, traits) {
+  const allowance = assignmentAllowance(badges, traits);
+  const issues = [];
+  const explain = allowance.extra_slots ? ` (${BASE_MAX_BADGES} base + ${allowance.extra_slots} from the ${allowance.mr_versatile_tier} Mr. Versatile)` : " \u2014 add Mr. Versatile to raise the cap";
+  if (badges && badges.length > allowance.max_badges) {
+    issues.push({
+      code: "TOO_MANY_BADGES",
+      field: "badges",
+      message: `A card may hold ${allowance.max_badges} badge(s)${explain}, received ${badges.length}.`,
+      allowed: allowance.max_badges,
+      received: badges.length
+    });
+  }
+  if (traits && traits.length > allowance.max_traits) {
+    issues.push({
+      code: "TOO_MANY_TRAITS",
+      field: "traits",
+      message: `A card may hold ${allowance.max_traits} signature trait(s)${allowance.extra_slots ? ` (${BASE_MAX_TRAITS} base + ${allowance.extra_slots} from the ${allowance.mr_versatile_tier} Mr. Versatile)` : " \u2014 add Mr. Versatile to raise the cap"}, received ${traits.length}.`,
+      allowed: allowance.max_traits,
+      received: traits.length
+    });
+  }
+  return issues;
+}
+var ASSIGNMENT_RULE_DOC = `A card holds up to ${BASE_MAX_BADGES} badges and ${BASE_MAX_TRAITS} signature trait. Mr. Versatile (available as a badge or a signature trait) raises both caps by its tier: ` + Object.entries(MR_VERSATILE_SLOTS).map(([tier, slots]) => `${tier} +${slots}`).join(", ") + `. Supplying badges or traits always replaces the whole set; [] clears it; omitting the field leaves existing assignments untouched.`;
+
 // supabase/functions/actions/contentRelease.ts
 var STAT_KEYS3 = [
   "stat_3pt",
@@ -2063,6 +2134,32 @@ var EVO_OBJECTIVES = {
   games_won: { objective_type: "games_won", stat_key: null, label: "Games won" }
 };
 var SPECIAL_ODDS_SLOTS = ["player_choice"];
+var RELEASE_SECTIONS = [
+  "release",
+  "collection",
+  "players",
+  "team",
+  "pack",
+  "evo_paths",
+  "locker_codes",
+  "challenges",
+  "forbid_existing_links_to"
+];
+var RELEASE_PASSTHROUGH_GROUPS = [
+  "gem_tiers",
+  "badges",
+  "signature_traits",
+  "sub_collections",
+  "collection_requirements",
+  "gem_tasks",
+  "runs",
+  "domination_roads",
+  "domination_games",
+  "dynamic_duos",
+  "storylines",
+  "location_accounts",
+  "social_posts"
+];
 var BADGE_TIER_ALIASES = {
   base: "base",
   bronze: "base",
@@ -2284,6 +2381,13 @@ function normalizeRelease(input) {
       reward_type: c.reward_type ?? (c.reward_release_pack ? "pack" : "coins")
     }));
   }
+  if (out.challenges?.length) {
+    out.challenges = out.challenges.map((c) => ({
+      ...c,
+      name: String(c.name ?? "").trim(),
+      ...c.stat_limit_stat ? { stat_limit_stat: normalizeStatKey(c.stat_limit_stat) } : {}
+    }));
+  }
   if (out.team) out.team.roster = [...out.team.roster ?? []].sort((a, b) => a.slot - b.slot);
   return out;
 }
@@ -2313,6 +2417,20 @@ function validateRelease(input, options = {}) {
   const err = (code, message, entity) => out.push({ code, severity: "error", message, entity });
   const warn = (code, message, entity) => out.push({ code, severity: "warning", message, entity });
   if (!release.release?.name?.trim()) err("RELEASE_NAME_REQUIRED", "Release name is required.", "release");
+  for (const [key, value] of Object.entries(input ?? {})) {
+    if (RELEASE_SECTIONS.includes(key)) continue;
+    if (RELEASE_PASSTHROUGH_GROUPS.includes(key)) {
+      if (!Array.isArray(value)) {
+        err("INVALID_RELEASE_GROUP", `"${key}" must be an array of items.`, key);
+      }
+      continue;
+    }
+    err(
+      "UNKNOWN_RELEASE_SECTION",
+      `"${key}" is not a release section. Sections: ${RELEASE_SECTIONS.join(", ")}. Forwarded groups: ${RELEASE_PASSTHROUGH_GROUPS.join(", ")}.`,
+      key
+    );
+  }
   const players = release.players ?? [];
   const known = (ref) => players.some(
     (p) => ref.player_card_id && p.player_card_id === ref.player_card_id || sameRef(p.name, ref.player_name) || sameRef(p.new_name, ref.player_name)
@@ -2630,6 +2748,39 @@ function validateRelease(input, options = {}) {
       err("LOCKER_CARD_REF_REQUIRED", "A card reward needs reward_value.card_name or reward_value.player_card_id.", scope);
     }
   });
+  const challengeNames = /* @__PURE__ */ new Set();
+  (release.challenges ?? []).forEach((c, i) => {
+    const scope = `challenges[${i}]`;
+    const name = String(c.name ?? "").trim();
+    if (!name) err("CHALLENGE_NAME_REQUIRED", "Each challenge needs a name.", scope);
+    if (name && challengeNames.has(name.toLowerCase())) {
+      err("DUPLICATE_CHALLENGE", `Challenge "${name}" appears more than once in this release.`, scope);
+    }
+    challengeNames.add(name.toLowerCase());
+    if (c.card_reward && !c.card_reward_id && !known({ player_name: c.card_reward })) {
+      out.push({
+        code: "EXISTING_CHALLENGE_REWARD_CARD",
+        severity: "info",
+        message: `"${c.card_reward}" is not defined in this release and is resolved from existing player cards (ambiguous names are rejected).`,
+        entity: `${scope}.card_reward`
+      });
+    }
+    if (c.pack_release_reward && !release.pack?.name?.trim()) {
+      err("CHALLENGE_RELEASE_PACK_MISSING", "pack_release_reward is set but this release does not define a pack.", scope);
+    }
+    if (c.opponent_release_team && !release.team?.name?.trim()) {
+      err("CHALLENGE_RELEASE_TEAM_MISSING", "opponent_release_team is set but this release does not define a team.", scope);
+    }
+    if (c.stat_limit_stat && !STAT_KEYS3.includes(normalizeStatKey(c.stat_limit_stat))) {
+      err("INVALID_CHALLENGE_STAT", `"${c.stat_limit_stat}" is not one of the nine base stats.`, `${scope}.stat_limit_stat`);
+    }
+    for (const field of ["coin_reward", "gem_reward", "sort_order", "win_by_amount", "series_length"]) {
+      const value = c[field];
+      if (value !== void 0 && value !== null && !Number.isFinite(Number(value))) {
+        err("INVALID_CHALLENGE_NUMBER", `${field} must be a number.`, `${scope}.${field}`);
+      }
+    }
+  });
   return out;
 }
 function validateAssignments(badges, traits, scope, err) {
@@ -2660,11 +2811,15 @@ function validateAssignments(badges, traits, scope, err) {
       err("INVALID_TRAIT_TARGET_STAT", `"${t.target_stat}" is not a valid trait target stat.`, `${scope}.traits[${i}]`);
     }
   });
+  for (const issue of checkAssignmentLimits(badges, traits)) {
+    err(issue.code, issue.message, `${scope}.${issue.field}`);
+  }
 }
 var slug = (value) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 var RELEASE_REF = "ref:release:main";
 var COLLECTION_REF = "ref:collection:main";
 var PACK_REF = "ref:pack:main";
+var TEAM_REF = "ref:team:main";
 var cardRef = (name) => `ref:player:${slug(name)}`;
 function evoSourceFields(release, path) {
   const match = (release.players ?? []).find(
@@ -2757,6 +2912,7 @@ function buildReleasePayload(input) {
       {
         action: "upsert",
         name: release.team.name,
+        temp_ref: TEAM_REF,
         ...release.team.category ? { category: release.team.category } : {},
         ...release.team.unlock_cost != null ? { unlock_cost: release.team.unlock_cost } : {},
         release_bundle_ref: RELEASE_REF,
@@ -2855,6 +3011,59 @@ function buildReleasePayload(input) {
         ...c.status ? { status: c.status === "published" ? "active" : "draft" } : {}
       };
     });
+  }
+  if (release.challenges?.length) {
+    payload.challenges = release.challenges.map((c) => {
+      const rewardCard = c.card_reward_id ? { card_reward_id: c.card_reward_id } : c.card_reward ? (() => {
+        const fields = cardRefFields(release, { player_name: c.card_reward });
+        if (fields.player_card_id) return { card_reward_id: fields.player_card_id };
+        if (fields.player_ref) return { card_reward_ref: fields.player_ref };
+        return { card_reward: c.card_reward };
+      })() : {};
+      const rewardPack = c.pack_release_reward ? { pack_reward_ref: PACK_REF } : c.pack_reward ? { pack_reward: c.pack_reward } : {};
+      const opponent = c.opponent_release_team ? { opponent_team_ref: TEAM_REF } : c.opponent_team ? { opponent_team: c.opponent_team } : {};
+      const scalars = {};
+      for (const key of [
+        "description",
+        "challenge_type",
+        "win_condition",
+        "win_by_amount",
+        "series_length",
+        "series_win_coins",
+        "series_loss_coins",
+        "coin_reward",
+        "gem_reward",
+        "stat_limit_player",
+        "stat_limit_value",
+        "prerequisite",
+        "spotlight_group",
+        "sort_order",
+        "conditions",
+        "reward_payload",
+        "lineup_restrictions",
+        "is_repeatable",
+        "expires_at"
+      ]) {
+        if (c[key] !== void 0) scalars[key] = c[key];
+      }
+      if (c.stat_limit_stat) scalars.stat_limit_stat = normalizeStatKey(c.stat_limit_stat);
+      return {
+        action: "upsert",
+        ...c.challenge_id ? { challenge_id: c.challenge_id } : {},
+        name: String(c.name ?? "").trim(),
+        ...scalars,
+        ...rewardCard,
+        ...rewardPack,
+        ...opponent,
+        ...c.status ? { status: c.status === "published" ? "active" : "draft" } : {}
+      };
+    });
+  }
+  for (const group of RELEASE_PASSTHROUGH_GROUPS) {
+    const items = release[group];
+    if (!Array.isArray(items) || items.length === 0) continue;
+    const existing = Array.isArray(payload[group]) ? payload[group] : [];
+    payload[group] = [...existing, ...items];
   }
   return payload;
 }

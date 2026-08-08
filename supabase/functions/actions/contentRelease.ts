@@ -24,6 +24,7 @@ import {
   completeRunStats as sharedCompleteRunStats,
   PLAYABLE_CARD_FIELDS,
 } from "../_shared/admin-api/playableCard.ts";
+import { checkAssignmentLimits } from "../_shared/admin-api/assignmentRules.ts";
 
 
 export const STAT_KEYS = [
@@ -198,8 +199,79 @@ export interface ContentReleaseInput {
     expires_at?: string | null;
     status?: "draft" | "published";
   }>;
+  /** Challenges shipped with the release, including same-release card/pack rewards. */
+  challenges?: ReleaseChallengeInput[];
   forbid_existing_links_to?: string[];
 }
+
+/** Challenge fields the release engine understands. */
+export interface ReleaseChallengeInput {
+  name: string;
+  challenge_id?: string;
+  description?: string;
+  challenge_type?: string;
+  win_condition?: string;
+  win_by_amount?: number;
+  series_length?: number;
+  series_win_coins?: number;
+  series_loss_coins?: number;
+  opponent_team?: string;
+  /** Set true to face the team created in this same release. */
+  opponent_release_team?: boolean;
+  coin_reward?: number;
+  gem_reward?: number;
+  /** Rewards a card: a name (resolved, including cards created in this release) or an id. */
+  card_reward?: string;
+  card_reward_id?: string;
+  /** Rewards the pack defined in this release. */
+  pack_reward?: string;
+  pack_release_reward?: boolean;
+  stat_limit_player?: string;
+  stat_limit_stat?: string;
+  stat_limit_value?: number;
+  prerequisite?: string;
+  spotlight_group?: string;
+  sort_order?: number;
+  conditions?: Record<string, unknown>;
+  reward_payload?: Record<string, unknown>;
+  lineup_restrictions?: Record<string, unknown>;
+  is_repeatable?: boolean;
+  expires_at?: string | null;
+  status?: "draft" | "published";
+}
+
+/** Every top-level section a release document may contain. */
+export const RELEASE_SECTIONS = [
+  "release",
+  "collection",
+  "players",
+  "team",
+  "pack",
+  "evo_paths",
+  "locker_codes",
+  "challenges",
+  "forbid_existing_links_to",
+] as const;
+
+/**
+ * Batch groups a release may carry verbatim. They are NOT dropped: each array is
+ * forwarded into the admin_apply_batch payload and applied in group order.
+ */
+export const RELEASE_PASSTHROUGH_GROUPS = [
+  "gem_tiers",
+  "badges",
+  "signature_traits",
+  "sub_collections",
+  "collection_requirements",
+  "gem_tasks",
+  "runs",
+  "domination_roads",
+  "domination_games",
+  "dynamic_duos",
+  "storylines",
+  "location_accounts",
+  "social_posts",
+] as const;
 
 export interface ValidationResult {
   code: string;
@@ -483,6 +555,13 @@ export function normalizeRelease(input: ContentReleaseInput): ContentReleaseInpu
       reward_type: c.reward_type ?? (c.reward_release_pack ? "pack" : "coins"),
     }));
   }
+  if (out.challenges?.length) {
+    out.challenges = out.challenges.map((c) => ({
+      ...c,
+      name: String(c.name ?? "").trim(),
+      ...(c.stat_limit_stat ? { stat_limit_stat: normalizeStatKey(c.stat_limit_stat) } : {}),
+    }));
+  }
   if (out.team) out.team.roster = [...(out.team.roster ?? [])].sort((a, b) => a.slot - b.slot);
   return out;
 }
@@ -542,6 +621,23 @@ export function validateRelease(
     out.push({ code, severity: "warning", message, entity });
 
   if (!release.release?.name?.trim()) err("RELEASE_NAME_REQUIRED", "Release name is required.", "release");
+
+  // No section is ever silently dropped: a key is either a release section, a
+  // forwarded batch group, or an explicit UNKNOWN_RELEASE_SECTION error.
+  for (const [key, value] of Object.entries((input ?? {}) as Record<string, unknown>)) {
+    if ((RELEASE_SECTIONS as readonly string[]).includes(key)) continue;
+    if ((RELEASE_PASSTHROUGH_GROUPS as readonly string[]).includes(key)) {
+      if (!Array.isArray(value)) {
+        err("INVALID_RELEASE_GROUP", `"${key}" must be an array of items.`, key);
+      }
+      continue;
+    }
+    err(
+      "UNKNOWN_RELEASE_SECTION",
+      `"${key}" is not a release section. Sections: ${RELEASE_SECTIONS.join(", ")}. Forwarded groups: ${RELEASE_PASSTHROUGH_GROUPS.join(", ")}.`,
+      key,
+    );
+  }
 
   const players = release.players ?? [];
   const known = (ref: { player_name?: string; player_card_id?: string }) =>
@@ -908,6 +1004,41 @@ export function validateRelease(
     }
   });
 
+  // challenges
+  const challengeNames = new Set<string>();
+  (release.challenges ?? []).forEach((c, i) => {
+    const scope = `challenges[${i}]`;
+    const name = String(c.name ?? "").trim();
+    if (!name) err("CHALLENGE_NAME_REQUIRED", "Each challenge needs a name.", scope);
+    if (name && challengeNames.has(name.toLowerCase())) {
+      err("DUPLICATE_CHALLENGE", `Challenge "${name}" appears more than once in this release.`, scope);
+    }
+    challengeNames.add(name.toLowerCase());
+    if (c.card_reward && !c.card_reward_id && !known({ player_name: c.card_reward })) {
+      out.push({
+        code: "EXISTING_CHALLENGE_REWARD_CARD",
+        severity: "info",
+        message: `"${c.card_reward}" is not defined in this release and is resolved from existing player cards (ambiguous names are rejected).`,
+        entity: `${scope}.card_reward`,
+      });
+    }
+    if (c.pack_release_reward && !release.pack?.name?.trim()) {
+      err("CHALLENGE_RELEASE_PACK_MISSING", "pack_release_reward is set but this release does not define a pack.", scope);
+    }
+    if (c.opponent_release_team && !release.team?.name?.trim()) {
+      err("CHALLENGE_RELEASE_TEAM_MISSING", "opponent_release_team is set but this release does not define a team.", scope);
+    }
+    if (c.stat_limit_stat && !(STAT_KEYS as readonly string[]).includes(normalizeStatKey(c.stat_limit_stat))) {
+      err("INVALID_CHALLENGE_STAT", `"${c.stat_limit_stat}" is not one of the nine base stats.`, `${scope}.stat_limit_stat`);
+    }
+    for (const field of ["coin_reward", "gem_reward", "sort_order", "win_by_amount", "series_length"] as const) {
+      const value = c[field];
+      if (value !== undefined && value !== null && !Number.isFinite(Number(value))) {
+        err("INVALID_CHALLENGE_NUMBER", `${field} must be a number.`, `${scope}.${field}`);
+      }
+    }
+  });
+
   return out;
 
 }
@@ -945,6 +1076,11 @@ function validateAssignments(
       err("INVALID_TRAIT_TARGET_STAT", `"${t.target_stat}" is not a valid trait target stat.`, `${scope}.traits[${i}]`);
     }
   });
+
+  // Five badges and one signature trait, unless Mr. Versatile raises the caps.
+  for (const issue of checkAssignmentLimits(badges, traits)) {
+    err(issue.code, issue.message, `${scope}.${issue.field}`);
+  }
 }
 
 // ------------------------------------------------------------ payload builder
@@ -955,6 +1091,7 @@ const slug = (value: string) =>
 const RELEASE_REF = "ref:release:main";
 const COLLECTION_REF = "ref:collection:main";
 const PACK_REF = "ref:pack:main";
+const TEAM_REF = "ref:team:main";
 const cardRef = (name: string) => `ref:player:${slug(name)}`;
 
 /**
@@ -1098,6 +1235,7 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
       {
         action: "upsert",
         name: release.team.name,
+        temp_ref: TEAM_REF,
         ...(release.team.category ? { category: release.team.category } : {}),
         ...(release.team.unlock_cost != null ? { unlock_cost: release.team.unlock_cost } : {}),
         release_bundle_ref: RELEASE_REF,
@@ -1219,6 +1357,74 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
     });
   }
 
+  if (release.challenges?.length) {
+    payload.challenges = release.challenges.map((c) => {
+      const rewardCard = c.card_reward_id
+        ? { card_reward_id: c.card_reward_id }
+        : c.card_reward
+          ? (() => {
+              const fields = cardRefFields(release, { player_name: c.card_reward });
+              if (fields.player_card_id) return { card_reward_id: fields.player_card_id };
+              if (fields.player_ref) return { card_reward_ref: fields.player_ref };
+              return { card_reward: c.card_reward };
+            })()
+          : {};
+      const rewardPack = c.pack_release_reward
+        ? { pack_reward_ref: PACK_REF }
+        : c.pack_reward
+          ? { pack_reward: c.pack_reward }
+          : {};
+      const opponent = c.opponent_release_team
+        ? { opponent_team_ref: TEAM_REF }
+        : c.opponent_team
+          ? { opponent_team: c.opponent_team }
+          : {};
+      const scalars: Record<string, unknown> = {};
+      for (const key of [
+        "description",
+        "challenge_type",
+        "win_condition",
+        "win_by_amount",
+        "series_length",
+        "series_win_coins",
+        "series_loss_coins",
+        "coin_reward",
+        "gem_reward",
+        "stat_limit_player",
+        "stat_limit_value",
+        "prerequisite",
+        "spotlight_group",
+        "sort_order",
+        "conditions",
+        "reward_payload",
+        "lineup_restrictions",
+        "is_repeatable",
+        "expires_at",
+      ] as const) {
+        if (c[key] !== undefined) scalars[key] = c[key];
+      }
+      if (c.stat_limit_stat) scalars.stat_limit_stat = normalizeStatKey(c.stat_limit_stat);
+      return {
+        action: "upsert",
+        ...(c.challenge_id ? { challenge_id: c.challenge_id } : {}),
+        name: String(c.name ?? "").trim(),
+        ...scalars,
+        ...rewardCard,
+        ...rewardPack,
+        ...opponent,
+        ...(c.status ? { status: c.status === "published" ? "active" : "draft" } : {}),
+      };
+    });
+  }
+
+  // Forwarded groups (duos, runs, domination, storylines, ...) travel verbatim so
+  // a release never quietly does less than the document asked for.
+  for (const group of RELEASE_PASSTHROUGH_GROUPS) {
+    const items = (release as unknown as Record<string, unknown>)[group];
+    if (!Array.isArray(items) || items.length === 0) continue;
+    const existing = Array.isArray(payload[group]) ? (payload[group] as unknown[]) : [];
+    payload[group] = [...existing, ...items];
+  }
 
   return payload;
 }

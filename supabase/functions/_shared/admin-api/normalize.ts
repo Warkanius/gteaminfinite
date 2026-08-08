@@ -5,6 +5,7 @@
 // the matching group array, so no schema can drift between the two shapes.
 
 import { apiError, apiWarning, type AdminApiError, type AdminApiWarning } from "./errors.ts";
+import { checkAssignmentLimits } from "./assignmentRules.ts";
 import { canonicalize, compact } from "./canonical.ts";
 import {
   checkOvr,
@@ -950,6 +951,19 @@ function validateAssignments(
         }
       }
     });
+    for (const issue of checkAssignmentLimits(
+      (item.badges as unknown[] | undefined) as never,
+      (item.traits as unknown[] | undefined) as never,
+    )) {
+      if (issue.field !== field) continue;
+      errors.push(
+        apiError(issue.code, issue.message, {
+          path: `${path}.${issue.field}`,
+          received: issue.received,
+          expected: issue.allowed,
+        }),
+      );
+    }
     destructive.push(
       apiWarning(
         "ASSIGNMENT_REPLACEMENT",

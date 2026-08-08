@@ -6,6 +6,8 @@ import { GROUPS, ENTITY_TO_GROUP, EVO_OBJECTIVE_KEYS } from "./normalize.ts";
 import { GEM_TIER_BANDS, STAT_KEYS, bandLabel } from "./decimal.ts";
 import { RUN_SCALE_DOC } from "./runScale.ts";
 import { PLAYABLE_CARD_FIELDS } from "./playableCard.ts";
+import { ASSIGNMENT_RULE_DOC } from "./assignmentRules.ts";
+import { RELEASE_SECTIONS } from "../../actions/contentRelease.ts";
 
 export const LIMITS = {
   max_items_per_group: 500,
@@ -132,12 +134,20 @@ export function capabilities(base: string) {
         commit_operation: "commitContentRelease",
         preview_path: `POST ${base}/admin-api/${API_VERSION}/bulk/preview`,
         commit_path: `POST ${base}/admin-api/${API_VERSION}/bulk/commit`,
-        sections: ["release", "players", "collection", "collection membership", "collection reward", "team", "team roster", "pack", "pack pool", "pack odds", "evo_paths", "evo objectives", "playable resulting evo versions", "badges", "traits"],
+        sections: RELEASE_SECTIONS,
+        section_contract:
+          "every supported section is applied; an unrecognised top-level key is rejected with UNKNOWN_RELEASE_SECTION instead of being silently dropped",
         player_stat_support: "all nine base stats and all nine run_stat_* stats, identical to bulk_players",
         run_stat_scale: RUN_SCALE_DOC,
+        assignment_rules: ASSIGNMENT_RULE_DOC,
         evo_path_semantics: REPLACEMENT_SEMANTICS["evo_paths[].steps"],
         evo_source_identifiers: ["player_card_id", "card_key", "player_name"],
+        evo_source_tiers: GEM_TIER_BANDS.map((b) => b.tier),
+        evo_objective_schema:
+          "objectives[] accept the simple {stat, amount, description} shape and are normalized server-side into the internal objective registry — the same schema in preview and commit",
         evo_objective_stats: EVO_OBJECTIVE_KEYS,
+        same_transaction_references:
+          "challenges may reward a card or the pack created in the same release (card_reward by name, pack_release_reward: true) and may face the release team (opponent_release_team: true); locker codes may reward the release pack (reward_release_pack: true). Unresolvable-at-preview links are reported under deferred_references and bound inside the commit transaction.",
         resulting_version_fields: PLAYABLE_CARD_FIELDS,
         resulting_version_contract:
           "a resulting_version IS a complete playable card snapshot: it carries exactly the same playable fields as a player card (identity, positions, rating, run_rating, nine base stats, nine Runs stats, badges, traits). Omitted Runs stats are derived from the base stats on the Runs point scale and run_rating is their mean; supplied Runs stats must sit inside the band of their base star stat.",

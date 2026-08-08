@@ -99,6 +99,8 @@ export function canonicalNumber(value: number | string): string {
  * `max` is inclusive of everything strictly below max + 0.01.
  */
 export const GEM_TIER_BANDS: Array<{ tier: string; min: number; max: number | null }> = [
+  // Gold is a real, playable star-0 tier and a legitimate evolution SOURCE.
+  { tier: "gold", min: 0, max: 99 },
   { tier: "emerald", min: 100, max: 199 },
   { tier: "amethyst", min: 200, max: 299 },
   { tier: "diamond", min: 300, max: 399 },
