@@ -2652,6 +2652,39 @@ function validateRelease(input, options = {}) {
       err("LOCKER_CARD_REF_REQUIRED", "A card reward needs reward_value.card_name or reward_value.player_card_id.", scope);
     }
   });
+  const challengeNames = /* @__PURE__ */ new Set();
+  (release.challenges ?? []).forEach((c, i) => {
+    const scope = `challenges[${i}]`;
+    const name = String(c.name ?? "").trim();
+    if (!name) err("CHALLENGE_NAME_REQUIRED", "Each challenge needs a name.", scope);
+    if (name && challengeNames.has(name.toLowerCase())) {
+      err("DUPLICATE_CHALLENGE", `Challenge "${name}" appears more than once in this release.`, scope);
+    }
+    challengeNames.add(name.toLowerCase());
+    if (c.card_reward && !c.card_reward_id && !known({ player_name: c.card_reward })) {
+      out.push({
+        code: "EXISTING_CHALLENGE_REWARD_CARD",
+        severity: "info",
+        message: `"${c.card_reward}" is not defined in this release and is resolved from existing player cards (ambiguous names are rejected).`,
+        entity: `${scope}.card_reward`
+      });
+    }
+    if (c.pack_release_reward && !release.pack?.name?.trim()) {
+      err("CHALLENGE_RELEASE_PACK_MISSING", "pack_release_reward is set but this release does not define a pack.", scope);
+    }
+    if (c.opponent_release_team && !release.team?.name?.trim()) {
+      err("CHALLENGE_RELEASE_TEAM_MISSING", "opponent_release_team is set but this release does not define a team.", scope);
+    }
+    if (c.stat_limit_stat && !STAT_KEYS3.includes(normalizeStatKey(c.stat_limit_stat))) {
+      err("INVALID_CHALLENGE_STAT", `"${c.stat_limit_stat}" is not one of the nine base stats.`, `${scope}.stat_limit_stat`);
+    }
+    for (const field of ["coin_reward", "gem_reward", "sort_order", "win_by_amount", "series_length"]) {
+      const value = c[field];
+      if (value !== void 0 && value !== null && !Number.isFinite(Number(value))) {
+        err("INVALID_CHALLENGE_NUMBER", `${field} must be a number.`, `${scope}.${field}`);
+      }
+    }
+  });
   return out;
 }
 function validateAssignments(badges, traits, scope, err) {
