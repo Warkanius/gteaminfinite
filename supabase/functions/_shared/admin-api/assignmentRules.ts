@@ -24,7 +24,17 @@ export const MR_VERSATILE_SLOTS: Record<string, number> = {
 
 const MR_VERSATILE_NAMES = ["mr. versatile", "mr versatile", "mrversatile", "mv"];
 
-type Row = Record<string, unknown> | string;
+/** Any assignment shape accepted by the write surfaces: a bare name or a row. */
+type Row =
+  | string
+  | {
+      badge?: string | null;
+      trait?: string | null;
+      name?: string | null;
+      abbreviation?: string | null;
+      tier?: string | null;
+      [key: string]: unknown;
+    };
 
 function label(row: Row, kind: "badge" | "trait"): string {
   if (typeof row === "string") return row.trim().toLowerCase();
