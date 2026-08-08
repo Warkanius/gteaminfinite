@@ -253,6 +253,26 @@ export const RELEASE_SECTIONS = [
   "forbid_existing_links_to",
 ] as const;
 
+/**
+ * Batch groups a release may carry verbatim. They are NOT dropped: each array is
+ * forwarded into the admin_apply_batch payload and applied in group order.
+ */
+export const RELEASE_PASSTHROUGH_GROUPS = [
+  "gem_tiers",
+  "badges",
+  "signature_traits",
+  "sub_collections",
+  "collection_requirements",
+  "gem_tasks",
+  "runs",
+  "domination_roads",
+  "domination_games",
+  "dynamic_duos",
+  "storylines",
+  "location_accounts",
+  "social_posts",
+] as const;
+
 export interface ValidationResult {
   code: string;
   severity: "error" | "warning" | "info";
