@@ -22,6 +22,7 @@ import {
   OVR_TOLERANCE,
 } from "./decimal.ts";
 import { normalizeRef, hasTarget, isUuid } from "./refs.ts";
+import { applyDominationSection } from "./domination.ts";
 import {
   deriveRunStats,
   runBandForBase,
@@ -192,13 +193,18 @@ export const EVO_OBJECTIVE_KEYS = [
 ];
 
 /** Normalizes, validates and plans a bulk document. Never touches the database. */
-export function normalizeDocument(input: Record<string, unknown>): NormalizeResult {
+export function normalizeDocument(rawInput: Record<string, unknown>): NormalizeResult {
   const errors: AdminApiError[] = [];
   const warnings: AdminApiWarning[] = [];
   const destructive: AdminApiWarning[] = [];
   const canonical: Record<string, unknown> = {};
   const groupsPlan: Array<{ group: string; items: number }> = [];
   let entityCount = 0;
+
+  // The GPT Actions schema sends ONE `domination` object; the batch writer
+  // speaks `domination_roads`. Translate before validation so it is neither
+  // rejected as unknown nor silently dropped.
+  const input = applyDominationSection(rawInput ?? {});
 
   for (const key of Object.keys(input)) {
     if (!GROUPS.includes(key as Group) && !PASSTHROUGH_KEYS.includes(key as never)) {

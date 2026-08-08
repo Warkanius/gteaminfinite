@@ -25,6 +25,7 @@ import {
   PLAYABLE_CARD_FIELDS,
 } from "../_shared/admin-api/playableCard.ts";
 import { checkAssignmentLimits } from "../_shared/admin-api/assignmentRules.ts";
+import { expandDominationSection } from "../_shared/admin-api/domination.ts";
 
 
 export const STAT_KEYS = [
@@ -224,6 +225,11 @@ export interface ContentReleaseInput {
   }>;
   /** Challenges shipped with the release, including same-release card/pack rewards. */
   challenges?: ReleaseChallengeInput[];
+  /**
+   * One Domination road (or an array of them) in the singular GPT shape:
+   * `{ road_name, mode, games: [...] }`. Forwarded to the domination_roads group.
+   */
+  domination?: Record<string, unknown> | Record<string, unknown>[];
   forbid_existing_links_to?: string[];
 }
 
@@ -286,6 +292,9 @@ export const RELEASE_SECTIONS = [
   "evo_paths",
   "locker_codes",
   "challenges",
+  // Singular Domination road object (GPT Actions shape); forwarded to the
+  // domination_roads batch group.
+  "domination",
   "forbid_existing_links_to",
 ] as const;
 
@@ -1474,6 +1483,16 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
         ...(c.status ? { status: releaseStatus(c.status) } : {}),
       };
     });
+  }
+
+  // Singular `domination` road object -> domination_roads group, so the GPT
+  // shape reaches the batch writer instead of being dropped.
+  if (release.domination) {
+    const { domination_roads } = expandDominationSection(release.domination);
+    if (domination_roads.length) {
+      const existing = Array.isArray(payload.domination_roads) ? (payload.domination_roads as unknown[]) : [];
+      payload.domination_roads = [...existing, ...domination_roads];
+    }
   }
 
   // Forwarded groups (duos, runs, domination, storylines, ...) travel verbatim so

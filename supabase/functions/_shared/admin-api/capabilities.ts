@@ -187,6 +187,10 @@ export function capabilities(base: string) {
     ],
     groups: GROUPS,
     group_apply_order: GROUP_APPLY_ORDER,
+    group_aliases: {
+      domination:
+        "singular road object {road_name, mode, games[]} accepted on bulk documents and content releases; applied as the domination_roads group",
+    },
     deferred_reference_contract: DEFERRED_LINK_CONTRACT,
     entities: Object.keys(ENTITY_TO_GROUP).sort(),
     single_and_bulk_share_schema: true,
