@@ -1203,6 +1203,7 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
       {
         action: "upsert",
         name: release.team.name,
+        temp_ref: TEAM_REF,
         ...(release.team.category ? { category: release.team.category } : {}),
         ...(release.team.unlock_cost != null ? { unlock_cost: release.team.unlock_cost } : {}),
         release_bundle_ref: RELEASE_REF,

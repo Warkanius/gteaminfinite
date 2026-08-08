@@ -2792,6 +2792,7 @@ var slug = (value) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").rep
 var RELEASE_REF = "ref:release:main";
 var COLLECTION_REF = "ref:collection:main";
 var PACK_REF = "ref:pack:main";
+var TEAM_REF = "ref:team:main";
 var cardRef = (name) => `ref:player:${slug(name)}`;
 function evoSourceFields(release, path) {
   const match = (release.players ?? []).find(
@@ -2884,6 +2885,7 @@ function buildReleasePayload(input) {
       {
         action: "upsert",
         name: release.team.name,
+        temp_ref: TEAM_REF,
         ...release.team.category ? { category: release.team.category } : {},
         ...release.team.unlock_cost != null ? { unlock_cost: release.team.unlock_cost } : {},
         release_bundle_ref: RELEASE_REF,
