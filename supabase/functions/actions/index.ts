@@ -455,11 +455,41 @@ async function entity(supabase: ReturnType<typeof clientFor>, body: any) {
       supabase.from("evo_paths").select("*").eq("player_card_id", card.id).order("step_order"),
     ]);
     // Evo versions are complete playable cards: return every column (including
-    // run_rating and run_stat_*) so the Commissioner can audit Runs data.
+    // run_rating and run_stat_*) so the Commissioner can audit Runs data, plus
+    // the step each version is published on and its badge/trait assignments.
     const pathIds = (evoPaths.data ?? []).map((p: any) => p.id);
-    const versions = pathIds.length
-      ? (await supabase.from("evo_card_versions").select("*").in("evo_path_id", pathIds).order("version_order")).data ?? []
-      : [];
+    const rawVersions =
+      (
+        await supabase
+          .from("evo_card_versions")
+          .select("*")
+          .or(
+            [`base_player_card_id.eq.${card.id}`, ...(pathIds.length ? [`evo_path_id.in.(${pathIds.join(",")})`] : [])].join(","),
+          )
+          .order("version_order")
+      ).data ?? [];
+    const versionIds = rawVersions.map((v: any) => v.id);
+    const [vBadges, vTraits] = await Promise.all([
+      versionIds.length
+        ? supabase
+            .from("evo_card_version_badges")
+            .select("evo_card_version_id, tier, badges(name, abbreviation)")
+            .in("evo_card_version_id", versionIds)
+        : Promise.resolve({ data: [] }),
+      versionIds.length
+        ? supabase
+            .from("evo_card_version_traits")
+            .select("evo_card_version_id, tier, target_stat, signature_traits(name, abbreviation)")
+            .in("evo_card_version_id", versionIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const versions = rawVersions.map((v: any) => ({
+      ...v,
+      // Immutable link back to the step that publishes this version.
+      linked_step_id: (evoPaths.data ?? []).find((p: any) => p.evolves_to_version_id === v.id)?.id ?? null,
+      badges: (vBadges.data ?? []).filter((b: any) => b.evo_card_version_id === v.id),
+      traits: (vTraits.data ?? []).filter((t: any) => t.evo_card_version_id === v.id),
+    }));
     return json({
       type,
       player: card,
@@ -467,7 +497,10 @@ async function entity(supabase: ReturnType<typeof clientFor>, body: any) {
       team: team.data,
       badges: badges.data ?? [],
       traits: traits.data ?? [],
-      evo_paths: evoPaths.data ?? [],
+      evo_paths: (evoPaths.data ?? []).map((p: any) => ({
+        ...p,
+        resulting_version_id: p.evolves_to_version_id ?? null,
+      })),
       evo_card_versions: versions,
     });
   }
