@@ -136,10 +136,12 @@ Deno.serve(async (req) => {
     // PATCH semantics: omitted fields are preserved, status is never forced to
     // draft, and badge/trait lists are only replaced when explicitly supplied.
     if (path === "/evo/versions" && req.method === "GET") {
-      const { data, error } = await supabase.rpc("admin_evo_version_list", {
-        p_player_card_id: url.searchParams.get("player_card_id"),
-        p_evo_path_id: url.searchParams.get("evo_path_id"),
-      });
+      const filters: Record<string, string> = {};
+      for (const k of ["player_card_id", "evo_path_id", "status"]) {
+        const v = url.searchParams.get(k);
+        if (v) filters[k] = v;
+      }
+      const { data, error } = await supabase.rpc("admin_evo_version_list", { p_filters: filters });
       if (error) return rpcError(error);
       return json(data ?? {});
     }
