@@ -224,6 +224,11 @@ export interface ContentReleaseInput {
   }>;
   /** Challenges shipped with the release, including same-release card/pack rewards. */
   challenges?: ReleaseChallengeInput[];
+  /**
+   * One Domination road (or an array of them) in the singular GPT shape:
+   * `{ road_name, mode, games: [...] }`. Forwarded to the domination_roads group.
+   */
+  domination?: Record<string, unknown> | Record<string, unknown>[];
   forbid_existing_links_to?: string[];
 }
 
