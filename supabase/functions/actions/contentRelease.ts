@@ -25,6 +25,7 @@ import {
   PLAYABLE_CARD_FIELDS,
 } from "../_shared/admin-api/playableCard.ts";
 import { checkAssignmentLimits } from "../_shared/admin-api/assignmentRules.ts";
+import { expandDominationSection } from "../_shared/admin-api/domination.ts";
 
 
 export const STAT_KEYS = [

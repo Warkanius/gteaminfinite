@@ -2108,6 +2108,23 @@ function checkAssignmentLimits(badges, traits) {
 }
 var ASSIGNMENT_RULE_DOC = `A card holds up to ${BASE_MAX_BADGES} badges and ${BASE_MAX_TRAITS} signature trait. Mr. Versatile (available as a badge or a signature trait) raises both caps by its tier: ` + Object.entries(MR_VERSATILE_SLOTS).map(([tier, slots]) => `${tier} +${slots}`).join(", ") + `. Supplying badges or traits always replaces the whole set; [] clears it; omitting the field leaves existing assignments untouched.`;
 
+// supabase/functions/_shared/admin-api/domination.ts
+function asList(value) {
+  if (Array.isArray(value)) return value.filter((v) => v && typeof v === "object");
+  if (value && typeof value === "object") return [value];
+  return [];
+}
+function expandDominationSection(value) {
+  const roads = [];
+  for (const entry of asList(value)) {
+    const road = { ...entry };
+    if (road.road_name === void 0 && road.name !== void 0) road.road_name = road.name;
+    delete road.name;
+    roads.push(road);
+  }
+  return { domination_roads: roads };
+}
+
 // supabase/functions/actions/contentRelease.ts
 var STAT_KEYS3 = [
   "stat_3pt",
