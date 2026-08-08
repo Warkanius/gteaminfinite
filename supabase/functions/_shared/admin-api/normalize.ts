@@ -950,6 +950,19 @@ function validateAssignments(
         }
       }
     });
+    for (const issue of checkAssignmentLimits(
+      (item.badges as unknown[] | undefined) as never,
+      (item.traits as unknown[] | undefined) as never,
+    )) {
+      if (issue.field !== field) continue;
+      errors.push(
+        apiError(issue.code, issue.message, {
+          path: `${path}.${issue.field}`,
+          received: issue.received,
+          expected: issue.allowed,
+        }),
+      );
+    }
     destructive.push(
       apiWarning(
         "ASSIGNMENT_REPLACEMENT",
