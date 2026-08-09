@@ -850,6 +850,8 @@ export function validateRelease(
       if (!s.player_card_id && !s.card_key && !known(s)) {
         err("UNKNOWN_POOL_CARD", `"${s.player_name ?? s.player_card_id}" is not part of this release.`, scope);
       }
+      }
+    });
     const ordered = [...slots].sort((a, b) => a - b);
     ordered.forEach((slot, i) => {
       if (slot !== i + 1) {
@@ -860,20 +862,23 @@ export function validateRelease(
     const oddsSeen = new Set<string>();
     (pack?.odds ?? []).forEach((row, i) => {
       const scope = `pack.odds[${i}]`;
+      const resultSlot = String(row.result_slot ?? "").trim();
       const cents = toHundredths(row.percentage);
       if (Number.isNaN(cents)) {
         err("INVALID_PERCENTAGE", `"${row.percentage}" is not a percentage with at most two decimals.`, scope);
       } else if (cents <= 0) {
         err("NON_POSITIVE_PERCENTAGE", "Percentage must be greater than 0.", scope);
       }
-      if (oddsSeen.has(row.result_slot)) {
-        err("DUPLICATE_ODDS_ROW", `result_slot "${row.result_slot}" appears more than once.`, scope);
+      if (oddsSeen.has(resultSlot)) {
+        err("DUPLICATE_ODDS_ROW", `result_slot "${resultSlot}" appears more than once.`, scope);
       }
-      oddsSeen.add(row.result_slot);
-      const numeric = Number(row.result_slot);
-      const special = (SPECIAL_ODDS_SLOTS as readonly string[]).includes(row.result_slot);
-      if (!special && (!Number.isFinite(numeric) || !slots.has(numeric))) {
-        err("UNKNOWN_RESULT_SLOT", `result_slot "${row.result_slot}" is not in the pool.`, scope);
+      oddsSeen.add(resultSlot);
+      const numeric = Number(resultSlot);
+      const special = (SPECIAL_ODDS_SLOTS as readonly string[]).includes(resultSlot);
+      // With no pool submitted the pack keeps its existing pool, so slot
+      // membership is validated inside the transaction instead.
+      if (!special && (!Number.isFinite(numeric) || (slots.size > 0 && !slots.has(numeric)))) {
+        err("UNKNOWN_RESULT_SLOT", `result_slot "${resultSlot}" is not in the pool.`, scope);
       }
     });
     if (pack?.odds?.length) {
