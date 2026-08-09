@@ -836,15 +836,20 @@ export function validateRelease(
 
   // pack
   const pack = release.pack;
-  if (pack?.name?.trim() || pack?.players?.length || pack?.odds?.length) {
-    if (!pack?.name?.trim()) err("PACK_NAME_REQUIRED", "Pack name is required when a pack is included.", "pack");
+  if (pack?.name?.trim() || pack?.pack_id || pack?.players?.length || pack?.odds?.length) {
+    if (!pack?.name?.trim() && !pack?.pack_id) {
+      err("PACK_NAME_REQUIRED", "Pack name or pack_id is required when a pack is included.", "pack");
+    }
     const slots = new Set<number>();
     (pack?.players ?? []).forEach((s, i) => {
       const scope = `pack.players[${i}]`;
-      if (slots.has(s.slot)) err("DUPLICATE_POOL_SLOT", `Pool slot ${s.slot} is used twice.`, scope);
-      slots.add(s.slot);
-      if (!known(s)) err("UNKNOWN_POOL_CARD", `"${s.player_name ?? s.player_card_id}" is not part of this release.`, scope);
-    });
+      if (slots.has(s.slot as number)) err("DUPLICATE_POOL_SLOT", `Pool slot ${s.slot} is used twice.`, scope);
+      slots.add(s.slot as number);
+      // A pool card may be created in this release OR already exist; existing
+      // cards are targeted by immutable id / card_key and resolved server-side.
+      if (!s.player_card_id && !s.card_key && !known(s)) {
+        err("UNKNOWN_POOL_CARD", `"${s.player_name ?? s.player_card_id}" is not part of this release.`, scope);
+      }
     const ordered = [...slots].sort((a, b) => a - b);
     ordered.forEach((slot, i) => {
       if (slot !== i + 1) {
