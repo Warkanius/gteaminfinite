@@ -7,6 +7,7 @@
 
 const str = (description: string) => ({ type: "string", description });
 const anyObj = { type: "object", additionalProperties: true } as const;
+const schemaRef = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 
 const okJson = (description: string) => ({
   "200": { description, content: { "application/json": { schema: anyObj } } },
@@ -565,11 +566,11 @@ export function buildCompactOpenApi(baseUrl: string) {
               properties: {
                 release: anyObj,
                 players: { type: "array", items: anyObj },
-                collection: collectionItem,
-                team: teamItem,
-                pack: packItem,
+                collection: schemaRef("CollectionMutation"),
+                team: schemaRef("TeamMutation"),
+                pack: schemaRef("PackMutation"),
                 evo_paths: { type: "array", items: anyObj },
-                locker_codes: { type: "array", items: lockerCodeItem },
+                locker_codes: { type: "array", items: schemaRef("LockerCodeMutation") },
                 challenges: { type: "array", items: anyObj },
                 dynamic_duos: { type: "array", items: anyObj },
                 domination: anyObj,
@@ -679,7 +680,7 @@ export function buildCompactOpenApi(baseUrl: string) {
               required: ["players"],
               additionalProperties: false,
               properties: {
-                players: { type: "array", minItems: 1, maxItems: 500, items: playerItem },
+                players: { type: "array", minItems: 1, maxItems: 500, items: schemaRef("PlayerMutation") },
                 notes: str("Optional note stored with the preview."),
               },
             },
@@ -710,7 +711,7 @@ export function buildCompactOpenApi(baseUrl: string) {
                 preview_token: str("Token from the matching previewBulkPlayers response."),
                 idempotency_key: str("Optional key making a retry safe."),
                 notes: str("Must match the previewed payload."),
-                players: { type: "array", minItems: 1, maxItems: 500, items: playerItem },
+                players: { type: "array", minItems: 1, maxItems: 500, items: schemaRef("PlayerMutation") },
               },
             },
           },
@@ -723,11 +724,11 @@ export function buildCompactOpenApi(baseUrl: string) {
   // Bulk documents keep additionalProperties open (every group is supported)
   // but the canonical groups are declared so the GPT can see the real fields.
   const bulkGroups = {
-    players: { type: "array", items: playerItem },
-    packs: { type: "array", items: packItem },
-    collections: { type: "array", items: collectionItem },
-    teams: { type: "array", items: teamItem },
-    locker_codes: { type: "array", items: lockerCodeItem },
+    players: { type: "array", items: schemaRef("PlayerMutation") },
+    packs: { type: "array", items: schemaRef("PackMutation") },
+    collections: { type: "array", items: schemaRef("CollectionMutation") },
+    teams: { type: "array", items: schemaRef("TeamMutation") },
+    locker_codes: { type: "array", items: schemaRef("LockerCodeMutation") },
     evo_paths: { type: "array", items: anyObj },
     challenges: { type: "array", items: anyObj },
     dynamic_duos: { type: "array", items: anyObj },
@@ -864,6 +865,13 @@ export function buildCompactOpenApi(baseUrl: string) {
     servers: [{ url: baseUrl }],
     paths,
     components: {
+      schemas: {
+        PlayerMutation: playerItem,
+        PackMutation: packItem,
+        CollectionMutation: collectionItem,
+        TeamMutation: teamItem,
+        LockerCodeMutation: lockerCodeItem,
+      },
       securitySchemes: {
         oauth2: {
           type: "oauth2",
