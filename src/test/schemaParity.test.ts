@@ -23,12 +23,22 @@ const IGNORED: Record<string, string[]> = {
   locker_codes: ["reward_payload"],
 };
 
+/** Follows a `$ref` into components.schemas so parity checks see real fields. */
+const deref = (node: any): any => {
+  if (!node || typeof node !== "object") return node;
+  if (typeof node.$ref === "string") {
+    const name = node.$ref.split("/").pop() as string;
+    return schema.components.schemas[name];
+  }
+  return node;
+};
+
 const bodySchema = (path: string) =>
-  schema.paths[path].post.requestBody.content["application/json"].schema;
+  deref(schema.paths[path].post.requestBody.content["application/json"].schema);
 
 const groupProps = (group: string) => {
-  const bulk = bodySchema("/admin-api/v1/bulk/preview").properties[group];
-  return bulk?.items?.properties ?? bulk?.properties ?? {};
+  const bulk = deref(bodySchema("/admin-api/v1/bulk/preview").properties[group]);
+  return deref(bulk?.items)?.properties ?? bulk?.properties ?? {};
 };
 
 describe("capabilities <-> GPT schema parity", () => {
@@ -41,11 +51,11 @@ describe("capabilities <-> GPT schema parity", () => {
 
   it("exposes the release pack, collection, team and locker code schemas", () => {
     const release = bodySchema("/content-release/preview").properties;
-    expect(release.pack.properties).toHaveProperty("odds");
-    expect(release.pack.properties).toHaveProperty("players");
-    expect(release.collection.properties).toHaveProperty("player_cards");
-    expect(release.team.properties).toHaveProperty("roster");
-    expect(release.locker_codes.items.properties).toHaveProperty("reward_payload");
+    expect(deref(release.pack).properties).toHaveProperty("odds");
+    expect(deref(release.pack).properties).toHaveProperty("players");
+    expect(deref(release.collection).properties).toHaveProperty("player_cards");
+    expect(deref(release.team).properties).toHaveProperty("roster");
+    expect(deref(release.locker_codes.items).properties).toHaveProperty("reward_payload");
   });
 
   for (const group of ["players", "packs", "collections", "teams", "locker_codes"]) {
