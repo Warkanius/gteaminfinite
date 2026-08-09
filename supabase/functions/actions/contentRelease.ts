@@ -1312,32 +1312,47 @@ export function buildReleasePayload(input: ContentReleaseInput): Record<string, 
   }
 
   const pack = release.pack;
-  if (pack?.name?.trim()) {
+  if (pack?.name?.trim() || pack?.pack_id) {
     payload.packs = [
       {
         temp_ref: PACK_REF,
         action: "upsert",
-        name: pack.name,
-        pack_type: pack.pack_type ?? "standard",
-        cost: pack.cost ?? 0,
-        ten_box_cost: pack.ten_box_cost ?? null,
+        // pack_id is authoritative; the batch writer resolves the name from it.
+        ...(pack.pack_id ? { pack_id: pack.pack_id } : {}),
+        ...(pack.name?.trim() ? { name: pack.name.trim() } : {}),
+        ...(pack.new_name ? { new_name: pack.new_name } : {}),
+        ...(pack.pack_type ? { pack_type: pack.pack_type } : {}),
+        ...(pack.cost != null ? { cost: pack.cost } : {}),
+        ...(pack.ten_box_cost !== undefined ? { ten_box_cost: pack.ten_box_cost } : {}),
+        ...(pack.status ? { status: releaseStatus(pack.status) } : {}),
         release_bundle_ref: RELEASE_REF,
         ...(collection?.name ? { collection_ref: COLLECTION_REF } : {}),
-        replace_pool: true,
-        pool: [...(pack.players ?? [])]
-          .sort((a, b) => a.slot - b.slot)
-          .map((s) => ({ slot_number: s.slot, ...cardRefFields(release, s) })),
-        replace_odds: true,
-        odds: (pack.odds ?? []).map((o) => ({
-          dice_roll: o.result_slot,
-          result_slot: o.result_slot,
-          percentage: Number(formatHundredths(toHundredths(o.percentage))),
-          description: o.description ?? null,
-          pack_type: pack.pack_type ?? "standard",
-        })),
+        // `players` is the ordered pool the batch writer replaces wholesale.
+        // Omit the key entirely to keep the pack's current pool.
+        ...(pack.players
+          ? {
+              replace_pool: true,
+              players: [...pack.players]
+                .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))
+                .map((s) => ({ ...cardRefFields(release, s), slot_number: s.slot })),
+            }
+          : {}),
+        ...(pack.odds
+          ? {
+              replace_odds: true,
+              odds: pack.odds.map((o) => ({
+                dice_roll: String(o.result_slot),
+                result_slot: String(o.result_slot),
+                percentage: Number(formatHundredths(toHundredths(o.percentage))),
+                description: o.description ?? null,
+                ...(pack.pack_type ? { pack_type: pack.pack_type } : {}),
+              })),
+            }
+          : {}),
       },
     ];
   }
+
 
   if (release.evo_paths?.length) {
     // Every path is submitted as ONE item so the database applies explicit
