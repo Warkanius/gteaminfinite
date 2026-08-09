@@ -97,6 +97,124 @@ const playerItem = {
   },
 } as const;
 
+const cardRef = (what: string) => ({
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    player_card_id: str("Immutable card id. Preferred target."),
+    card_key: str("Immutable card key."),
+    player_name: str(`Card name — a card created in this same payload, or an existing card. ${what}`),
+    slot: { type: "number", description: "1-based ordered slot. Optional: submitted order is used when omitted." },
+  },
+});
+
+const packItem = {
+  type: "object",
+  additionalProperties: false,
+  description:
+    "Pack. Target an existing pack with pack_id (preferred) or its exact name. `players` is a FULL ordered pool replacement and `odds` a FULL odds-table replacement — omit a key to keep what the pack has today.",
+  properties: {
+    temp_ref: str("Reference so later items in the same payload can point at this pack."),
+    pack_id: str("Immutable pack id. Preferred target for an existing pack."),
+    name: str("Pack name (match key when pack_id is absent)."),
+    new_name: str("Rename the pack."),
+    pack_type: str("standard | premium | promo."),
+    cost: { type: "number", description: "Coin cost for a single open." },
+    ten_box_cost: { type: ["number", "null"], description: "Coin cost for a ten-box, or null." },
+    status: str("draft | scheduled | active | disabled | archived."),
+    players: {
+      type: "array",
+      description: "FULL ORDERED POOL REPLACEMENT. First entry is slot 1 unless `slot` is given.",
+      items: cardRef("One entry per pool slot."),
+    },
+    odds: {
+      type: "array",
+      description: "FULL ODDS TABLE REPLACEMENT. Percentages must total exactly 100.00 and every entry must be > 0.",
+      items: {
+        type: "object",
+        required: ["result_slot", "percentage"],
+        additionalProperties: false,
+        properties: {
+          result_slot: str("Pool slot number as a string, or `player_choice`."),
+          percentage: { type: "number", description: "Chance for this slot; all entries sum to 100.00." },
+          description: str("Label shown in the odds table."),
+        },
+      },
+    },
+  },
+} as const;
+
+const collectionItem = {
+  type: "object",
+  additionalProperties: false,
+  description:
+    "Collection. Target with collection_id (preferred) or exact name. `player_cards` is a FULL ordered membership replacement; exactly one entry may be the reward.",
+  properties: {
+    temp_ref: str("Reference so later items in the same payload can point at this collection."),
+    collection_id: str("Immutable collection id. Preferred target."),
+    name: str("Collection name (match key when collection_id is absent)."),
+    new_name: str("Rename the collection."),
+    description: str("Collection description."),
+    status: str("draft | scheduled | active | disabled | archived."),
+    player_cards: {
+      type: "array",
+      description: "FULL ORDERED MEMBERSHIP REPLACEMENT. Set is_reward on exactly one entry.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          player_card_id: str("Immutable card id."),
+          card_key: str("Immutable card key."),
+          player_name: str("Card name, in this payload or already existing."),
+          slot: { type: "number", description: "1-based order. Optional." },
+          is_reward: { type: "boolean", description: "Marks this card as the collection reward." },
+        },
+      },
+    },
+  },
+} as const;
+
+const teamItem = {
+  type: "object",
+  additionalProperties: false,
+  description: "Team. Target with team_id or exact name. `roster` is a FULL ordered replacement.",
+  properties: {
+    temp_ref: str("Reference so later items can point at this team."),
+    team_id: str("Immutable team id. Preferred target."),
+    name: str("Team name (match key when team_id is absent)."),
+    new_name: str("Rename the team."),
+    category: str("Team category."),
+    unlock_cost: { type: "number", description: "Coin cost to unlock." },
+    roster: { type: "array", description: "FULL ORDERED ROSTER REPLACEMENT.", items: cardRef("One entry per roster slot.") },
+  },
+} as const;
+
+const lockerCodeItem = {
+  type: "object",
+  additionalProperties: false,
+  description: "Locker code, matched case-insensitively on `code`. Rewards are validated and normalised server-side.",
+  properties: {
+    code: str("The code itself; stored uppercase."),
+    reward_type: str("coins | gems | pack | card."),
+    reward_payload: {
+      type: "object",
+      additionalProperties: true,
+      description: "Reward payload matching reward_type.",
+      properties: {
+        amount: { type: "number", description: "For coins / gems." },
+        pack_name: str("For a pack reward; resolved to the pack id."),
+        card_name: str("For a card reward; resolved to the player card id."),
+        player_card_id: str("For a card reward, by immutable id."),
+      },
+    },
+    reward_release_pack: { type: "boolean", description: "Reward the pack created in this same release." },
+    max_redemptions: { type: ["number", "null"], description: "Redemption cap, or null for unlimited." },
+    activates_at: { type: ["string", "null"], description: "ISO timestamp the code becomes usable, or null." },
+    expires_at: { type: ["string", "null"], description: "ISO timestamp, or null for no expiry." },
+    status: str("draft | scheduled | active | disabled | archived."),
+  },
+} as const;
+
 const previewStored = {
   type: "object",
   additionalProperties: true,
