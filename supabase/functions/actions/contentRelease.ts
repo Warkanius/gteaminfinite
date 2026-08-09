@@ -590,7 +590,11 @@ export function normalizeRelease(input: ContentReleaseInput): ContentReleaseInpu
 
   }));
   if (out.pack) {
-    out.pack.players = [...(out.pack.players ?? [])].sort((a, b) => a.slot - b.slot);
+    // `slot` is optional: submitted order IS the pool order, so fill it in
+    // before sorting so preview and commit see the identical canonical pool.
+    out.pack.players = [...(out.pack.players ?? [])]
+      .map((p, i) => ({ ...p, slot: typeof p.slot === "number" && p.slot > 0 ? p.slot : i + 1 }))
+      .sort((a, b) => a.slot - b.slot);
     out.pack.odds = (out.pack.odds ?? []).map((o) => ({ ...o, result_slot: String(o.result_slot) }));
   }
   if (out.locker_codes?.length) {
