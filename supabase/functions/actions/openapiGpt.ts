@@ -720,6 +720,22 @@ export function buildCompactOpenApi(baseUrl: string) {
     },
   };
 
+  // Bulk documents keep additionalProperties open (every group is supported)
+  // but the canonical groups are declared so the GPT can see the real fields.
+  const bulkGroups = {
+    players: { type: "array", items: playerItem },
+    packs: { type: "array", items: packItem },
+    collections: { type: "array", items: collectionItem },
+    teams: { type: "array", items: teamItem },
+    locker_codes: { type: "array", items: lockerCodeItem },
+    evo_paths: { type: "array", items: anyObj },
+    challenges: { type: "array", items: anyObj },
+    dynamic_duos: { type: "array", items: anyObj },
+    runs: { type: "array", items: anyObj },
+    domination_roads: { type: "array", items: anyObj },
+    domination: anyObj,
+  };
+
   paths["/admin-api/v1/bulk/preview"] = {
     post: {
       operationId: "previewBulk",
@@ -729,7 +745,12 @@ export function buildCompactOpenApi(baseUrl: string) {
       "x-openai-isConsequential": false,
       requestBody: {
         required: true,
-        content: { "application/json": { schema: anyObj, example: { players: [{ player_card_id: "uuid", rating: 2.11 }] } } },
+        content: {
+          "application/json": {
+            schema: { type: "object", additionalProperties: true, properties: bulkGroups },
+            example: { players: [{ player_card_id: "uuid", rating: 2.11 }] },
+          },
+        },
       },
       responses: okJson("Preview plan"),
     },
@@ -744,11 +765,25 @@ export function buildCompactOpenApi(baseUrl: string) {
       "x-openai-isConsequential": true,
       requestBody: {
         required: true,
-        content: { "application/json": { schema: anyObj, example: { preview_token: "tok", players: [{ player_card_id: "uuid", rating: 2.11 }] } } },
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                preview_token: str("Single-use token from the preview."),
+                idempotency_key: str("Optional key making retries safe."),
+                ...bulkGroups,
+              },
+            },
+            example: { preview_token: "tok", players: [{ player_card_id: "uuid", rating: 2.11 }] },
+          },
+        },
       },
       responses: okJson("Commit report"),
     },
   };
+
 
   paths["/domination-roads"] = {
     get: {
