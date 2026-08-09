@@ -1194,9 +1194,10 @@ function evoSourceFields(release: ContentReleaseInput, path: ReleaseEvoPathInput
  */
 function cardRefFields(
   release: ContentReleaseInput,
-  ref: { player_name?: string; player_card_id?: string },
+  ref: { player_name?: string; player_card_id?: string; card_key?: string },
 ): Record<string, unknown> {
   if (ref.player_card_id) return { player_card_id: ref.player_card_id };
+  if (ref.card_key) return { card_key: ref.card_key };
   const match = (release.players ?? []).find(
     (p) => sameRef(p.name, ref.player_name) || sameRef(p.new_name, ref.player_name),
   );
