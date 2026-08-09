@@ -129,7 +129,7 @@ describe("Galactic acceptance case", () => {
     expect(payload.collections[0].requirements).toHaveLength(12);
     expect(payload.collection_requirements).toBeUndefined();
 
-    expect(payload.packs[0].pool.map((p: any) => p.slot_number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(payload.packs[0].players.map((p: any) => p.slot_number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect(payload.packs[0].replace_odds).toBe(true);
     // whole-path replacement: one item per player, steps carried inside it
     expect(payload.evo_paths).toHaveLength(1);
