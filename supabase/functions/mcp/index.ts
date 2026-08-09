@@ -2582,14 +2582,18 @@ function validateRelease(input, options = {}) {
     });
   }
   const pack = release.pack;
-  if (pack?.name?.trim() || pack?.players?.length || pack?.odds?.length) {
-    if (!pack?.name?.trim()) err("PACK_NAME_REQUIRED", "Pack name is required when a pack is included.", "pack");
+  if (pack?.name?.trim() || pack?.pack_id || pack?.players?.length || pack?.odds?.length) {
+    if (!pack?.name?.trim() && !pack?.pack_id) {
+      err("PACK_NAME_REQUIRED", "Pack name or pack_id is required when a pack is included.", "pack");
+    }
     const slots = /* @__PURE__ */ new Set();
     (pack?.players ?? []).forEach((s, i) => {
       const scope = `pack.players[${i}]`;
       if (slots.has(s.slot)) err("DUPLICATE_POOL_SLOT", `Pool slot ${s.slot} is used twice.`, scope);
       slots.add(s.slot);
-      if (!known(s)) err("UNKNOWN_POOL_CARD", `"${s.player_name ?? s.player_card_id}" is not part of this release.`, scope);
+      if (!s.player_card_id && !s.card_key && !known(s)) {
+        err("UNKNOWN_POOL_CARD", `"${s.player_name ?? s.player_card_id}" is not part of this release.`, scope);
+      }
     });
     const ordered = [...slots].sort((a, b) => a - b);
     ordered.forEach((slot, i) => {
@@ -2600,20 +2604,21 @@ function validateRelease(input, options = {}) {
     const oddsSeen = /* @__PURE__ */ new Set();
     (pack?.odds ?? []).forEach((row, i) => {
       const scope = `pack.odds[${i}]`;
+      const resultSlot = String(row.result_slot ?? "").trim();
       const cents = toHundredths(row.percentage);
       if (Number.isNaN(cents)) {
         err("INVALID_PERCENTAGE", `"${row.percentage}" is not a percentage with at most two decimals.`, scope);
       } else if (cents <= 0) {
         err("NON_POSITIVE_PERCENTAGE", "Percentage must be greater than 0.", scope);
       }
-      if (oddsSeen.has(row.result_slot)) {
-        err("DUPLICATE_ODDS_ROW", `result_slot "${row.result_slot}" appears more than once.`, scope);
+      if (oddsSeen.has(resultSlot)) {
+        err("DUPLICATE_ODDS_ROW", `result_slot "${resultSlot}" appears more than once.`, scope);
       }
-      oddsSeen.add(row.result_slot);
-      const numeric = Number(row.result_slot);
-      const special = SPECIAL_ODDS_SLOTS.includes(row.result_slot);
-      if (!special && (!Number.isFinite(numeric) || !slots.has(numeric))) {
-        err("UNKNOWN_RESULT_SLOT", `result_slot "${row.result_slot}" is not in the pool.`, scope);
+      oddsSeen.add(resultSlot);
+      const numeric = Number(resultSlot);
+      const special = SPECIAL_ODDS_SLOTS.includes(resultSlot);
+      if (!special && (!Number.isFinite(numeric) || slots.size > 0 && !slots.has(numeric))) {
+        err("UNKNOWN_RESULT_SLOT", `result_slot "${resultSlot}" is not in the pool.`, scope);
       }
     });
     if (pack?.odds?.length) {
@@ -2872,6 +2877,7 @@ function evoSourceFields(release, path) {
 }
 function cardRefFields(release, ref) {
   if (ref.player_card_id) return { player_card_id: ref.player_card_id };
+  if (ref.card_key) return { card_key: ref.card_key };
   const match = (release.players ?? []).find(
     (p) => sameRef(p.name, ref.player_name) || sameRef(p.new_name, ref.player_name)
   );
@@ -2955,27 +2961,37 @@ function buildReleasePayload(input) {
     ];
   }
   const pack = release.pack;
-  if (pack?.name?.trim()) {
+  if (pack?.name?.trim() || pack?.pack_id) {
     payload.packs = [
       {
         temp_ref: PACK_REF,
         action: "upsert",
-        name: pack.name,
-        pack_type: pack.pack_type ?? "standard",
-        cost: pack.cost ?? 0,
-        ten_box_cost: pack.ten_box_cost ?? null,
+        // pack_id is authoritative; the batch writer resolves the name from it.
+        ...pack.pack_id ? { pack_id: pack.pack_id } : {},
+        ...pack.name?.trim() ? { name: pack.name.trim() } : {},
+        ...pack.new_name ? { new_name: pack.new_name } : {},
+        ...pack.pack_type ? { pack_type: pack.pack_type } : {},
+        ...pack.cost != null ? { cost: pack.cost } : {},
+        ...pack.ten_box_cost !== void 0 ? { ten_box_cost: pack.ten_box_cost } : {},
+        ...pack.status ? { status: releaseStatus(pack.status) } : {},
         release_bundle_ref: RELEASE_REF,
         ...collection?.name ? { collection_ref: COLLECTION_REF } : {},
-        replace_pool: true,
-        pool: [...pack.players ?? []].sort((a, b) => a.slot - b.slot).map((s) => ({ slot_number: s.slot, ...cardRefFields(release, s) })),
-        replace_odds: true,
-        odds: (pack.odds ?? []).map((o) => ({
-          dice_roll: o.result_slot,
-          result_slot: o.result_slot,
-          percentage: Number(formatHundredths(toHundredths(o.percentage))),
-          description: o.description ?? null,
-          pack_type: pack.pack_type ?? "standard"
-        }))
+        // `players` is the ordered pool the batch writer replaces wholesale.
+        // Omit the key entirely to keep the pack's current pool.
+        ...pack.players ? {
+          replace_pool: true,
+          players: [...pack.players].sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0)).map((s) => ({ ...cardRefFields(release, s), slot_number: s.slot }))
+        } : {},
+        ...pack.odds ? {
+          replace_odds: true,
+          odds: pack.odds.map((o) => ({
+            dice_roll: String(o.result_slot),
+            result_slot: String(o.result_slot),
+            percentage: Number(formatHundredths(toHundredths(o.percentage))),
+            description: o.description ?? null,
+            ...pack.pack_type ? { pack_type: pack.pack_type } : {}
+          }))
+        } : {}
       }
     ];
   }

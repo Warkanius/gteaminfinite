@@ -850,7 +850,6 @@ export function validateRelease(
       if (!s.player_card_id && !s.card_key && !known(s)) {
         err("UNKNOWN_POOL_CARD", `"${s.player_name ?? s.player_card_id}" is not part of this release.`, scope);
       }
-      }
     });
     const ordered = [...slots].sort((a, b) => a - b);
     ordered.forEach((slot, i) => {
