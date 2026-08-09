@@ -200,12 +200,17 @@ export interface ContentReleaseInput {
     roster: Array<{ player_name?: string; player_card_id?: string; slot: number }>;
   };
   pack?: {
-    name: string;
+    /** Immutable pack id. Authoritative target for an existing pack. */
+    pack_id?: string;
+    name?: string;
+    new_name?: string;
     pack_type?: "standard" | "premium" | "promo";
     cost?: number;
     ten_box_cost?: number | null;
-    players: Array<{ player_name?: string; player_card_id?: string; slot: number }>;
-    odds: Array<{ result_slot: string; percentage: number | string; description?: string }>;
+    status?: ContentStatus;
+    /** Ordered pool. `slot` is optional; submitted order is the pool order. */
+    players?: Array<{ player_name?: string; player_card_id?: string; card_key?: string; slot?: number }>;
+    odds?: Array<{ result_slot: string | number; percentage: number | string; description?: string }>;
   };
   evo_paths?: ReleaseEvoPathInput[];
   /**
