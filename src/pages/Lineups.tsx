@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Star, Plus, Trash2, Copy, Check, ShieldCheck, ShieldAlert, Loader2, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Star, Plus, Trash2, Copy, Check, ShieldCheck, ShieldAlert, Loader2, Search, Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -15,27 +19,69 @@ const MODES = [
   { key: "runs", label: "The Runs", slots: 3 },
 ];
 
+const NONE = "__none";
+
+interface Filters {
+  name: string;
+  position: string;
+  gem_tier: string;
+  badge: string;
+  trait: string;
+  collection: string;
+  min_rating: string;
+  max_rating: string;
+  min_run_rating: string;
+  evo_active: boolean;
+  evo_completed: boolean;
+  favorite: boolean;
+  challenge_id: string;
+}
+
+const EMPTY_FILTERS: Filters = {
+  name: "",
+  position: NONE,
+  gem_tier: NONE,
+  badge: NONE,
+  trait: NONE,
+  collection: NONE,
+  min_rating: "",
+  max_rating: "",
+  min_run_rating: "",
+  evo_active: false,
+  evo_completed: false,
+  favorite: false,
+  challenge_id: NONE,
+};
+
 export default function Lineups() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [mode, setMode] = useState("5v5");
   const [lineups, setLineups] = useState<InsiderLineup[]>([]);
-  const [cards, setCards] = useState<InsiderCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<InsiderLineup | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftSlots, setDraftSlots] = useState<string[]>([]);
-  const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [legality, setLegality] = useState<Record<string, InsiderLegality>>({});
 
+  // Card pool + filters
+  const [pool, setPool] = useState<InsiderCard[]>([]);
+  const [poolTotal, setPoolTotal] = useState(0);
+  const [poolLoading, setPoolLoading] = useState(false);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [refs, setRefs] = useState<Awaited<ReturnType<typeof insider.references>> | null>(null);
+  const [challenges, setChallenges] = useState<Array<{ challenge_id: string; name: string; completed: boolean }>>([]);
+  const [selectedCards, setSelectedCards] = useState<Record<string, InsiderCard>>({});
+
   const slotsRequired = MODES.find((m) => m.key === mode)?.slots ?? 5;
+  const editingSlots = editing?.mode === "runs" ? 3 : 5;
 
   async function refresh() {
     setLoading(true);
     try {
-      const [l, c] = await Promise.all([insider.lineups(), insider.collection({ limit: 200 })]);
+      const l = await insider.lineups();
       setLineups(l.lineups);
-      setCards(c.cards);
     } catch (e) {
       toast({ title: "Could not load lineups", description: (e as Error).message, variant: "destructive" });
     } finally {
@@ -45,21 +91,67 @@ export default function Lineups() {
 
   useEffect(() => {
     refresh();
+    insider
+      .references()
+      .then(setRefs)
+      .catch(() => undefined);
+    insider
+      .challenges()
+      .then((r) => setChallenges(r.challenges as never))
+      .catch(() => undefined);
   }, []);
+
+  // Load the card pool whenever the builder is open and filters change.
+  useEffect(() => {
+    if (!editing) return;
+    let cancelled = false;
+    setPoolLoading(true);
+    (async () => {
+      try {
+        if (filters.challenge_id !== NONE) {
+          const res = await insider.eligibleCards({ challenge_id: filters.challenge_id });
+          if (cancelled) return;
+          setPool(res.eligible);
+          setPoolTotal(res.eligible_count);
+          return;
+        }
+        const res = await insider.collection({
+          limit: 200,
+          name: filters.name || undefined,
+          position: filters.position !== NONE ? filters.position : undefined,
+          gem_tier: filters.gem_tier !== NONE ? filters.gem_tier : undefined,
+          badge: filters.badge !== NONE ? filters.badge : undefined,
+          trait: filters.trait !== NONE ? filters.trait : undefined,
+          collection: filters.collection !== NONE ? filters.collection : undefined,
+          min_rating: filters.min_rating || undefined,
+          max_rating: filters.max_rating || undefined,
+          min_run_rating: filters.min_run_rating || undefined,
+          evo_active: filters.evo_active || undefined,
+          evo_completed: filters.evo_completed || undefined,
+          favorite: filters.favorite || undefined,
+        });
+        if (cancelled) return;
+        setPool(res.cards);
+        setPoolTotal(res.total);
+      } catch (e) {
+        if (!cancelled) toast({ title: "Could not load cards", description: (e as Error).message, variant: "destructive" });
+      } finally {
+        if (!cancelled) setPoolLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?.lineup_id, editing?.mode, JSON.stringify(filters)]);
 
   const modeLineups = useMemo(() => lineups.filter((l) => l.mode === mode), [lineups, mode]);
 
-  const cardById = useMemo(() => new Map(cards.map((c) => [c.owned_card_id, c])), [cards]);
-
-  const filteredCards = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return cards.filter((c) => !q || c.name.toLowerCase().includes(q) || (c.gem_tier ?? "").toLowerCase().includes(q));
-  }, [cards, search]);
-
   function openNew() {
+    const label = mode === "runs" ? "Runs" : "5v5";
     setEditing({
       lineup_id: "",
-      name: `New ${mode === "runs" ? "Runs" : "5v5"} Lineup`,
+      name: `New ${label} Lineup`,
       mode,
       is_default: false,
       notes: null,
@@ -67,25 +159,40 @@ export default function Lineups() {
       slots_required: slotsRequired,
       slots: [],
     });
-    setDraftName(`New ${mode === "runs" ? "Runs" : "5v5"} Lineup`);
+    setDraftName(`New ${label} Lineup`);
     setDraftSlots([]);
-    setSearch("");
+    setSelectedCards({});
+    setFilters(EMPTY_FILTERS);
   }
 
-  function openEdit(l: InsiderLineup) {
+  async function openEdit(l: InsiderLineup) {
     setEditing(l);
     setDraftName(l.name);
-    setDraftSlots(l.slots.map((s) => s.owned_card_id ?? "").filter(Boolean));
-    setSearch("");
+    setFilters(EMPTY_FILTERS);
+    const ids = l.slots.map((s) => s.owned_card_id ?? "").filter(Boolean);
+    setDraftSlots(ids);
+    // Keep the selected cards resolvable even when filters hide them.
+    try {
+      const res = await insider.collection({ limit: 200 });
+      const map: Record<string, InsiderCard> = {};
+      for (const c of res.cards) if (ids.includes(c.owned_card_id)) map[c.owned_card_id] = c;
+      setSelectedCards(map);
+    } catch {
+      setSelectedCards({});
+    }
   }
 
-  function toggleCard(ownedId: string) {
+  function toggleCard(card: InsiderCard) {
+    const id = card.owned_card_id;
     setDraftSlots((prev) => {
-      if (prev.includes(ownedId)) return prev.filter((id) => id !== ownedId);
-      const required = editing?.mode === "runs" ? 3 : 5;
-      if (prev.length >= required) return prev;
-      return [...prev, ownedId];
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= editingSlots) {
+        toast({ title: "Lineup full", description: `This mode uses ${editingSlots} cards.` });
+        return prev;
+      }
+      return [...prev, id];
     });
+    setSelectedCards((prev) => ({ ...prev, [id]: card }));
   }
 
   async function save() {
@@ -134,13 +241,34 @@ export default function Lineups() {
     }
   }
 
+  function playLineup(l: InsiderLineup) {
+    if (l.slot_count < l.slots_required) {
+      toast({ title: "Lineup incomplete", description: `Add ${l.slots_required - l.slot_count} more card(s) first.`, variant: "destructive" });
+      return;
+    }
+    if (l.mode === "runs") {
+      navigate("/runs", { state: { savedLineupId: l.lineup_id } });
+    } else {
+      navigate("/play/match", { state: { savedLineupId: l.lineup_id } });
+    }
+  }
+
+  const activeFilterCount = useMemo(
+    () =>
+      Object.entries(filters).filter(([k, v]) => {
+        const empty = EMPTY_FILTERS[k as keyof Filters];
+        return v !== empty;
+      }).length,
+    [filters],
+  );
+
   return (
     <div className="space-y-6">
       <header className="space-y-2">
         <h1 className="font-heading text-3xl uppercase tracking-wide">Saved Lineups</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Build and store lineups here or let the GTeam Insider assistant create them for you — both write to the same saved
-          lineups, so anything the Insider builds shows up on this page instantly.
+          Build lineups here or let the GTeam Insider assistant build them — both write to the same records. Load any saved
+          lineup straight into a game, or filter your collection down to exactly what a challenge allows.
         </p>
       </header>
 
@@ -189,8 +317,7 @@ export default function Lineups() {
                       {l.slot_count}/{l.slots_required} cards
                       {leg && (
                         <span className={leg.legal ? " text-primary" : " text-destructive"}>
-                          {" "}
-                          · {leg.legal ? "legal" : "not legal"}
+                          {" "}· {leg.legal ? "legal" : "not legal"}
                         </span>
                       )}
                     </p>
@@ -242,7 +369,7 @@ export default function Lineups() {
                     >
                       <span className="truncate">
                         <span className="mr-2 text-xs text-muted-foreground">{s.slot}</span>
-                        {s.name ?? "Unknown card"}
+                        {s.name ?? "No longer in your collection"}
                       </span>
                       <span className="ml-2 shrink-0 text-xs text-muted-foreground">
                         {s.gem_tier ?? "—"} ·{" "}
@@ -250,9 +377,14 @@ export default function Lineups() {
                       </span>
                     </button>
                   ))}
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => openEdit(l)}>
-                    Edit cards
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(l)}>
+                      Edit cards
+                    </Button>
+                    <Button size="sm" className="flex-1 gap-2" onClick={() => playLineup(l)}>
+                      <Play className="h-4 w-4" /> Play
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -261,56 +393,230 @@ export default function Lineups() {
       )}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing?.lineup_id ? "Edit lineup" : "New lineup"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <Input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Lineup name" />
+
+            {/* Slots */}
             <div className="flex flex-wrap gap-2">
-              {Array.from({ length: editing?.mode === "runs" ? 3 : 5 }).map((_, i) => {
+              {Array.from({ length: editingSlots }).map((_, i) => {
                 const id = draftSlots[i];
-                const card = id ? cardById.get(id) : undefined;
+                const card = id ? selectedCards[id] : undefined;
                 return (
                   <Badge
                     key={i}
                     variant={card ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => id && toggleCard(id)}
+                    className={card ? "cursor-pointer" : ""}
+                    onClick={() => card && toggleCard(card)}
                   >
-                    {card ? card.name : `Slot ${i + 1}`}
+                    {card ? `${i + 1}. ${card.name}` : `Slot ${i + 1}`}
                   </Badge>
                 );
               })}
             </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search your collection"
-                className="pl-9"
-              />
+
+            {/* Filters */}
+            <div className="space-y-3 rounded-lg border border-border/50 bg-muted/20 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+                </span>
+                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => setFilters(EMPTY_FILTERS)}>
+                  <RotateCcw className="h-3 w-3" /> Reset
+                </Button>
+              </div>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={filters.name}
+                  onChange={(e) => setFilters((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Search by player name"
+                  className="pl-9"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <Select
+                  value={filters.challenge_id}
+                  onValueChange={(v) => setFilters((f) => ({ ...f, challenge_id: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Challenge legal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Any challenge</SelectItem>
+                    {challenges.map((c) => (
+                      <SelectItem key={c.challenge_id} value={c.challenge_id}>
+                        {c.name}
+                        {c.completed ? " ✓" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filters.position} onValueChange={(v) => setFilters((f) => ({ ...f, position: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Any position</SelectItem>
+                    {(refs?.positions ?? []).map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filters.gem_tier} onValueChange={(v) => setFilters((f) => ({ ...f, gem_tier: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Gem tier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Any tier</SelectItem>
+                    {(refs?.gem_tiers ?? []).map((t) => (
+                      <SelectItem key={t.gem_tier_id} value={t.name}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filters.badge} onValueChange={(v) => setFilters((f) => ({ ...f, badge: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Badge" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Any badge</SelectItem>
+                    {(refs?.badges ?? []).map((b) => (
+                      <SelectItem key={b.badge_id} value={b.name}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filters.trait} onValueChange={(v) => setFilters((f) => ({ ...f, trait: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Signature trait" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Any trait</SelectItem>
+                    {(refs?.traits ?? []).map((t) => (
+                      <SelectItem key={t.trait_id} value={t.name}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filters.collection} onValueChange={(v) => setFilters((f) => ({ ...f, collection: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Collection" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Any collection</SelectItem>
+                    {(refs?.collections ?? []).map((c) => (
+                      <SelectItem key={c.collection_id} value={c.name}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Min OVR</Label>
+                  <Input
+                    inputMode="decimal"
+                    value={filters.min_rating}
+                    onChange={(e) => setFilters((f) => ({ ...f, min_rating: e.target.value }))}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Max OVR</Label>
+                  <Input
+                    inputMode="decimal"
+                    value={filters.max_rating}
+                    onChange={(e) => setFilters((f) => ({ ...f, max_rating: e.target.value }))}
+                    placeholder="6.99"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Min RUN</Label>
+                  <Input
+                    inputMode="numeric"
+                    value={filters.min_run_rating}
+                    onChange={(e) => setFilters((f) => ({ ...f, min_run_rating: e.target.value }))}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-xs">
+                  <Switch
+                    checked={filters.evo_active}
+                    onCheckedChange={(v) => setFilters((f) => ({ ...f, evo_active: v }))}
+                  />
+                  Evolving now
+                </label>
+                <label className="flex items-center gap-2 text-xs">
+                  <Switch
+                    checked={filters.evo_completed}
+                    onCheckedChange={(v) => setFilters((f) => ({ ...f, evo_completed: v }))}
+                  />
+                  Fully evolved
+                </label>
+                <label className="flex items-center gap-2 text-xs">
+                  <Switch
+                    checked={filters.favorite}
+                    onCheckedChange={(v) => setFilters((f) => ({ ...f, favorite: v }))}
+                  />
+                  Favorites
+                </label>
+              </div>
+            </div>
+
+            {/* Pool */}
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {poolLoading ? "Loading cards…" : `${pool.length} of ${poolTotal} card${poolTotal === 1 ? "" : "s"}`}
+              </span>
+              <span>
+                {draftSlots.length}/{editingSlots} selected
+              </span>
             </div>
             <ScrollArea className="h-72 rounded-md border border-border/50">
               <div className="divide-y divide-border/40">
-                {filteredCards.map((c) => {
+                {pool.map((c) => {
                   const selected = draftSlots.includes(c.owned_card_id);
                   return (
                     <button
                       key={c.owned_card_id}
-                      onClick={() => toggleCard(c.owned_card_id)}
+                      onClick={() => toggleCard(c)}
                       className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted/40 ${
                         selected ? "bg-primary/10" : ""
                       }`}
                     >
-                      <span className="flex items-center gap-2 truncate">
-                        {selected && <Check className="h-4 w-4 text-primary" />}
+                      <span className="flex min-w-0 items-center gap-2">
+                        {selected && <Check className="h-4 w-4 shrink-0 text-primary" />}
                         <span className="truncate">{c.name}</span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="shrink-0 text-xs text-muted-foreground">
                           {c.position1}
                           {c.position2 ? `/${c.position2}` : ""}
                         </span>
+                        {c.badges?.slice(0, 2).map((b) => (
+                          <Badge key={b.abbreviation} variant="outline" className="hidden shrink-0 text-[10px] sm:inline-flex">
+                            {b.abbreviation}
+                          </Badge>
+                        ))}
                       </span>
                       <span className="ml-2 shrink-0 text-xs text-muted-foreground">
                         {c.gem_tier ?? "—"} ·{" "}
@@ -319,6 +625,11 @@ export default function Lineups() {
                     </button>
                   );
                 })}
+                {!poolLoading && pool.length === 0 && (
+                  <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+                    No cards match these filters.
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </div>

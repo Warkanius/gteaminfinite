@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,7 @@ export default function RunPlay() {
   const { runId } = useParams<{ runId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [playerLineup, setPlayerLineup] = useState<any[]>([]);
   const [cpuLineup, setCpuLineup] = useState<any[]>([]);
@@ -59,6 +60,7 @@ export default function RunPlay() {
         <RunLineupSelect
           runId={run.id}
           teamId={run.team_id}
+          savedLineupId={(location.state as { savedLineupId?: string } | null)?.savedLineupId}
           onLineupConfirmed={(player, cpu, badges, traits, duos) => {
             setPlayerLineup(player);
             setCpuLineup(cpu);

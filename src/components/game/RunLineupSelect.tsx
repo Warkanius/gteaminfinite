@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { PlayerCard } from "@/components/cards/PlayerCard";
 import { RevealCard, RevealCardHandle } from "@/components/packs/RevealCard";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Dices } from "lucide-react";
 import { starStatToRunStat } from "@/lib/gameEngine";
@@ -15,6 +16,8 @@ import { resolveActiveDynamicDuos, type ActiveDynamicDuo, type DynamicDuoRow } f
 interface Props {
   runId: string;
   teamId: string | null;
+  /** Optional saved Runs lineup to load into the selection on mount. */
+  savedLineupId?: string;
   onLineupConfirmed: (
     playerLineup: any[],
     cpuLineup: any[],
@@ -24,7 +27,7 @@ interface Props {
   ) => void;
 }
 
-export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
+export function RunLineupSelect({ runId, teamId, savedLineupId, onLineupConfirmed }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -32,6 +35,7 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
   const [cpuLineup, setCpuLineup] = useState<any[]>([]);
   const [revealIndex, setRevealIndex] = useState(-1);
   const [isRolling, setIsRolling] = useState(false);
+  const [appliedLineupId, setAppliedLineupId] = useState<string | null>(null);
 
   const revealRefs = useRef<(RevealCardHandle | null)[]>([]);
 
@@ -83,6 +87,49 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
     },
     enabled: !!runId,
   });
+
+  // Saved Runs lineups, so a lineup built on the Lineups page can be played here.
+  const { data: savedLineups = [] } = useQuery({
+    queryKey: ["saved-lineups-runs", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("player_lineups")
+        .select("id, name, is_default, player_lineup_slots(slot, player_card_id)")
+        .eq("user_id", user!.id)
+        .eq("mode", "runs")
+        .order("is_default", { ascending: false })
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const applySavedLineup = (lineupId: string) => {
+    const lineup = (savedLineups as any[]).find((l) => l.id === lineupId);
+    if (!lineup) return;
+    const ownedIds = new Set((collection ?? []).map((c: any) => c.player_card_id as string));
+    const wanted = [...(lineup.player_lineup_slots ?? [])]
+      .sort((a: any, b: any) => a.slot - b.slot)
+      .map((s: any) => s.player_card_id as string);
+    const usable = wanted.filter((id) => ownedIds.has(id)).slice(0, 3);
+    setSelectedIds(new Set(usable));
+    setAppliedLineupId(lineupId);
+    if (usable.length < wanted.length) {
+      toast({
+        title: "Lineup partially loaded",
+        description: `${wanted.length - usable.length} card(s) are no longer available — pick replacements.`,
+      });
+    } else {
+      toast({ title: `Loaded "${lineup.name}"` });
+    }
+  };
+
+  useEffect(() => {
+    if (!savedLineupId || appliedLineupId || !collection?.length || !savedLineups.length) return;
+    applySavedLineup(savedLineupId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedLineupId, appliedLineupId, collection?.length, savedLineups.length]);
 
   const handleCardClick = (cardId: string) => {
     const newSelected = new Set(selectedIds);
@@ -177,6 +224,23 @@ export function RunLineupSelect({ runId, teamId, onLineupConfirmed }: Props) {
             {selectedIds.size} / 3 Selected
           </div>
         </div>
+
+        {savedLineups.length > 0 && cpuLineup.length === 0 && (
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Saved lineups</span>
+            {(savedLineups as any[]).map((l) => (
+              <Badge
+                key={l.id}
+                variant={appliedLineupId === l.id ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => applySavedLineup(l.id)}
+              >
+                {l.name}
+                {l.is_default ? " ★" : ""}
+              </Badge>
+            ))}
+          </div>
+        )}
 
       <div className="flex gap-3 min-h-[200px] mb-8 overflow-x-auto pb-4">
           {selectedDisplayCards.map((card: any, i) => (
