@@ -58,6 +58,7 @@ interface GameState {
   coinReward?: number;
   packReward?: string;
   dominationVariant?: "base" | "rttr";
+  savedLineupId?: string;
   roadName?: string;
 }
 
@@ -140,6 +141,7 @@ export default function Play() {
           dominationGameId={gameState.dominationGameId}
           challengeTeamId={gameState.challengeTeamId}
           lineupRestrictions={gameState.lineupRestrictions}
+          savedLineupId={gameState.savedLineupId}
         />
       )}
       {phase === "matchup" && (

@@ -59,6 +59,7 @@ export default function RunPlay() {
         <RunLineupSelect
           runId={run.id}
           teamId={run.team_id}
+          savedLineupId={(location.state as { savedLineupId?: string } | null)?.savedLineupId}
           onLineupConfirmed={(player, cpu, badges, traits, duos) => {
             setPlayerLineup(player);
             setCpuLineup(cpu);
