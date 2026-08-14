@@ -108,4 +108,26 @@ export const insider = {
     mode?: string;
   }) => call<InsiderLegality>(`/lineups/validate`, { method: "POST", body: JSON.stringify(payload) }),
   capabilities: () => call<Record<string, unknown>>(`/capabilities`),
+  references: () =>
+    call<{
+      gem_tiers: Array<{ gem_tier_id: string; name: string; stars: number }>;
+      positions: string[];
+      badges: Array<{ badge_id: string; name: string; abbreviation: string }>;
+      traits: Array<{ trait_id: string; name: string; abbreviation: string }>;
+      collections: Array<{ collection_id: string; name: string }>;
+    }>(`/references`),
+  challenges: () =>
+    call<{ challenges: Array<Record<string, unknown>> }>(`/challenges`),
+  eligibleCards: (params: { challenge_id?: string; domination_game_id?: string; run_id?: string; mode?: string }) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) qs.set(k, String(v));
+    qs.set("limit", "200");
+    return call<{
+      eligible: InsiderCard[];
+      eligible_count: number;
+      slots_required: number;
+      sufficient: boolean;
+      context: Record<string, unknown>;
+    }>(`/eligible-cards?${qs.toString()}`);
+  },
 };
