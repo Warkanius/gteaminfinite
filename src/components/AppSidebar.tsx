@@ -21,6 +21,7 @@ import {
   FolderOpen,
   Target,
   Rocket,
+  ClipboardList,
 
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -42,6 +43,7 @@ import { Button } from "@/components/ui/button";
 const playerItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Collection", url: "/collection", icon: BookOpen },
+  { title: "Lineups", url: "/lineups", icon: ClipboardList },
   { title: "Game Modes", url: "/play", icon: Sparkles },
   { title: "Domination", url: "/domination", icon: Swords },
   { title: "The Runs", url: "/runs", icon: Trophy },
