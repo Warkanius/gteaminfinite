@@ -2459,6 +2459,56 @@ export type Database = {
           },
         ]
       }
+      player_card_preferences: {
+        Row: {
+          core_player: boolean
+          created_at: string
+          do_not_recommend: boolean
+          evo_priority: number | null
+          favorite: boolean
+          grinding: boolean
+          id: string
+          notes: string | null
+          player_card_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          core_player?: boolean
+          created_at?: string
+          do_not_recommend?: boolean
+          evo_priority?: number | null
+          favorite?: boolean
+          grinding?: boolean
+          id?: string
+          notes?: string | null
+          player_card_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          core_player?: boolean
+          created_at?: string
+          do_not_recommend?: boolean
+          evo_priority?: number | null
+          favorite?: boolean
+          grinding?: boolean
+          id?: string
+          notes?: string | null
+          player_card_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_card_preferences_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       player_card_traits: {
         Row: {
           id: string
@@ -2699,6 +2749,94 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      player_lineup_slots: {
+        Row: {
+          created_at: string
+          display_order: number
+          evo_card_version_id: string | null
+          id: string
+          lineup_id: string
+          player_card_id: string
+          slot: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          evo_card_version_id?: string | null
+          id?: string
+          lineup_id: string
+          player_card_id: string
+          slot: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          evo_card_version_id?: string | null
+          id?: string
+          lineup_id?: string
+          player_card_id?: string
+          slot?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_lineup_slots_evo_card_version_id_fkey"
+            columns: ["evo_card_version_id"]
+            isOneToOne: false
+            referencedRelation: "evo_card_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_lineup_slots_lineup_id_fkey"
+            columns: ["lineup_id"]
+            isOneToOne: false
+            referencedRelation: "player_lineups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_lineup_slots_player_card_id_fkey"
+            columns: ["player_card_id"]
+            isOneToOne: false
+            referencedRelation: "player_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_lineups: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          mode: string
+          name: string
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          mode?: string
+          name: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          mode?: string
+          name?: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -4237,6 +4375,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      set_default_lineup: { Args: { p_lineup_id: string }; Returns: Json }
       sync_gem_tier_collection: { Args: { p_tier_id: string }; Returns: string }
     }
     Enums: {
