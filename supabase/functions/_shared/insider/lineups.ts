@@ -112,7 +112,8 @@ export async function listLineups(client: SupabaseClient, userId: string, mode?:
   const { data, error } = await q.order("is_default", { ascending: false }).order("updated_at", { ascending: false });
   if (error) throw new InsiderError("INTERNAL_ERROR", error.message);
   const index = await ownedIndex(client, userId);
-  return { lineups: (data ?? []).map((r: Row) => lineupView(r, index.byOwned)) };
+  // Slots are stored by player_card_id, so hydration must use the by-card index.
+  return { lineups: (data ?? []).map((r: Row) => lineupView(r, index.byCard)) };
 }
 
 export async function getLineup(
@@ -125,7 +126,7 @@ export async function getLineup(
   if (error) throw new InsiderError("INTERNAL_ERROR", error.message);
   if (!data) throw new InsiderError("LINEUP_NOT_FOUND", `No lineup ${lineupId} for this player.`);
   const index = await ownedIndex(client, userId);
-  const view = lineupView(data, index.byOwned);
+  const view = lineupView(data, index.byCard);
 
   const cards = (data.player_lineup_slots ?? [])
     .map((s: Row) => index.byCard.get(s.player_card_id))
