@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,11 +35,31 @@ interface LineupSelectProps {
   dominationGameId?: string;
   challengeTeamId?: string;
   lineupRestrictions?: LineupRestrictions;
+  /** Optional saved lineup to load into the selection on mount. */
+  savedLineupId?: string;
 }
 
-export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lineupRestrictions }: LineupSelectProps) {
+export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lineupRestrictions, savedLineupId }: LineupSelectProps) {
   const { user } = useAuth();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [appliedLineupId, setAppliedLineupId] = useState<string | null>(null);
+
+  // Saved 5v5 lineups, so a lineup built on the Lineups page can be played here.
+  const { data: savedLineups = [] } = useQuery({
+    queryKey: ["saved-lineups-5v5", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("player_lineups")
+        .select("id, name, is_default, mode, player_lineup_slots(slot, player_card_id)")
+        .eq("user_id", user!.id)
+        .eq("mode", "5v5")
+        .order("is_default", { ascending: false })
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   // Fetch user's full collection with player_cards joined
   const { data: rawCollection = [], isLoading } = useQuery({
@@ -268,6 +288,33 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
     return rawCollection.filter((card: any) => activeChecks.some((check) => check(card)));
   }, [rawCollection, lineupRestrictions, cardBadgeAssignments, cardTraitAssignments, chainRootOf, cardById]);
 
+  const applySavedLineup = (lineupId: string) => {
+    const lineup = (savedLineups as any[]).find((l) => l.id === lineupId);
+    if (!lineup) return;
+    const eligibleIds = new Set((collection as any[]).map((c) => c.id));
+    const wanted = [...(lineup.player_lineup_slots ?? [])]
+      .sort((a: any, b: any) => a.slot - b.slot)
+      .map((s: any) => s.player_card_id as string);
+    const usable = wanted.filter((id) => eligibleIds.has(id)).slice(0, 5);
+    setSelectedIds(new Set(usable));
+    setAppliedLineupId(lineupId);
+    const dropped = wanted.length - usable.length;
+    if (dropped > 0) {
+      toast.warning(
+        `${dropped} card${dropped === 1 ? "" : "s"} from "${lineup.name}" can't be used here — pick replacements.`,
+      );
+    } else {
+      toast.success(`Loaded "${lineup.name}"`);
+    }
+  };
+
+  // Auto-apply a lineup the player launched the game with.
+  useEffect(() => {
+    if (!savedLineupId || appliedLineupId || !collection.length || !savedLineups.length) return;
+    applySavedLineup(savedLineupId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedLineupId, appliedLineupId, collection.length, savedLineups.length]);
+
   const toggleCard = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -372,6 +419,23 @@ export function LineupSelect({ onConfirm, dominationGameId, challengeTeamId, lin
   return (
     <div className="space-y-6">
       <p className="text-muted-foreground">Select 5 cards for your lineup</p>
+
+      {savedLineups.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs uppercase tracking-wide text-muted-foreground">Saved lineups</span>
+          {(savedLineups as any[]).map((l) => (
+            <Button
+              key={l.id}
+              size="sm"
+              variant={appliedLineupId === l.id ? "default" : "outline"}
+              onClick={() => applySavedLineup(l.id)}
+            >
+              {l.name}
+              {l.is_default ? " ★" : ""}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {/* Selected bench */}
       <div className="flex gap-2 items-center min-h-[48px] flex-wrap">
