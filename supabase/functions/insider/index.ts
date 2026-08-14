@@ -9,7 +9,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 import { InsiderError, insiderErrorBody } from "../_shared/insider/errors.ts";
-import { INSIDER_API_LIMITS, LINEUP_MODES, lineupModeRule, round2 } from "../_shared/insider/rules.ts";
+import { INSIDER_API_LIMITS, LINEUP_MODES, lineupModeRule } from "../_shared/insider/rules.ts";
 import {
   closeToEvolving,
   compareCards,
