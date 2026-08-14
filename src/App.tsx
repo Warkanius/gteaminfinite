@@ -17,6 +17,7 @@ const RunPlay = lazy(() => import("@/pages/RunPlay"));
 import NotFound from "./pages/NotFound";
 const OAuthConsent = lazy(() => import("@/pages/OAuthConsent"));
 const Collection = lazy(() => import("@/pages/Collection"));
+const Lineups = lazy(() => import("@/pages/Lineups"));
 const PackMarket = lazy(() => import("@/pages/PackMarket"));
 
 const AdminPlayers = lazy(() => import("@/pages/admin/AdminPlayers"));
@@ -102,6 +103,7 @@ const App = () => (
             <Route path="/.lovable/oauth/consent" element={<LazyLoad><OAuthConsent /></LazyLoad>} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/collection" element={<ProtectedRoute><LazyLoad><Collection /></LazyLoad></ProtectedRoute>} />
+            <Route path="/lineups" element={<ProtectedRoute><LazyLoad><Lineups /></LazyLoad></ProtectedRoute>} />
             <Route path="/play" element={<ProtectedRoute><LazyLoad><GameHub /></LazyLoad></ProtectedRoute>} />
             <Route path="/play/match" element={<ProtectedRoute><LazyLoad><Play /></LazyLoad></ProtectedRoute>} />
             <Route path="/domination" element={<ProtectedRoute><LazyLoad><Domination /></LazyLoad></ProtectedRoute>} />
