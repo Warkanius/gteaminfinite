@@ -304,13 +304,12 @@ describe("bulk-players evo versions", () => {
               step_order: 1,
               from_tier: "actolytrene",
               to_tier: "game over",
-              objectives: [{ objective: "points", target: 100 }],
+              objectives: [{ stat: "points", amount: 100 }],
             },
           ],
         },
       ],
     });
-    if (status !== 200) console.log(JSON.stringify(json.errors, null, 1));
     expect(status).toBe(200);
     expect(json.ok).toBe(true);
     expect(h.engine.calls[0].p_payload.evo_paths).toHaveLength(1);
