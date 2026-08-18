@@ -245,3 +245,73 @@ describe("bulk-players commit", () => {
     expect(h.db.tables.admin_api_previews[0].consumed_at ?? null).toBe(null);
   });
 });
+
+// ------------------------------------------- evo versions in one bulk payload
+describe("bulk-players evo versions", () => {
+  const twinCards = () => [
+    {
+      name: "Kyle Sabre",
+      action: "create",
+      gem_tier: "diamond",
+      rating: 5,
+      position1: "SG",
+      ...statsFor(5),
+    },
+    {
+      name: "Kyle Sabre",
+      action: "create",
+      temp_ref: "kyle_evo_1",
+      gem_tier: "diamond",
+      rating: 5,
+      position1: "SG",
+      ...statsFor(5),
+    },
+  ];
+
+  it("accepts two brand-new cards that intentionally share a name", async () => {
+    const h = harness();
+    const { status, json } = await h.call(PREVIEW, { players: twinCards() });
+    expect(status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.summary.entity_count).toBe(2);
+    expect(h.db.writes).toEqual([]);
+  });
+
+  it("still rejects same-named entries without explicit create intent", async () => {
+    const players = twinCards().map(({ action, ...rest }) => rest);
+    const { status, json } = await harness().call(PREVIEW, { players });
+    expect(status).toBe(400);
+    expect(json.errors.some((e: any) => e.code === "DUPLICATE_TARGET")).toBe(true);
+  });
+
+  it("keeps whole-number stats castable through canonicalization", async () => {
+    const h = harness();
+    await h.call(PREVIEW, { players: twinCards() });
+    const sent = h.engine.calls[0].p_payload.players[0];
+    expect(Number(sent.stat_3pt)).toBe(5);
+  });
+
+  it("accepts evo paths and version/step patches in the same bulk payload", async () => {
+    const h = harness();
+    const { status, json } = await h.call(PREVIEW, {
+      players: twinCards(),
+      evo_paths: [
+        {
+          player_name: "Kyle Sabre",
+          source_gem_tier: "diamond",
+          steps: [
+            {
+              step_order: 1,
+              from_tier: "diamond",
+              to_tier: "actolytrene",
+              objectives: [{ objective: "points", target: 100 }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(h.engine.calls[0].p_payload.evo_paths).toHaveLength(1);
+  });
+});
