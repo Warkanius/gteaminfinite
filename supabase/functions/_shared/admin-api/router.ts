@@ -128,16 +128,14 @@ export async function handleAdminApi(
   if (mode && req.method === "POST") {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     if (head === "bulk-players" || head === "bulk_players") {
-      const foreign = Object.keys(body).filter(
-        (k) => !["players", "preview_token", "idempotency_key", "notes"].includes(k),
-      );
+      const foreign = Object.keys(body).filter((k) => !BULK_PLAYERS_SCOPE.includes(k));
       if (foreign.length) {
         return send(
           failure("validation", [
-            apiError("PLAYERS_ONLY_SCOPE", "bulk-players updates player cards only.", {
+            apiError("PLAYERS_ONLY_SCOPE", "bulk-players handles player cards and their evolution wiring only.", {
               received: foreign,
-              expected: ["players", "preview_token", "idempotency_key", "notes"],
-              remediation: "Move releases, collections, packs, teams, evo paths and every other group to /admin-api/v1/bulk or /content-release.",
+              expected: BULK_PLAYERS_SCOPE,
+              remediation: "Move collections, packs, teams, challenges and every other group to /admin-api/v1/bulk or /content-release.",
             }),
           ], "bulk_players"),
           400,
