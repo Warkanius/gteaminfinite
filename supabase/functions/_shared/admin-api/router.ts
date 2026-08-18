@@ -12,6 +12,21 @@ import { canonicalize, payloadHash, byteSize } from "./canonical.ts";
 import { normalizeDocument, documentForEntity, ENTITY_TO_GROUP } from "./normalize.ts";
 import { capabilities, LIMITS } from "./capabilities.ts";
 import { runDiagnostics } from "./diagnostics.ts";
+
+/**
+ * bulk-players covers player cards plus the evolution wiring that belongs to
+ * them, so a card and its evo versions/steps commit in ONE atomic batch.
+ */
+export const BULK_PLAYERS_SCOPE = [
+  "players",
+  "evo_paths",
+  "evo_version_updates",
+  "evo_step_updates",
+  "preview_token",
+  "preview_id",
+  "idempotency_key",
+  "notes",
+];
 import {
   savePreview,
   loadPreview,
