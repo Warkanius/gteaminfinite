@@ -2685,6 +2685,7 @@ DECLARE
   v_stat_keys text[] := ARRAY['stat_3pt','stat_mid','stat_fin','stat_dnk','stat_ast','stat_stl','stat_reb','stat_blk','stat_int',
                               'run_stat_3pt','run_stat_mid','run_stat_fin','run_stat_dnk','run_stat_ast','run_stat_stl','run_stat_reb','run_stat_blk','run_stat_int'];
   v_k text;
+  v_allow_dup boolean := coalesce((p_payload->>'allow_duplicate_name')::boolean, false);
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'NOT_AUTHENTICATED: sign in first'; END IF;
   IF NOT public.has_role(auth.uid(), 'admin'::app_role) THEN RAISE EXCEPTION 'FORBIDDEN: admin role required'; END IF;
@@ -2709,13 +2710,19 @@ BEGIN
   ELSE
     v_name := btrim(coalesce(p_payload->>'name',''));
     IF v_name = '' THEN RAISE EXCEPTION 'MISSING_PLAYER_REF: supply player_card_id, card_key, or name'; END IF;
-    SELECT count(*) INTO v_n FROM player_cards WHERE lower(name) = lower(v_name);
-    IF v_n > 1 THEN
-      RAISE EXCEPTION 'AMBIGUOUS_PLAYER_NAME: "%" matches % cards. Target one with player_card_id or card_key. matches=%',
-        v_name, v_n, public.admin_player_matches(v_name)::text;
-    END IF;
-    IF v_n = 1 AND v_action <> 'create' THEN
-      SELECT id INTO v_id FROM player_cards WHERE lower(name) = lower(v_name);
+    IF v_action = 'create' OR v_allow_dup THEN
+      -- explicit create (or an evo variant intentionally sharing a name):
+      -- never resolve onto an existing card by name.
+      v_id := NULL;
+    ELSE
+      SELECT count(*) INTO v_n FROM player_cards WHERE lower(name) = lower(v_name);
+      IF v_n > 1 THEN
+        RAISE EXCEPTION 'AMBIGUOUS_PLAYER_NAME: "%" matches % cards. Target one with player_card_id or card_key, or send action="create" / allow_duplicate_name=true to create a new card. matches=%',
+          v_name, v_n, public.admin_player_matches(v_name)::text;
+      END IF;
+      IF v_n = 1 THEN
+        SELECT id INTO v_id FROM player_cards WHERE lower(name) = lower(v_name);
+      END IF;
     END IF;
   END IF;
 
@@ -2723,7 +2730,7 @@ BEGIN
     RAISE EXCEPTION 'UNKNOWN_PLAYER: no existing card matched for action="update"';
   END IF;
   IF v_action = 'create' AND v_id IS NOT NULL THEN
-    RAISE EXCEPTION 'ALREADY_EXISTS: action="create" but card % already exists', v_id;
+    RAISE EXCEPTION 'ALREADY_EXISTS: action="create" but card % was targeted by id or card_key', v_id;
   END IF;
   IF v_id IS NULL AND coalesce(v_name,'') = '' THEN RAISE EXCEPTION 'MISSING_NAME: new cards require a name'; END IF;
 
@@ -2793,9 +2800,15 @@ BEGIN
     v_base := public.admin_resolve_player(p_payload->'base_card_id');
   END IF;
 
+  -- Stats may arrive as JSON numbers or as canonical numeric text (the preview
+  -- hashing layer renders every number as fixed-precision text), so validate the
+  -- VALUE, not the JSON type.
   FOREACH v_k IN ARRAY v_stat_keys LOOP
     IF p_payload ? v_k AND jsonb_typeof(p_payload->v_k) NOT IN ('number','null') THEN
-      RAISE EXCEPTION 'INVALID_STAT: % must be a number', v_k;
+      IF jsonb_typeof(p_payload->v_k) <> 'string'
+         OR btrim(coalesce(p_payload->>v_k,'')) !~ '^-?[0-9]+(\.[0-9]+)?$' THEN
+        RAISE EXCEPTION 'INVALID_STAT: % must be a number, got %', v_k, coalesce(p_payload->>v_k, 'null');
+      END IF;
     END IF;
   END LOOP;
 
@@ -2902,7 +2915,7 @@ BEGIN
       name = coalesce(v_new_name, name),
       card_key = coalesce(nullif(btrim(coalesce(p_payload->>'new_card_key','')),''), card_key),
       card_variant = CASE WHEN p_payload ? 'card_variant' THEN p_payload->>'card_variant' ELSE card_variant END,
-      evo_stage = coalesce((p_payload->>'evo_stage')::int, evo_stage),
+      evo_stage = coalesce(round((nullif(btrim(p_payload->>'evo_stage'),''))::numeric)::int, evo_stage),
       base_card_id = coalesce(v_base, base_card_id),
       gem_tier_id = coalesce(v_tier, gem_tier_id),
       gem_name = CASE WHEN p_payload ? 'gem_name' THEN p_payload->>'gem_name' ELSE gem_name END,
@@ -2913,7 +2926,7 @@ BEGIN
       position2 = CASE WHEN p_payload ? 'position2' THEN p_payload->>'position2' ELSE position2 END,
       rating = coalesce((p_payload->>'rating')::numeric, rating),
       run_rating = CASE WHEN p_payload ? 'run_rating' THEN (p_payload->>'run_rating')::numeric ELSE run_rating END,
-      market_value = coalesce((p_payload->>'market_value')::int, market_value),
+      market_value = coalesce(round((nullif(btrim(p_payload->>'market_value'),''))::numeric)::int, market_value),
       social_handle = CASE WHEN p_payload ? 'social_handle' THEN p_payload->>'social_handle' ELSE social_handle END,
       avatar_url = CASE WHEN p_payload ? 'avatar_url' THEN p_payload->>'avatar_url' ELSE avatar_url END,
       is_collection_reward = coalesce((p_payload->>'is_collection_reward')::boolean, is_collection_reward),
@@ -2921,24 +2934,24 @@ BEGIN
       card_color_secondary = CASE WHEN p_payload ? 'card_color_secondary' THEN p_payload->>'card_color_secondary' ELSE card_color_secondary END,
       card_glow_color = CASE WHEN p_payload ? 'card_glow_color' THEN p_payload->>'card_glow_color' ELSE card_glow_color END,
       card_animation = CASE WHEN p_payload ? 'card_animation' THEN p_payload->>'card_animation' ELSE card_animation END,
-      stat_3pt = coalesce((p_payload->>'stat_3pt')::int, stat_3pt),
-      stat_mid = coalesce((p_payload->>'stat_mid')::int, stat_mid),
-      stat_fin = coalesce((p_payload->>'stat_fin')::int, stat_fin),
-      stat_dnk = coalesce((p_payload->>'stat_dnk')::int, stat_dnk),
-      stat_ast = coalesce((p_payload->>'stat_ast')::int, stat_ast),
-      stat_stl = coalesce((p_payload->>'stat_stl')::int, stat_stl),
-      stat_reb = coalesce((p_payload->>'stat_reb')::int, stat_reb),
-      stat_blk = coalesce((p_payload->>'stat_blk')::int, stat_blk),
-      stat_int = coalesce((p_payload->>'stat_int')::int, stat_int),
-      run_stat_3pt = coalesce((p_payload->>'run_stat_3pt')::int, run_stat_3pt),
-      run_stat_mid = coalesce((p_payload->>'run_stat_mid')::int, run_stat_mid),
-      run_stat_fin = coalesce((p_payload->>'run_stat_fin')::int, run_stat_fin),
-      run_stat_dnk = coalesce((p_payload->>'run_stat_dnk')::int, run_stat_dnk),
-      run_stat_ast = coalesce((p_payload->>'run_stat_ast')::int, run_stat_ast),
-      run_stat_stl = coalesce((p_payload->>'run_stat_stl')::int, run_stat_stl),
-      run_stat_reb = coalesce((p_payload->>'run_stat_reb')::int, run_stat_reb),
-      run_stat_blk = coalesce((p_payload->>'run_stat_blk')::int, run_stat_blk),
-      run_stat_int = coalesce((p_payload->>'run_stat_int')::int, run_stat_int),
+      stat_3pt = coalesce(round((nullif(btrim(p_payload->>'stat_3pt'),''))::numeric)::int, stat_3pt),
+      stat_mid = coalesce(round((nullif(btrim(p_payload->>'stat_mid'),''))::numeric)::int, stat_mid),
+      stat_fin = coalesce(round((nullif(btrim(p_payload->>'stat_fin'),''))::numeric)::int, stat_fin),
+      stat_dnk = coalesce(round((nullif(btrim(p_payload->>'stat_dnk'),''))::numeric)::int, stat_dnk),
+      stat_ast = coalesce(round((nullif(btrim(p_payload->>'stat_ast'),''))::numeric)::int, stat_ast),
+      stat_stl = coalesce(round((nullif(btrim(p_payload->>'stat_stl'),''))::numeric)::int, stat_stl),
+      stat_reb = coalesce(round((nullif(btrim(p_payload->>'stat_reb'),''))::numeric)::int, stat_reb),
+      stat_blk = coalesce(round((nullif(btrim(p_payload->>'stat_blk'),''))::numeric)::int, stat_blk),
+      stat_int = coalesce(round((nullif(btrim(p_payload->>'stat_int'),''))::numeric)::int, stat_int),
+      run_stat_3pt = coalesce(round((nullif(btrim(p_payload->>'run_stat_3pt'),''))::numeric)::int, run_stat_3pt),
+      run_stat_mid = coalesce(round((nullif(btrim(p_payload->>'run_stat_mid'),''))::numeric)::int, run_stat_mid),
+      run_stat_fin = coalesce(round((nullif(btrim(p_payload->>'run_stat_fin'),''))::numeric)::int, run_stat_fin),
+      run_stat_dnk = coalesce(round((nullif(btrim(p_payload->>'run_stat_dnk'),''))::numeric)::int, run_stat_dnk),
+      run_stat_ast = coalesce(round((nullif(btrim(p_payload->>'run_stat_ast'),''))::numeric)::int, run_stat_ast),
+      run_stat_stl = coalesce(round((nullif(btrim(p_payload->>'run_stat_stl'),''))::numeric)::int, run_stat_stl),
+      run_stat_reb = coalesce(round((nullif(btrim(p_payload->>'run_stat_reb'),''))::numeric)::int, run_stat_reb),
+      run_stat_blk = coalesce(round((nullif(btrim(p_payload->>'run_stat_blk'),''))::numeric)::int, run_stat_blk),
+      run_stat_int = coalesce(round((nullif(btrim(p_payload->>'run_stat_int'),''))::numeric)::int, run_stat_int),
       updated_at = now()
     WHERE id = v_id;
 
@@ -2992,6 +3005,8 @@ BEGIN
       IF v_num <> trunc(v_num) THEN
         RAISE EXCEPTION 'INVALID_FIELD_TYPE: %.% is a whole-number column but received %. Send a whole number (this column cannot store decimals).', p_table, k, v_txt;
       END IF;
+      -- whole-number text such as "5.0" is accepted; the writer rounds it.
+      CONTINUE;
     END IF;
 
     BEGIN

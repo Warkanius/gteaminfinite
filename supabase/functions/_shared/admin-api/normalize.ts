@@ -176,6 +176,10 @@ export const PLAYER_FIELDS = [
   "evo_stage",
   "badges",
   "traits",
+  // Explicit create intent: skips name-based resolution so a new card may
+  // intentionally share a name with an existing one (evo versions).
+  "action",
+  "allow_duplicate_name",
 ] as const;
 
 const PLAYER_FIELD_SET = new Set<string>(PLAYER_FIELDS as unknown as string[]);
@@ -249,18 +253,31 @@ export function normalizeDocument(rawInput: Record<string, unknown>): NormalizeR
   };
 }
 
+/** Explicit create intent: the card is never resolved by name. */
+export function isExplicitCreate(item: Record<string, unknown>): boolean {
+  return (
+    String(item.action ?? "").toLowerCase() === "create" ||
+    item.allow_duplicate_name === true ||
+    String(item.allow_duplicate_name ?? "").toLowerCase() === "true"
+  );
+}
+
 /**
  * Two entries may never target the same card, whether through the same
  * identifier or through different ones (id, card_key, name, temp_ref).
+ * Entries flagged as explicit creates are exempt from the name-based check —
+ * two brand-new cards (e.g. evo versions) may deliberately share a name.
  */
 function detectDuplicateTargets(items: Array<Record<string, unknown>>, errors: AdminApiError[]) {
   const seen = new Map<string, number>();
   items.forEach((item, index) => {
+    const nameKeyed =
+      !item.player_card_id && !item.card_key && item.name && !isExplicitCreate(item);
     const keys = [
       item.player_card_id ? `id:${String(item.player_card_id).toLowerCase()}` : null,
       item.card_key ? `key:${String(item.card_key).toLowerCase()}` : null,
       item.temp_ref ? `ref:${String(item.temp_ref).toLowerCase()}` : null,
-      !item.player_card_id && !item.card_key && item.name ? `name:${String(item.name).trim().toLowerCase()}` : null,
+      nameKeyed ? `name:${String(item.name).trim().toLowerCase()}` : null,
     ].filter(Boolean) as string[];
     for (const key of keys) {
       const first = seen.get(key);
