@@ -310,6 +310,7 @@ describe("bulk-players evo versions", () => {
         },
       ],
     });
+    if (status !== 200) console.log(JSON.stringify(json.errors, null, 1));
     expect(status).toBe(200);
     expect(json.ok).toBe(true);
     expect(h.engine.calls[0].p_payload.evo_paths).toHaveLength(1);
