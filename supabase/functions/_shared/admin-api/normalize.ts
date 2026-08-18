@@ -176,6 +176,10 @@ export const PLAYER_FIELDS = [
   "evo_stage",
   "badges",
   "traits",
+  // Explicit create intent: skips name-based resolution so a new card may
+  // intentionally share a name with an existing one (evo versions).
+  "action",
+  "allow_duplicate_name",
 ] as const;
 
 const PLAYER_FIELD_SET = new Set<string>(PLAYER_FIELDS as unknown as string[]);
