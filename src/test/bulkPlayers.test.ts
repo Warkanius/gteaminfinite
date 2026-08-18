@@ -252,7 +252,7 @@ describe("bulk-players evo versions", () => {
     {
       name: "Kyle Sabre",
       action: "create",
-      gem_tier: "diamond",
+      gem_tier: "actolytrene",
       rating: 5,
       position1: "SG",
       ...statsFor(5),
@@ -261,7 +261,7 @@ describe("bulk-players evo versions", () => {
       name: "Kyle Sabre",
       action: "create",
       temp_ref: "kyle_evo_1",
-      gem_tier: "diamond",
+      gem_tier: "actolytrene",
       rating: 5,
       position1: "SG",
       ...statsFor(5),
@@ -298,12 +298,12 @@ describe("bulk-players evo versions", () => {
       evo_paths: [
         {
           player_name: "Kyle Sabre",
-          source_gem_tier: "diamond",
+          source_gem_tier: "actolytrene",
           steps: [
             {
               step_order: 1,
-              from_tier: "diamond",
-              to_tier: "actolytrene",
+              from_tier: "actolytrene",
+              to_tier: "game over",
               objectives: [{ objective: "points", target: 100 }],
             },
           ],
